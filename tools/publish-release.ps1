@@ -85,7 +85,8 @@ function Sha256File($path) { (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower
 # GH_TOKEN da sessao OU o login guardado pelo `gh auth login` (Gerenciador de Credenciais do Windows).
 $HasGhAuth = [bool]$env:GH_TOKEN
 if (-not $HasGhAuth) {
-    & $Gh auth status --hostname github.com *> $null
+    # --active: uma conta antiga e inativa com token vencido no keyring não pode derrubar o check.
+    & $Gh auth status --hostname github.com --active *> $null
     $HasGhAuth = ($LASTEXITCODE -eq 0)
 }
 if (-not $DryRun -and -not $HasGhAuth) {
