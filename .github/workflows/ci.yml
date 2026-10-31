@@ -1,0 +1,40 @@
+name: CI
+
+# Testes JVM + busca de segredos. Sem nenhum secret: o CI nunca assina nem publica APK (a
+# assinatura é offline, no PC de publicação — tools/publish-release.ps1). As bibliotecas
+# proprietárias dos sensores não existem aqui, então os testes rodam no build sem elas.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read   # gitleaks-action lê o histórico do PR (mesma configuração do GluSync)
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Testes unitários
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

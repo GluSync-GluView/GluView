@@ -1,0 +1,40 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+# Chaves de assinatura NUNCA entram no repositório — nem a de debug, que é a chave "A" que assina
+# os aparelhos instalados (plano 08_atualizacao_ota_plano.md, seção 6).
+*.keystore
+*.jks
+*.p12
+
+# Build outputs
+app/build/
+compiler-cli/build/
+build_log*.txt
+
+
+# Cache do compilador Kotlin (K2 daemon)
+.kotlin/
+
+# Artefatos locais de engenharia reversa e depuração na raiz (nunca versionar)
+/*.apk
+/*.apkm
+/*.zip
+/*.dex
+/*.so
+/*.txt
+/*.log
+/*.py
+/*_extracted/
+/bugreport*
+
+# Bibliotecas proprietárias (Abbott/Sibionics): nunca no repositório. Gere com
+# tools/extract_native_libs.py a partir dos APKs oficiais (ver docs/build-native-libs.md).
+/app/src/main/jniLibs/

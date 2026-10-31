@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo da janela no modo escuro = md_backgroundD (#111318), sem preto puro. -->
+    <color name="window_bg">#FF111318</color>
+    <!-- Widget antes do 1º dado (o mesmo neutro do "sem sinal" dos widgets). -->
+    <color name="widget_placeholder">#FF2B2B2B</color>
+</resources>

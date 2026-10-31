@@ -1,0 +1,30 @@
+# Linha de base do check-strings (StringsAuditTest). Só pode DIMINUIR.
+# Regerar: gradlew :app:testDebugUnitTest --tests *StringsAuditTest -Pgluview.visualaudit.updateBaseline=true
+pt-literals	dream/GluViewDreamService.kt	1
+pt-literals	notification/NotificationHelper.kt	6
+pt-literals	ui/screen/accessrequests/AccessRequestStatusScreen.kt	1
+pt-literals	ui/screen/accessrequests/MyAccessRequestsScreen.kt	1
+pt-literals	ui/screen/alertsettings/AlertSettingsScreen.kt	16
+pt-literals	ui/screen/apikeys/ApiKeysViewModel.kt	1
+pt-literals	ui/screen/caregiver/CaregiverViewModel.kt	3
+pt-literals	ui/screen/caregiver/FollowedPatientViewModel.kt	1
+pt-literals	ui/screen/chart/ChartViewModel.kt	1
+pt-literals	ui/screen/dailypattern/DailyPatternViewModel.kt	1
+pt-literals	ui/screen/eventlog/EventLogViewModel.kt	3
+pt-literals	ui/screen/integrations/ExternalIntegrationScreen.kt	18
+pt-literals	ui/screen/integrations/ExternalIntegrationViewModel.kt	2
+pt-literals	ui/screen/libre2/Libre2ActivationScreen.kt	1
+pt-literals	ui/screen/libre2/Libre2ActivationViewModel.kt	4
+pt-literals	ui/screen/login/LoginViewModel.kt	13
+pt-literals	ui/screen/miband/MiBandViewModel.kt	5
+pt-literals	ui/screen/passkeys/PasskeysViewModel.kt	2
+pt-literals	ui/screen/report/ReportViewModel.kt	1
+pt-literals	ui/screen/sensorscan/SensorScanViewModel.kt	4
+pt-literals	ui/screen/settings/SettingsViewModel.kt	2
+pt-literals	ui/screen/terms/TermsContent.kt	1
+pt-literals	ui/screen/tir/TirViewModel.kt	1
+pt-literals	ui/screen/watchface/WatchFaceEditorViewModel.kt	1
+pt-literals	ui/screen/watchface/WatchFaceManagerViewModel.kt	2
+pt-literals	ui/screen/watchface/WatchfaceStoreViewModel.kt	1
+pt-literals	widget/GluViewChartWidget.kt	1
+pt-literals	widget/GluViewXDripWidget.kt	1

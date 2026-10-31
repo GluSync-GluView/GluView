@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Consulta ao app oficial FreeStyle Libre 2 (para o tracer apontar o maps ao APK oficial) -->
+    <queries>
+        <package android:name="com.freestylelibre.app.br" />
+    </queries>
+
+    <!-- Rede -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground Service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Necessário para BLE background no Android 14+ (Frente B) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <!-- Notificações (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Alertas avançados (Sprint 3) -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- Boot (Sprint 5) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Isenção de otimização de bateria — necessário para o serviço não ser morto pelo SO -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Plano OTA (E7) — o próprio app instala a versão nova (sempre por toque do usuário).
+         UPDATE_PACKAGES_WITHOUT_USER_ACTION: no Android 12+ dispensa o diálogo do sistema quando o
+         GluView é o instalador de registro; sem ela, a sessão sempre pede confirmação. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+
+    <!-- Fase 3 — BLE direto do sensor Sibionics (Frente B) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Compat Android <= 11 (API 30) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <!-- FreeStyle Libre 2 Plus — ativação por NFC (ISO 15693 / NfcV) -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
+    <application
+        android:name=".GluViewApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.GluView">
+
+        <!-- Baixa o módulo do Google Code Scanner na instalação (1º uso instantâneo) -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
+        <!-- S27 — descriptor para o Android Auto -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- S34 — deep link gluview://diagnostic; F6 — gluview://caregiver -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="gluview" android:host="diagnostic" />
+                <data android:scheme="gluview" android:host="caregiver" />
+            </intent-filter>
+        </activity>
+
+        <!-- Foreground Service de polling + SignalR + BLE (Frente B) -->
+        <service
+            android:name=".service.GluSyncService"
+            android:foregroundServiceType="dataSync|connectedDevice"
+            android:exported="false" />
+
+        <!-- S18 — Quick Settings Tile -->
+        <service
+            android:name=".service.GluViewTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_glucose"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- S25 — BootReceiver: reinicia o serviço após reboot e após atualizar o app (E1, plano OTA) -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Plano OTA (E7) — resultado da sessão do PackageInstaller. NÃO exportado: só o
+             PendingIntent explícito do próprio app chega aqui (e o sessionId é conferido). -->
+        <receiver
+            android:name=".service.UpdateInstallReceiver"
+            android:exported="false" />
+
+        <!-- S31 — GluViewWidget: widget de glicemia na home screen -->
+        <receiver
+            android:name=".widget.GluViewWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_widget_info" />
+        </receiver>
+
+        <!-- Widget com gráfico (4×2) -->
+        <receiver
+            android:name=".widget.GluViewChartWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_chart_widget_info" />
+        </receiver>
+
+        <!-- Widget com gráfico compacto (3×2) -->
+        <receiver
+            android:name=".widget.GluViewMiniChartWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_mini_chart_widget_info" />
+        </receiver>
+
+        <!-- Widget estilo xDrip (2×2, fundo transparente) -->
+        <receiver
+            android:name=".widget.GluViewXDripWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_xdrip_widget_info" />
+        </receiver>
+
+        <!-- Widget faixa com gráfico (2×1) -->
+        <receiver
+            android:name=".widget.GluViewStripWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_strip_widget_info" />
+        </receiver>
+
+        <!-- S27 — Android Auto (projeção no carro via USB/Bluetooth) -->
+        <service
+            android:name=".service.GluAutoService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <!-- IOT: categoria real da lib para apps de status/dado de sensor externo
+                     (IOAPP não existe na Car App Library — confirmado no código-fonte). -->
+                <category android:name="androidx.car.app.category.IOT" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.car.app.minCarApiLevel"
+                android:value="1" />
+        </service>
+
+        <!-- Protetor de tela (DreamService) — aparece em Configurações → Proteção de tela -->
+        <service
+            android:name=".dream.GluViewDreamService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.dream"
+                android:resource="@xml/dream_info" />
+        </service>
+
+        <!-- S24 — FileProvider para compartilhar PDF/CSV -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

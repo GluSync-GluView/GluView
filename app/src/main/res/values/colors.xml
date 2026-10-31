@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo da janela (atrás das barras de sistema). Casa com o md_background do tema
+         para não aparecer faixa preta. Variante escura em values-night/colors.xml. -->
+    <color name="window_bg">#FFFAF9FD</color>
+    <!-- Widget antes do 1º dado (o mesmo neutro do "sem sinal" dos widgets). -->
+    <color name="widget_placeholder">#FFEEEDF4</color>
+</resources>

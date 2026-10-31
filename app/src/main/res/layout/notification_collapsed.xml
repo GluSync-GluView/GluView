@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notificação recolhida (redesign visual, Fase 5): sem fundo próprio e com os estilos de texto do
+     sistema — segue o tema do cartão (antes: caixa #1C1C1E/#FAFAFA e hora invisível no claro).
+     2 linhas: "135 ↗" e "+3 mg/dL · 14:05" (ou "Sem sinal" / "Última leitura 14:05"). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_collapsed_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+
+    <!-- O texto tem a largura dele (nunca corta); o gráfico fica com o que sobra. -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_notif_sgv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tv_notif_detail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Info"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Miniatura do mesmo gráfico (sem eixos), no tamanho real e com fundo transparente. -->
+    <ImageView
+        android:id="@+id/iv_notif_dots"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:scaleType="fitCenter"
+        android:contentDescription="@string/notif_chart_description" />
+
+</LinearLayout>

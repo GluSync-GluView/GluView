@@ -1,0 +1,9 @@
+# Linha de base do GraphArchitectureTest. Só pode DIMINUIR.
+# Regerar: gradlew :app:testDebugUnitTest --tests *GraphArchitectureTest -Pgluview.visualaudit.updateBaseline=true
+hex	dream/GluViewDreamService.kt	3
+hex	notification/NotificationHelper.kt	2
+hex	ui/screen/chart/ChartScreen.kt	2
+hex	ui/screen/watchface/WatchFaceRenderer.kt	3
+hex	ui/theme/Color.kt	2
+hex	ui/theme/GlucoseZoneColors.kt	2
+hex	widget/GluViewXDripWidget.kt	3
