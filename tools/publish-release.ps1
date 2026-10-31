@@ -22,10 +22,16 @@
     6. Gera GluView-<versao>.apk, .sha256 e manifest.json (contrato da secao 5.2 do plano).
     7. Cria a Release v<versionName> no GitHub apontando para o commit publicado.
 
-  Tokens (nunca cole no chat nem em arquivo): defina na sessao do PowerShell antes de rodar
-    $env:GH_TOKEN = Read-Host "Cole o token"   (fica so nesta janela do PowerShell)
-  - Publicar exige token fine-grained com Contents: Read and write no repositorio, de curta duracao.
-  - -DryRun nao publica nada; com token de leitura ele tambem consulta as releases ja publicadas.
+  Autenticacao do GitHub (nunca cole token no chat nem em arquivo), uma das duas:
+  - Uma vez so: `gh auth login` com token fine-grained (Contents: Read and write, so neste
+    repositorio). O gh guarda o token cifrado no Gerenciador de Credenciais do Windows e o script
+    passa a publicar sem pedir nada.
+  - Ou, na sessao: $env:GH_TOKEN (vale mais que o login guardado).
+  - -DryRun nao publica nada; com autenticacao ele tambem consulta as releases ja publicadas.
+
+  Notas da versao: release-notes/<versao>.pt.txt e .en.txt (texto puro, sem links), ou os
+  parametros -NotesPt/-NotesEn. Duplo clique em tools\publicar.cmd roda tudo sem a trava de
+  scripts do Windows.
 
 .EXAMPLE
   .\tools\publish-release.ps1 -DryRun
@@ -76,10 +82,15 @@ function RunGit { $out = & git.exe -C $Root @args 2>&1 | ForEach-Object { "$_" }
 function MinutesSince2026 { [int][Math]::Floor(([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() - 1767225600000) / 60000) }
 function Sha256File($path) { (Get-FileHash -Algorithm SHA256 $path).Hash.ToLowerInvariant() }
 
-if (-not $DryRun -and ([string]::IsNullOrWhiteSpace($NotesPt) -or [string]::IsNullOrWhiteSpace($NotesEn))) {
-    Fail "informe -NotesPt e -NotesEn (texto puro, sem links) ou use -DryRun"
+# GH_TOKEN da sessao OU o login guardado pelo `gh auth login` (Gerenciador de Credenciais do Windows).
+$HasGhAuth = [bool]$env:GH_TOKEN
+if (-not $HasGhAuth) {
+    & $Gh auth status --hostname github.com *> $null
+    $HasGhAuth = ($LASTEXITCODE -eq 0)
 }
-if (-not $DryRun -and -not $env:GH_TOKEN) { Fail "defina `$env:GH_TOKEN com o token de escrita antes de publicar" }
+if (-not $DryRun -and -not $HasGhAuth) {
+    Fail "sem autenticacao do GitHub: rode uma vez 'gh auth login' (token fine-grained com Contents: Read and write so neste repositorio) ou defina `$env:GH_TOKEN"
+}
 
 # ---------------------------------------------------------------------------------------------- 1
 Step "1. Estado do repositorio"
@@ -106,8 +117,25 @@ $versionName = $Matches[1]
 $tag = "v$versionName"
 Ok "versionName $versionName (tag $tag)"
 
+# Notas: parametros, ou release-notes/<versao>.pt.txt e .en.txt (escritas junto com a versao).
+$notesDir = Join-Path $Root "release-notes"
+foreach ($lang in "pt", "en") {
+    $file = Join-Path $notesDir "$versionName.$lang.txt"
+    $current = if ($lang -eq "pt") { $NotesPt } else { $NotesEn }
+    if ([string]::IsNullOrWhiteSpace($current) -and (Test-Path $file)) {
+        $text = ([System.IO.File]::ReadAllText($file, [System.Text.Encoding]::UTF8)).Trim()
+        if ($lang -eq "pt") { $NotesPt = $text } else { $NotesEn = $text }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($NotesPt) -or [string]::IsNullOrWhiteSpace($NotesEn)) {
+    if (-not $DryRun) { Fail "faltam as notas: crie release-notes/$versionName.pt.txt e .en.txt (ou use -NotesPt/-NotesEn)" }
+    Write-Host "    aviso: sem notas da versao (so permitido em -DryRun)" -ForegroundColor Yellow
+} else {
+    Ok "notas da versao em pt e en"
+}
+
 $lastCode = 0; $lastName = [version]"0.0.0"
-if ($env:GH_TOKEN) {
+if ($HasGhAuth) {
     $ghErr = [System.IO.Path]::GetTempFileName()
     $relJson = (& $Gh release list --repo $Repo --limit 100 --json tagName,isDraft 2>$ghErr) -join "`n"
     $ghErrText = (Get-Content $ghErr -Raw -ErrorAction SilentlyContinue); Remove-Item $ghErr -Force -ErrorAction SilentlyContinue
@@ -129,7 +157,7 @@ if ($env:GH_TOKEN) {
     Ok "ultima publicada: versionName $lastName, versionCode $lastCode (releases sem manifest.json sao ignoradas)"
     if ([version]$versionName -le $lastName) { Fail "versionName $versionName nao e maior que o ultimo publicado ($lastName)" }
 } else {
-    Write-Host "    aviso: sem GH_TOKEN, nao consultei as releases publicadas (so permitido em -DryRun)" -ForegroundColor Yellow
+    Write-Host "    aviso: sem autenticacao do GitHub, nao consultei as releases publicadas (so permitido em -DryRun)" -ForegroundColor Yellow
 }
 $existingTag = & git.exe -C $Root ls-remote --tags origin "refs/tags/$tag" 2>&1
 if ($existingTag) { Fail "a tag $tag ja existe no GitHub" }

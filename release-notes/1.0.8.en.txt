@@ -1,0 +1,1 @@
+Sensor list organized by model and region (FreeStyle Libre 2 Plus SA and NA, Libre 2 NA, Sibionics GS1 CN and SA), with the Libre region detected during activation. The European Libre is listed as coming soon. Follower accounts no longer need to request cloud access.

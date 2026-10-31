@@ -1,0 +1,1 @@
+Conta gratuita obrigatória, sem anúncios e sem exploração de dados (quem já usava sem conta pode adiar). Glicemia na nuvem e acompanhamento agora dependem de liberação: peça em Ajustes, Conta, Nuvem e acompanhamento. O GluView agora tem código aberto (GPLv3).

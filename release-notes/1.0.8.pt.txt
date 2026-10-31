@@ -1,0 +1,1 @@
+Lista de sensores organizada por modelo e região (FreeStyle Libre 2 Plus SA e NA, Libre 2 NA, Sibionics GS1 CN e SA), com a região do Libre detectada na ativação. O Libre europeu aparece como em breve. Conta de seguidor não precisa mais pedir liberação da nuvem.

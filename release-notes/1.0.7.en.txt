@@ -1,0 +1,1 @@
+A free account is now required, with no ads and no data exploitation (existing users without an account can postpone it). Cloud glucose and follower access now require approval: request it in Settings, Account, Cloud and follower access. GluView is now open source (GPLv3).
