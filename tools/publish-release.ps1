@@ -344,4 +344,4 @@ if ($Channel -eq "beta") { $ghArgs += "--prerelease" }
 & $Gh @ghArgs
 if ($LASTEXITCODE -ne 0) { Fail "gh release create falhou" }
 Ok "release $tag publicada (commit $($head.Substring(0,7)), versionCode $versionCode)"
-Write-Host "`nLembrete: revogue o token de escrita se ele nao for mais necessario." -ForegroundColor Yellow
+if ($env:GH_TOKEN) { Write-Host "`nLembrete: revogue o token de escrita se ele nao for mais necessario." -ForegroundColor Yellow }
