@@ -79,6 +79,16 @@
     <string name="settings_cloud_requested">Pedido enviado. Avisamos por e-mail quando for analisado.</string>
     <string name="settings_cloud_request_error">Não foi possível enviar o pedido. Tente de novo.</string>
     <string name="caregiver_follow_not_entitled">O acompanhamento ainda não foi liberado para o paciente. Peça a liberação em Ajustes › Conta › Nuvem e acompanhamento.</string>
+    <string name="sensor_model_libre2">FreeStyle Libre 2</string>
+    <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
+    <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
+    <string name="sensor_region_eu">Europa</string>
+    <string name="sensor_region_na">América do Norte</string>
+    <string name="sensor_region_sa">América do Sul</string>
+    <string name="sensor_region_cn">China</string>
+    <string name="sensor_variant_label">%1$s %2$s</string>
+    <string name="libre2_gen1_not_supported">Este é um FreeStyle Libre 2 europeu (geração 1). O GluView ainda não lê essa versão — por enquanto, só a da América do Norte e da América do Sul.</string>
+    <string name="settings_cloud_state_follower">Para acompanhar alguém você não precisa pedir nada: basta que a pessoa acompanhada tenha a nuvem liberada.</string>
     <string name="login_verify_title">Confirme seu e-mail</string>
     <string name="login_verify_subtitle">Enviamos um código de 6 dígitos para %1$s</string>
     <string name="login_code_label">Código de verificação</string>

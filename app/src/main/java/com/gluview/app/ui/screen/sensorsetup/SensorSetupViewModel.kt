@@ -7,11 +7,14 @@ import com.gluview.app.data.sensor.ScanNotice
 import com.gluview.app.data.sensor.SensorSetupCoordinator
 import com.gluview.app.data.sensor.SetupState
 import com.gluview.app.data.source.DataSourceType
+import com.gluview.app.data.source.SensorVariant
+import com.gluview.app.data.source.SensorVariantCatalog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -25,13 +28,15 @@ data class SensorOption(
     val isCurrent: Boolean,
     val isSupported: Boolean,
     /** O sensor existe, mas este aparelho (32 bits) não roda a biblioteca nativa dele. */
-    val unavailableOnDevice: Boolean = false
+    val unavailableOnDevice: Boolean = false,
+    /** Modelo + região mostrados ("FreeStyle Libre 2 Plus SA"); [type] é a implementação. */
+    val variant: SensorVariant = SensorVariantCatalog.defaultFor(type)
 )
 
 @HiltViewModel
 class SensorSetupViewModel @Inject constructor(
     private val coordinator: SensorSetupCoordinator,
-    preferences: AppPreferences
+    private val preferences: AppPreferences
 ) : ViewModel() {
 
     val state: StateFlow<SetupState> = coordinator.state
@@ -45,16 +50,18 @@ class SensorSetupViewModel @Inject constructor(
      * ([DataSourceType.isUsableOnThisDevice]), com o rótulo "indisponível neste aparelho".
      * GluSync não entra — é a fonte de nuvem, não um sensor que se coloca no corpo.
      */
-    val options: StateFlow<List<SensorOption>> = preferences.dataSource
-        .map { currentId ->
-            DataSourceType.entries
-                .filter { it != DataSourceType.GLUSYNC }
-                .map { type ->
+    val options: StateFlow<List<SensorOption>> = combine(preferences.dataSource, preferences.sensorVariantId) { currentId, variantId ->
+            val current = SensorVariantCatalog.resolve(variantId, currentId)
+            SensorVariantCatalog.all
+                .filter { it.source != DataSourceType.GLUSYNC }
+                .map { variant ->
+                    val type = variant.source
                     SensorOption(
                         type                = type,
-                        isCurrent           = type.id == currentId,
-                        isSupported         = !type.comingSoon && type.isUsableOnThisDevice,
-                        unavailableOnDevice = !type.isUsableOnThisDevice
+                        isCurrent           = type.id == currentId && variant.id == current.id,
+                        isSupported         = variant.implemented && !type.comingSoon && type.isUsableOnThisDevice,
+                        unavailableOnDevice = !type.isUsableOnThisDevice,
+                        variant             = variant
                     )
                 }
                 .sortedByDescending { it.isCurrent }
@@ -63,6 +70,11 @@ class SensorSetupViewModel @Inject constructor(
 
     fun start()                        = coordinator.startSensorChange()
     fun choose(type: DataSourceType)   = coordinator.chooseSensor(type)
+
+    /** Guarda o modelo + região escolhidos antes de seguir o fluxo da implementação. */
+    fun rememberVariant(option: SensorOption) {
+        viewModelScope.launch { preferences.saveSensorVariantId(option.variant.id) }
+    }
     fun readyToScan()                  = coordinator.readyToScan()
     fun onPackageScanned(raw: String)  = coordinator.onPackageScanned(raw)
     /** true = a tela precisa abrir a câmera (sem caixa lida). */

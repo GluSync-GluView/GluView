@@ -60,6 +60,7 @@ import com.gluview.app.data.sensor.FailureReason
 import com.gluview.app.data.sensor.ScanNotice
 import com.gluview.app.data.sensor.SetupState
 import com.gluview.app.data.source.DataSourceType
+import com.gluview.app.ui.components.label
 import com.gluview.app.ui.components.kit.GluCallout
 import com.gluview.app.ui.components.kit.GluCard
 import com.gluview.app.ui.components.kit.GluSection
@@ -156,8 +157,9 @@ fun SensorSetupScreen(
         onBack = { viewModel.cancel(); onDone() },
         // L19: Libre 2 Plus se ativa por NFC — antes o assistente pedia a caixa e a lia como
         // Sibionics ("Este código não é de um sensor compatível").
-        onChoose = { type ->
-            if (type == DataSourceType.LIBRE2_PLUS) { viewModel.cancel(); onLibre2Activation() } else viewModel.choose(type)
+        onChoose = { option ->
+            viewModel.rememberVariant(option)
+            if (option.type == DataSourceType.LIBRE2_PLUS) { viewModel.cancel(); onLibre2Activation() } else viewModel.choose(option.type)
         },
         onContinue = { viewModel.readyToScan(); scanWithPermissions() },
         onCancel = viewModel::cancel,
@@ -182,7 +184,7 @@ internal fun SensorSetupContent(
     state: SetupState,
     options: List<SensorOption>,
     onBack: () -> Unit,
-    onChoose: (DataSourceType) -> Unit,
+    onChoose: (SensorOption) -> Unit,
     onContinue: () -> Unit,
     onCancel: () -> Unit,
     onDone: () -> Unit,
@@ -242,7 +244,7 @@ private fun ColumnScope.StepHeader(title: String, body: String) {
 }
 
 @Composable
-private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: (DataSourceType) -> Unit) {
+private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: (SensorOption) -> Unit) {
     StepHeader(stringResource(R.string.setup_choose_title), stringResource(R.string.setup_choose_body))
     if (options.isEmpty()) {
         ListSkeleton(rows = 2)
@@ -252,12 +254,16 @@ private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: 
     if (available.isNotEmpty()) {
         GluSection(stringResource(R.string.setup_available)) {
             available.forEach { option ->
-                GluCard(onClick = { onChoose(option.type) }, selected = option.isCurrent) {
+                GluCard(onClick = { onChoose(option) }, selected = option.isCurrent) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                         modifier = Modifier.heightIn(min = 40.dp)) {
                         Icon(Icons.Outlined.Sensors, null, tint = MaterialTheme.colorScheme.primary)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                            Text(stringResource(option.type.labelRes), style = MaterialTheme.typography.titleMedium)
+                            Text(option.variant.label(), style = MaterialTheme.typography.titleMedium)
+                            option.variant.region?.let {
+                                Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             if (option.isCurrent) StatusBadge(stringResource(R.string.setup_in_use), tone = Tone.Info)
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -273,9 +279,9 @@ private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: 
                 later.forEach { option ->
                     Text(
                         if (option.unavailableOnDevice)
-                            stringResource(R.string.setup_label_with_note, stringResource(option.type.labelRes),
+                            stringResource(R.string.setup_label_with_note, option.variant.label(),
                                 stringResource(R.string.setup_unavailable_on_device))
-                        else stringResource(option.type.labelRes),
+                        else option.variant.label(),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

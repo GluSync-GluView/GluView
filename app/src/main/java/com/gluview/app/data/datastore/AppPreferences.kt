@@ -166,6 +166,8 @@ class AppPreferences @Inject constructor(
         val KEY_ACCOUNT_PROMPT_POSTPONED_AT = longPreferencesKey("account_prompt_postponed_at")
         val KEY_CLOUD_SYNC_STATE            = stringPreferencesKey("cloud_sync_state")
         val KEY_CLOUD_SYNC_CHECKED_AT       = longPreferencesKey("cloud_sync_checked_at")
+        // Variante do sensor por modelo e região (SensorVariantCatalog); "" = padrão da fonte
+        val KEY_SENSOR_VARIANT_ID           = stringPreferencesKey("sensor_variant_id")
 
         // ── Idioma do app — "pt" (padrão) | "en" ─────────────────────────────────
         val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
@@ -346,6 +348,10 @@ class AppPreferences @Inject constructor(
     val hasAccount: Flow<Boolean> = combine(dataStore.data.safeMap("") { it[KEY_BASE_URL] ?: "" }, accessToken) { baseUrl, token ->
         baseUrl.isNotBlank() && token.isNotBlank()
     }
+
+    /** Variante escolhida/detectada do sensor (ver SensorVariantCatalog.resolve). */
+    val sensorVariantId: Flow<String> = dataStore.data.safeMap("") { it[KEY_SENSOR_VARIANT_ID] ?: "" }
+    suspend fun saveSensorVariantId(id: String) = dataStore.edit { it[KEY_SENSOR_VARIANT_ID] = id }
 
     val accountPromptPostponedAtMs: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_ACCOUNT_PROMPT_POSTPONED_AT] ?: 0L }
     suspend fun saveAccountPromptPostponedAtMs(ms: Long) = dataStore.edit { it[KEY_ACCOUNT_PROMPT_POSTPONED_AT] = ms }

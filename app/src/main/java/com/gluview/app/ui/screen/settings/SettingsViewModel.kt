@@ -15,6 +15,7 @@ import com.gluview.app.data.remote.dto.AccessRequestFeatures
 import com.gluview.app.data.repository.AccessRequestRepository
 import com.gluview.app.data.repository.AppConfigRepository
 import com.gluview.app.data.repository.CloudAccessRepository
+import com.gluview.app.data.source.SensorVariant
 import com.gluview.app.data.repository.AuthRepository
 import com.gluview.app.data.repository.CaregiverRepository
 import com.gluview.app.data.repository.DebugRepository
@@ -186,6 +187,18 @@ class SettingsViewModel @Inject constructor(
 
     fun onLogsEnabledChange(enabled: Boolean) {
         viewModelScope.launch { preferences.saveLogsEnabled(enabled) }
+    }
+
+    // Variante do sensor (modelo + região, SensorVariantCatalog) — várias variantes podem usar a
+    // mesma implementação; a fonte só muda (e o serviço só reinicia) se a implementação mudar.
+    val sensorVariantId: StateFlow<String> = preferences.sensorVariantId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    fun onSensorVariantChange(variant: SensorVariant) {
+        viewModelScope.launch {
+            preferences.saveSensorVariantId(variant.id)
+            if (variant.source.id != preferences.dataSource.first()) onDataSourceChange(variant.source.id)
+        }
     }
 
     fun onDataSourceChange(id: String) {

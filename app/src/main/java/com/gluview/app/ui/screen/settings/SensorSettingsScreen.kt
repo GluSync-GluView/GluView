@@ -41,6 +41,9 @@ import com.gluview.app.R
 import com.gluview.app.data.remote.dto.AccessRequestFeatures
 import com.gluview.app.data.sibionics.GlucoseDisplayMode
 import com.gluview.app.data.source.DataSourceType
+import com.gluview.app.data.source.SensorVariant
+import com.gluview.app.data.source.SensorVariantCatalog
+import com.gluview.app.ui.components.label
 import com.gluview.app.ui.components.kit.GluCard
 import com.gluview.app.ui.components.kit.GluSection
 import com.gluview.app.ui.components.kit.Page
@@ -57,7 +60,9 @@ internal data class SensorUi(
     val displayMode: String,
     /** Estado da candidatura por feature (pending/waitlisted/approved/rejected). */
     val betaStatus: Map<String, String>,
-    val betaEnabled: Boolean
+    val betaEnabled: Boolean,
+    /** Variante escolhida/detectada (modelo + região); "" = padrão da fonte. */
+    val sensorVariantId: String = ""
 )
 
 internal data class SensorActions(
@@ -69,7 +74,8 @@ internal data class SensorActions(
     val onDisplayMode: (String) -> Unit,
     val onSensorSetup: () -> Unit,
     val onSensorScanner: () -> Unit,
-    val onLibre2Activation: () -> Unit
+    val onLibre2Activation: () -> Unit,
+    val onVariant: (SensorVariant) -> Unit = {}
 )
 
 /**
@@ -88,6 +94,7 @@ fun SensorSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val dataSource         by viewModel.dataSource.collectAsState()
+    val sensorVariantId    by viewModel.sensorVariantId.collectAsState()
     val sensorWarnEnabled  by viewModel.sensorWarnEnabled.collectAsState()
     val sensorAgingDays    by viewModel.sensorAgingDays.collectAsState()
     val sensorNoSignalMin  by viewModel.sensorNoSignalMin.collectAsState()
@@ -108,10 +115,10 @@ fun SensorSettingsScreen(
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorBetaStatus, sensorBetaEnabled),
+            sensorBetaStatus, sensorBetaEnabled, sensorVariantId),
         actions = SensorActions(viewModel::onDataSourceChange, { betaDialogSource = it }, viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
-            onSensorSetup, onSensorScanner, onLibre2Activation),
+            onSensorSetup, onSensorScanner, onLibre2Activation, viewModel::onSensorVariantChange),
         onBack = onBack,
         snackbarHostState = snackbarHostState
     )
@@ -179,6 +186,7 @@ private fun displayModeLabel(mode: GlucoseDisplayMode): String = stringResource(
 @Composable
 internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> Unit)?, snackbarHostState: SnackbarHostState? = null) {
     val currentSource = DataSourceType.fromId(ui.dataSource)
+    val currentVariant = SensorVariantCatalog.resolve(ui.sensorVariantId, ui.dataSource)
 
     // Aba principal da barra inferior: sem seta (o voltar do sistema continua).
     Page(title = stringResource(R.string.settings_sensor_section_title), onBack = onBack, snackbarHostState = snackbarHostState) {
@@ -186,7 +194,7 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
             // T12 — seleção por dropdown (antes eram chips/botões).
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                val label = stringResource(currentSource.labelRes)
+                val label = currentVariant.label()
                 OutlinedTextField(
                     value = if (currentSource.isUsableOnThisDevice) label
                             else stringResource(R.string.settings_source_label_unavailable, label),
@@ -197,27 +205,37 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                     modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                 )
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DataSourceType.entries.forEach { source ->
+                    // Uma linha por variante (modelo + região), agrupadas por modelo; variantes com o
+                    // mesmo protocolo usam a mesma implementação (SensorVariant.source).
+                    SensorVariantCatalog.all.forEach { variant ->
+                        val source = variant.source
                         val betaState = ui.betaStatus[AccessRequestFeatures.sensorBeta(source.id)]
-                        val name = stringResource(source.labelRes)
+                        val name = variant.label()
                         DropdownMenuItem(
                             text = {
-                                Text(when {
-                                    !source.isUsableOnThisDevice -> stringResource(R.string.settings_source_label_unavailable, name)
-                                    source.comingSoon -> stringResource(R.string.settings_source_label_coming_soon, name)
-                                    else -> name
-                                })
+                                Column {
+                                    Text(when {
+                                        !source.isUsableOnThisDevice -> stringResource(R.string.settings_source_label_unavailable, name)
+                                        source.comingSoon || !variant.implemented -> stringResource(R.string.settings_source_label_coming_soon, name)
+                                        else -> name
+                                    })
+                                    variant.region?.let {
+                                        Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
                             },
                             // "Em breve" sem a candidatura ligada: desabilitado (o toque não fazia nada).
                             // Sensor de biblioteca nativa num aparelho 32 bits: idem (nem a beta faz sentido).
-                            enabled = source.isUsableOnThisDevice && (!source.comingSoon || ui.betaEnabled),
+                            // Variante sem protocolo implementado (Libre europeu): sempre desabilitada.
+                            enabled = variant.implemented && source.isUsableOnThisDevice && (!source.comingSoon || ui.betaEnabled),
                             onClick = {
                                 expanded = false
-                                if (source.comingSoon) actions.onBeta(source) else actions.onDataSource(source.id)
+                                if (source.comingSoon) actions.onBeta(source) else actions.onVariant(variant)
                             },
                             trailingIcon = {
                                 when {
-                                    source.id == ui.dataSource ->
+                                    variant.id == currentVariant.id && source.id == ui.dataSource ->
                                         Icon(Icons.Default.Check, stringResource(R.string.settings_selected))
                                     !source.comingSoon -> Unit
                                     betaState in setOf("pending", "waitlisted") ->

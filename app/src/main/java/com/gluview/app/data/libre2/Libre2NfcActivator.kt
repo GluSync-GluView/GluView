@@ -78,7 +78,15 @@ class Libre2NfcActivator @Inject constructor(
                 appLogger.usage(LOG, "NFC tag connected",
                     mapOf("uid" to uidHex, "patchInfo" to patchInfo.toHex(),
                           "gen" to gen, "fam" to fam, "serial" to serial))
+                // Gen1 = Libre 2/2 Plus europeu: protocolo ainda não implementado (mensagem própria).
+                if (gen == 1) throw LibreGen1NotSupportedException()
                 if (gen != 2) error("Unsupported Libre sensor generation: $gen")
+                // Região de comercialização pelo patchInfo: ajusta a variante mostrada na lista
+                // (ex.: "FreeStyle Libre 2 Plus NA" → "SA"), sem mudar o código de leitura.
+                LibrePatchInfo.detectedVariantId(patchInfo, preferences.sensorVariantId.first())?.let {
+                    appLogger.usage(LOG, "Variante detectada", mapOf("variante" to it, "regiao" to LibrePatchInfo.regionByte(patchInfo)))
+                    preferences.saveSensorVariantId(it)
+                }
 
                 // Juggluco: AlgNfcV.readNfcTag -> Natives.nfcdata. Activation comes later.
                 val fram = withNfcV(tag, "read sensor memory") {
@@ -561,16 +569,7 @@ class Libre2NfcActivator @Inject constructor(
     // ── getversion + serial (Gen2.getversionjava / share/serial.cpp getserial) ──────
 
     /** getversion (Gen2.getversionjava): 2 = Gen2 (US/Libre 2 Plus), 1 = Gen1, 0 = desconhecido. */
-    private fun getVersion(info: ByteArray): Int {
-        if (info.size < 6) return 0
-        val i = (info[2].toInt() and 0xff) shr 4
-        val i2 = info[2].toInt() and 0xF
-        return when (i) {
-            3 -> if (i2 < 9) 1 else 2
-            7 -> if (i2 < 4) 1 else 2
-            else -> 0
-        }
-    }
+    private fun getVersion(info: ByteArray): Int = LibrePatchInfo.generation(info)
 
     /** getserial(fam, uid): número de série completo ("XXXX-<fam><10 chars>"). Ver share/serial.cpp. */
     private fun getSerial(fam: Int, b: ByteArray): String {

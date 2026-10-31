@@ -62,7 +62,9 @@ internal data class AccountUi(
     val displayNameLoadFailed: Boolean = false,
     /** ADR-0030 — liberação da nuvem/acompanhamento: approved|pending|waitlisted|rejected|revoked|none|"" */
     val cloudSyncState: String = "",
-    val cloudSyncRequesting: Boolean = false
+    val cloudSyncRequesting: Boolean = false,
+    /** Conta só de seguidor: não envia leituras, então não há o que pedir. */
+    val isFollowerOnly: Boolean = false
 )
 
 internal data class AccountActions(
@@ -104,6 +106,7 @@ fun AccountSettingsScreen(
     val passkeysEnabled by viewModel.passkeysEnabled.collectAsState()
     val cloudSyncState      by viewModel.cloudSyncState.collectAsState()
     val cloudSyncRequesting by viewModel.cloudSyncRequesting.collectAsState()
+    val isFollowerOnly      by viewModel.isFollowerOnly.collectAsState()
     LaunchedEffect(Unit) { viewModel.refreshCloudSync() }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -123,7 +126,7 @@ fun AccountSettingsScreen(
     AccountContent(
         ui = AccountUi(state.email, state.baseUrl, displayName, displayNameSaving, displayNameSaved, passwordCodeSent,
             passwordCode, newAccountPassword, passwordChangeLoading, editableBaseUrl, passkeysEnabled, displayNameLoadFailed,
-            cloudSyncState, cloudSyncRequesting),
+            cloudSyncState, cloudSyncRequesting, isFollowerOnly),
         actions = AccountActions(viewModel::onDisplayNameChange, viewModel::saveDisplayName,
             viewModel::requestPasswordChangeCode, viewModel::onPasswordCodeChange, viewModel::onNewAccountPasswordChange,
             viewModel::confirmPasswordChange, viewModel::cancelPasswordChange, viewModel::onBaseUrlChange,
@@ -274,14 +277,17 @@ internal fun AccountContent(
 private fun CloudSyncSection(ui: AccountUi, actions: AccountActions) {
     GluSection(stringResource(R.string.settings_cloud_section), description = stringResource(R.string.settings_cloud_desc)) {
         GluCard {
-            val (text, tone) = when (ui.cloudSyncState) {
-                "approved"              -> R.string.settings_cloud_state_approved to Tone.Success
-                "pending", "waitlisted" -> R.string.settings_cloud_state_pending to Tone.Info
-                "rejected"              -> R.string.settings_cloud_state_rejected to Tone.Warning
-                else                    -> R.string.settings_cloud_state_none to Tone.Info
+            // Seguidor não envia leituras: acompanhar depende só do PACIENTE estar liberado.
+            val followerOnly = ui.isFollowerOnly && ui.cloudSyncState != "approved"
+            val (text, tone) = when {
+                followerOnly                                   -> R.string.settings_cloud_state_follower to Tone.Info
+                ui.cloudSyncState == "approved"                -> R.string.settings_cloud_state_approved to Tone.Success
+                ui.cloudSyncState in setOf("pending", "waitlisted") -> R.string.settings_cloud_state_pending to Tone.Info
+                ui.cloudSyncState == "rejected"                -> R.string.settings_cloud_state_rejected to Tone.Warning
+                else                                           -> R.string.settings_cloud_state_none to Tone.Info
             }
             GluCallout(stringResource(text), tone = tone)
-            if (ui.cloudSyncState !in setOf("approved", "pending", "waitlisted")) {
+            if (!ui.isFollowerOnly && ui.cloudSyncState !in setOf("approved", "pending", "waitlisted")) {
                 Button(
                     onClick  = actions.onRequestCloudSync,
                     enabled  = !ui.cloudSyncRequesting,

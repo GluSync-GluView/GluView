@@ -78,6 +78,16 @@
     <string name="settings_cloud_requested">Request sent. We will email you when it is reviewed.</string>
     <string name="settings_cloud_request_error">Could not send the request. Please try again.</string>
     <string name="caregiver_follow_not_entitled">Follower access is not approved for the patient yet. Request it in Settings › Account › Cloud and follower access.</string>
+    <string name="sensor_model_libre2">FreeStyle Libre 2</string>
+    <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
+    <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
+    <string name="sensor_region_eu">Europe</string>
+    <string name="sensor_region_na">North America</string>
+    <string name="sensor_region_sa">South America</string>
+    <string name="sensor_region_cn">China</string>
+    <string name="sensor_variant_label">%1$s %2$s</string>
+    <string name="libre2_gen1_not_supported">This is a European FreeStyle Libre 2 (generation 1). GluView cannot read this version yet — only the North and South American ones for now.</string>
+    <string name="settings_cloud_state_follower">To follow someone you do not need to request anything: the person you follow just needs cloud access approved.</string>
     <string name="login_verify_title">Confirm your email</string>
     <string name="login_verify_subtitle">We sent a 6-digit code to %1$s</string>
     <string name="login_code_label">Verification code</string>

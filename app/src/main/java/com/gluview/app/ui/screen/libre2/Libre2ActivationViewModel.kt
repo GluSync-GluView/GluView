@@ -9,6 +9,7 @@ import com.gluview.app.R
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.libre2.Libre2NfcActivator
 import com.gluview.app.data.libre2.Libre2NfcController
+import com.gluview.app.data.libre2.LibreGen1NotSupportedException
 import com.gluview.app.data.repository.GlucoseRepository
 import com.gluview.app.data.sibionics.SibionicsStatusHolder
 import com.gluview.app.data.source.DataSourceType
@@ -162,7 +163,10 @@ class Libre2ActivationViewModel @Inject constructor(
             restartService()
         }.onFailure { e ->
             _state.update {
-                it.copy(activating = false, readFailure = e.message ?: e::class.simpleName.orEmpty())
+                if (e is LibreGen1NotSupportedException)
+                    it.copy(activating = false, error = UiText.Res(R.string.libre2_gen1_not_supported))
+                else
+                    it.copy(activating = false, readFailure = e.message ?: e::class.simpleName.orEmpty())
             }
         }
     }
