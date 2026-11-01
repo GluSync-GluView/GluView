@@ -1,0 +1,1 @@
+Preparation for the app's new signing key: this version already recognizes the new key for updates. From this version on, GluView requires Android 9 or newer.

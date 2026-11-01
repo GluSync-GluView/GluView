@@ -1,0 +1,1 @@
+Preparação para a nova chave de assinatura do app: esta versão já reconhece a chave nova nas atualizações. A partir desta versão o GluView exige Android 9 ou mais recente.
