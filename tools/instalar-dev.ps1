@@ -22,7 +22,9 @@ param(
     [Parameter(Mandatory = $true)][string[]]$Devices,
     [switch]$SkipBuild
 )
-$ErrorActionPreference = "Stop"
+# "Continue": no PowerShell 5.1, com "Stop", linha que zipalign/apksigner/adb escrevam no stderr vira
+# erro fatal mesmo quando deu certo. Cada comando externo é julgado pelo $LASTEXITCODE.
+$ErrorActionPreference = "Continue"
 . "$PSScriptRoot\chave-b.ps1"
 $Root = Split-Path -Parent $PSScriptRoot
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"

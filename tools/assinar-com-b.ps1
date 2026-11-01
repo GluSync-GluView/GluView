@@ -20,7 +20,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Out,
     [string]$KeyA = (Join-Path $env:USERPROFILE ".android\debug.keystore")
 )
-$ErrorActionPreference = "Stop"
+# "Continue": no PowerShell 5.1, com "Stop", linha que zipalign/apksigner/adb escrevam no stderr vira
+# erro fatal mesmo quando deu certo. Cada comando externo é julgado pelo $LASTEXITCODE.
+$ErrorActionPreference = "Continue"
 . "$PSScriptRoot\chave-b.ps1"
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 $bt = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Android\Sdk\build-tools") | Sort-Object Name | Select-Object -Last 1

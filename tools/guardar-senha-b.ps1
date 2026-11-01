@@ -19,8 +19,16 @@ if (-not (Test-Path $GluviewKeyB)) { throw "chave B não encontrada em $GluviewK
 $secure = Read-Host "Senha da chave B" -AsSecureString
 $env:GLUVIEW_B_PASS = [System.Net.NetworkCredential]::new('', $secure).Password
 try {
-    & $keytool -list -keystore $GluviewKeyB -storetype PKCS12 -alias $GluviewKeyBAlias -storepass:env GLUVIEW_B_PASS *> $null
-    if ($LASTEXITCODE -ne 0) { throw "a senha não abre a chave B — nada foi gravado" }
+    # "Continue" só aqui: no PowerShell 5.1, com "Stop", qualquer linha que o keytool escreva no
+    # stderr vira erro fatal mesmo com a senha certa. Quem decide é o código de saída.
+    $ErrorActionPreference = "Continue"
+    $out = & $keytool -list -keystore $GluviewKeyB -storetype PKCS12 -alias $GluviewKeyBAlias -storepass:env GLUVIEW_B_PASS 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($code -ne 0) {
+        $out | ForEach-Object { Write-Host "    keytool: $_" -ForegroundColor Yellow }
+        throw "a senha não abre a chave B — nada foi gravado"
+    }
 } finally {
     Disable-GluviewKeyBPassword
 }
