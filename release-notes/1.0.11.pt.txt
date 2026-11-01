@@ -1,0 +1,1 @@
+Primeira versão assinada com a nova chave do GluView. A atualização é instalada por cima, como sempre, sem perder dados, conta nem pareamento do sensor. A partir dela, o app só aceita atualizações assinadas com a chave nova.

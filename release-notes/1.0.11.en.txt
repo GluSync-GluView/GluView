@@ -1,0 +1,1 @@
+First version signed with GluView's new key. The update installs over the current one as usual, keeping your data, account and sensor pairing. From this version on, the app only accepts updates signed with the new key.
