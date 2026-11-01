@@ -15,7 +15,7 @@ $GluviewLineage   = Join-Path (Split-Path -Parent $PSScriptRoot) "signing\lineag
 
 function Enable-GluviewKeyBPassword {
     if (Test-Path $GluviewKeyBPassFile) {
-        $secure = Get-Content $GluviewKeyBPassFile -Raw | ConvertTo-SecureString
+        $secure = (Get-Content $GluviewKeyBPassFile -Raw).Trim() | ConvertTo-SecureString  # Trim: a quebra de linha final quebra a decifragem
     } else {
         $secure = Read-Host "Senha da chave B" -AsSecureString
     }
