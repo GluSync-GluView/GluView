@@ -19,6 +19,7 @@ object UpdateTrust {
      */
     val TRUSTED_CERT_SHA256: Set<String> = setOf(
         "e678b39d85151bd06f3206b6bffa7f2b1bdbd65f2cb4e2c8dbe8a5584bd8c796", // A
+        "eceb6c6bd9128959483cdf9dcb5628efc3513bea73db8613024769bb01b5e034", // B (lineage A→B em signing/lineage.bin)
     )
 
     /** Hosts de onde o APK pode vir (URL assinada do GitHub). Qualquer outro é recusado, mesmo

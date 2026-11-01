@@ -41,7 +41,7 @@ android {
 
     defaultConfig {
         applicationId = "com.gluview.app"
-        minSdk        = 26
+        minSdk        = 28   // Android 9: permite assinar só com a chave B (rotação v3, plano OTA seção 6, passo 1a)
         targetSdk     = 35
         versionCode   = gluviewVersionCode
         versionName   = gluviewVersionName

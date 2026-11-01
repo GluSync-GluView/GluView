@@ -49,12 +49,17 @@ param(
     [string]$NotesEn = "",
     [ValidateSet("stable", "beta")][string]$Channel = "stable",
     [ValidateSet("release", "debug")][string]$Variant = "release",
-    # Chave A (debug.keystore padrao do Android nesta maquina; senha publica "android" — a protecao
-    # e o arquivo). Copia de seguranca fora do repositorio. A chave B entra na etapa E11.
+    # Chave que assina. A = debug.keystore deste PC (senha publica "android"; a protecao e o arquivo).
+    # B = chave de release com o lineage A->B (signing/lineage.bin), senha via tools\chave-b.ps1.
+    # Trocar para B so na publicacao que FAZ a rotacao (plano OTA secao 6): antes dela, toda versao
+    # publicada precisa ja confiar em B (UpdateTrust) e ter minSdk 28. Depois dela, nunca mais A.
+    [ValidateSet("A", "B")][string]$Signer = "A",
     [string]$SigningKeystore = (Join-Path $env:USERPROFILE ".android\debug.keystore"),
     [string]$Repo = "GluSync-GluView/GluView",
-    # Certificados aceitos. Hoje so a chave A (debug do PC de publicação). A chave B entra na etapa E11.
-    [string[]]$AllowedCertSha256 = @("e678b39d85151bd06f3206b6bffa7f2b1bdbd65f2cb4e2c8dbe8a5584bd8c796")
+    # Certificados aceitos: A (debug do PC de publicacao) e B (release, lineage A->B).
+    [string[]]$AllowedCertSha256 = @(
+        "e678b39d85151bd06f3206b6bffa7f2b1bdbd65f2cb4e2c8dbe8a5584bd8c796",
+        "eceb6c6bd9128959483cdf9dcb5628efc3513bea73db8613024769bb01b5e034")
 )
 
 # "Continue": no Windows PowerShell 5.1, com "Stop" qualquer linha que git/gh/gradle escrevem no
@@ -164,7 +169,8 @@ $existingTag = & git.exe -C $Root ls-remote --tags origin "refs/tags/$tag" 2>&1
 if ($existingTag) { Fail "a tag $tag ja existe no GitHub" }
 
 # ---------------------------------------------------------------------------------------------- 3
-Step "3. Build (variante $Variant, assinada com a chave A)"
+Step "3. Build (variante $Variant, assinada com a chave $Signer)"
+if ($Signer -eq "B" -and $Variant -ne "release") { Fail "a chave B so assina a variante release" }
 if ($SkipBuild -and -not $DryRun) { Fail "-SkipBuild so e permitido com -DryRun" }
 $V = if ($Variant -eq "release") { "Release" } else { "Debug" }
 $codeBefore = MinutesSince2026
@@ -191,9 +197,18 @@ if ($Variant -eq "release") {
         if ($LASTEXITCODE -ne 0) { Fail "zipalign falhou" }
     }
     $apk = Join-Path $Root "app\build\outputs\apk\release\app-release-signed.apk"
-    & $ApkSigner sign --ks $SigningKeystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
-        --v1-signing-enabled false --v2-signing-enabled true --out $apk $aligned 2>&1 | ForEach-Object { "$_" } | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail "apksigner sign falhou" }
+    if ($Signer -eq "B") {
+        # So B + lineage A->B, APK Signature Scheme v3 (ver tools\chave-b.ps1). A senha vem do arquivo
+        # cifrado (DPAPI) de tools\guardar-senha-b.ps1 ou e pedida escondida; nunca aparece em log.
+        . (Join-Path $PSScriptRoot "chave-b.ps1")
+        Enable-GluviewKeyBPassword
+        try { $signExit = Invoke-GluviewSignB $ApkSigner $aligned $apk } finally { Disable-GluviewKeyBPassword }
+        if ($signExit -ne 0) { Fail "apksigner sign (chave B) falhou" }
+    } else {
+        & $ApkSigner sign --ks $SigningKeystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
+            --v1-signing-enabled false --v2-signing-enabled true --out $apk $aligned 2>&1 | ForEach-Object { "$_" } | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "apksigner sign falhou" }
+    }
 } else {
     $apk = Join-Path $Root "app\build\outputs\apk\debug\app-debug.apk"
 }

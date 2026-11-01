@@ -13,11 +13,15 @@ import org.junit.Test
 class UpdateTrustTest {
 
     private val keyA = "e678b39d85151bd06f3206b6bffa7f2b1bdbd65f2cb4e2c8dbe8a5584bd8c796"
+    private val keyB = "eceb6c6bd9128959483cdf9dcb5628efc3513bea73db8613024769bb01b5e034"
 
     @Test fun certificado_soAceitaListaEmbutida_inclusiveNoHistoricoDeRotacao() {
         assertTrue(UpdateTrust.isTrusted(listOf(keyA)))
         assertTrue(UpdateTrust.isTrusted(listOf(keyA.uppercase())))
         assertTrue("histórico A→B", UpdateTrust.isTrusted(listOf(keyA, "b".repeat(64))))
+        // Depois da rotação o APK chega assinado só com B (o lineage traz A no histórico).
+        assertTrue("só B", UpdateTrust.isTrusted(listOf(keyB)))
+        assertTrue("B com histórico A", UpdateTrust.isTrusted(listOf(keyB, keyA)))
         assertFalse(UpdateTrust.isTrusted(listOf("0".repeat(64))))
         assertFalse(UpdateTrust.isTrusted(emptyList()))
     }
