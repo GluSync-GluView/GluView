@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var preferences: AppPreferences
     @Inject lateinit var nfcController: Libre2NfcController
     @Inject lateinit var updateChecker: com.gluview.app.data.update.UpdateChecker
+    @Inject lateinit var termsRepository: com.gluview.app.data.repository.TermsRepository
 
     private var deepLinkRoute: String? by mutableStateOf(null)
     private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
@@ -105,6 +106,8 @@ class MainActivity : AppCompatActivity() {
         // Plano OTA (E6) — checagem de versão ao abrir o app (o UpdateChecker impõe intervalo
         // mínimo de 1 h). Só consulta metadados; o resultado aparece em Ajustes › Atualizações.
         lifecycleScope.launch { runCatching { updateChecker.check(force = false) } }
+        // LGPD — registra no GluSync o aceite dos termos feito no aparelho (se houver conta e ainda não registrado).
+        lifecycleScope.launch { runCatching { termsRepository.syncAcceptance() } }
 
         // Libre 2 — reader-mode do NFC controlado pela tela de ativação via Libre2NfcController.
         lifecycleScope.launch {

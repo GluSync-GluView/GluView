@@ -3,6 +3,7 @@ package com.gluview.app.ui.screen.terms
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gluview.app.data.datastore.AppPreferences
+import com.gluview.app.data.repository.TermsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +14,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TermsViewModel @Inject constructor(
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    private val termsRepository: TermsRepository
 ) : ViewModel() {
 
     /** Escolhe PT (padrão) ou EN pro texto dos termos, conforme o idioma do app. null = ainda
@@ -27,6 +29,7 @@ class TermsViewModel @Inject constructor(
             val email = preferences.userEmail.first()
             preferences.saveTermsAccepted(TERMS_VERSION, email)
             onAccepted()
+            termsRepository.syncAcceptance() // prova do consentimento no servidor, se já houver conta
         }
     }
 }

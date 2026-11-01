@@ -9,11 +9,21 @@ alguém com diabetes (seguidor). Projeto **sem fins lucrativos**, feito para a c
 - Nuvem e acompanhamento (seguidor vendo a glicemia em tempo real) pelo servidor GluSync, liberados
   por pedido dentro do app
 
-## ⚠️ Aviso médico
+## ⚠️ Aviso médico e de boa-fé
 
-O GluView **não é um dispositivo médico** e não substitui orientação profissional nem o app ou
-leitor oficial do fabricante do seu sensor. Leia [`docs/aviso-medico.md`](docs/aviso-medico.md)
-antes de usar.
+- O GluView **não é um dispositivo médico** e **não substitui o aplicativo oficial do fabricante
+  do seu sensor**, o leitor oficial, o medidor de ponta de dedo nem orientação profissional. Use o
+  app oficial como referência; o GluView é um complemento.
+- É um projeto **independente e sem fins lucrativos**, sem afiliação, patrocínio ou aprovação de
+  Abbott, Sibionics, Dexcom, Roche, Xiaomi ou qualquer fabricante. As marcas pertencem aos donos e
+  aparecem só para indicar compatibilidade.
+- As bibliotecas dos fabricantes usadas na leitura direta **não fazem parte deste repositório**;
+  servem só para que cada pessoa acesse os dados do próprio sensor.
+- Fabricantes ou titulares de direitos com qualquer objeção: `glusync.gluview@gmail.com`. Toda
+  manifestação será tratada de boa-fé e com prioridade.
+
+Leia [`docs/aviso-medico.md`](docs/aviso-medico.md) e a
+[política de privacidade](docs/privacidade.md) antes de usar.
 
 ## Conta gratuita, sem exploração de dados
 

@@ -1,32 +1,35 @@
 # Instalação
 
-O GluView não está na Google Play Store. Por enquanto a distribuição é **privada**: o app só é
-entregue a quem tem uma conta aprovada no GluSync, e depois de instalado ele mesmo se atualiza,
-sem cabo e sem baixar nada à mão.
+O GluView é gratuito, de código aberto e não está na Google Play Store. O app oficial é publicado
+nas [Releases do GitHub](https://github.com/GluSync-GluView/GluView/releases/latest); depois de
+instalado, ele mesmo se atualiza, sem cabo e sem baixar nada à mão.
 
-## 1. Peça acesso e receba o app
+Requer Android 8.0 (API 26) ou mais recente. A leitura direta de sensores (FreeStyle Libre 2 Plus e
+Sibionics) exige aparelho de 64 bits; em aparelhos de 32 bits o app funciona como seguidor e com a
+nuvem.
 
-O cadastro é por aprovação. Depois que o seu acesso for aprovado, você recebe o arquivo de
-instalação (APK) diretamente de quem administra o projeto. Essa é a única vez em que o app chega
-"de fora": as versões seguintes vêm pelo próprio app (veja o passo 4).
+## 1. Baixe o app oficial
 
-## 2. Permita instalação de fontes desconhecidas
+No celular, abra a
+[última versão](https://github.com/GluSync-GluView/GluView/releases/latest) e toque no arquivo
+`GluView-<versão>.apk`.
 
-No Android, ao abrir o arquivo pela primeira vez, o sistema vai pedir permissão ("instalar apps
-desconhecidos") — é normal para apps fora da Play Store. Autorize só para o app usado pra abrir
-o arquivo (navegador, gerenciador de arquivos ou mensageiro).
+Baixe sempre deste endereço. Versões modificadas por terceiros, mesmo com o mesmo nome, não são o
+GluView oficial. Quem quiser conferir o arquivo encontra o SHA-256 ao lado dele, no arquivo
+`.sha256`.
 
-## 3. Abra o app
+## 2. Permita a instalação
 
-Na primeira abertura, você escolhe:
+Ao abrir o arquivo, o Android pede permissão para "instalar apps desconhecidos" — é normal para
+apps fora da Play Store. Autorize só para o app usado para abrir o arquivo (navegador ou
+gerenciador de arquivos). O Play Protect pode mostrar um aviso de app desconhecido; para instalar,
+toque em **Mais detalhes › Instalar mesmo assim**.
 
-- **Criar conta / entrar** — sincroniza com o servidor GluSync, permite acompanhamento
-  (seguidor/paciente) e acesso aos dados de qualquer aparelho.
-- **Usar sem servidor (100% local)** — tudo fica só neste aparelho; mais simples, mas sem
-  acompanhamento nem sincronização entre dispositivos. Dá pra mudar de ideia depois saindo
-  da conta local em Ajustes.
+## 3. Abra o app e crie sua conta grátis
 
-Requer Android 8.0 (API 26) ou mais recente.
+Na primeira abertura, leia o aviso médico e os termos e crie sua conta (veja
+[Primeiros passos](primeiros-passos.md)). A conta é **gratuita**, sem anúncios e sem exploração de
+dados. Com ela, o app funciona inteiro no aparelho; a nuvem e o acompanhamento você pede depois.
 
 ## 4. Atualizações dentro do app
 
@@ -46,17 +49,16 @@ Ele **nunca instala sozinho**: a atualização começa quando você toca em **At
   avisa se for o caso.
 - **Android 9 e anteriores:** o sistema sempre pede uma confirmação final ("Instalar"). Nos mais
   novos, depois da primeira atualização feita pelo app, normalmente não pede mais.
-- **Modo 100% local:** baixar atualizações exige entrar com uma conta aprovada.
 - **Se o Android bloquear:** em aparelhos Samsung, confira o **Bloqueador automático**
   (Configurações › Segurança e privacidade); no Android 16, a **Proteção avançada** também
   impede atualizar apps instalados fora de uma loja.
 
 ## Por que não a Play Store?
 
-A política da Google Play exige que apps de saúde, como os médicos, sejam publicados por uma
-conta de desenvolvedor do tipo **Organização**, com número D-U-N-S
+A política da Google Play exige que apps de saúde sejam publicados por uma conta de desenvolvedor
+do tipo **Organização**, com número D-U-N-S
 ([política da Play Console](https://support.google.com/googleplay/android-developer/answer/10788890)).
-Hoje o projeto usa conta individual, então a distribuição é direta e privada, com a atualização
-feita pelo próprio app.
+O GluView é um projeto individual e sem fins lucrativos, por isso a distribuição é direta, pelo
+GitHub, com a atualização feita pelo próprio app.
 
 Para quem publica versões: veja `tools/publish-release.ps1`.

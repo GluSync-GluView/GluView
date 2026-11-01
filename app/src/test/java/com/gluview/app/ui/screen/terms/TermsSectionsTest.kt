@@ -9,7 +9,7 @@ class TermsSectionsTest {
     private fun check(text: String) {
         val doc = parseTerms(text)
         assertEquals(text.lines().filter { it.isNotBlank() }, doc.allLines())
-        assertEquals(7, doc.sections.size)
+        assertEquals(10, doc.sections.size)  // versão 3: 10 seções; os subitens 8.x ficam dentro da 8
         assertEquals(1, doc.intro.size)
     }
 

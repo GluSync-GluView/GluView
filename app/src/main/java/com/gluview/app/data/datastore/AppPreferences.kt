@@ -136,6 +136,7 @@ class AppPreferences @Inject constructor(
         val KEY_TERMS_VERSION         = intPreferencesKey("terms_accepted_version")
         val KEY_TERMS_ACCEPTED_AT     = longPreferencesKey("terms_accepted_at")
         val KEY_TERMS_ACCEPTED_EMAIL  = stringPreferencesKey("terms_accepted_email")
+        val KEY_TERMS_RECORDED_VERSION = intPreferencesKey("terms_recorded_version") // já registrado no GluSync
 
         // ── Gráficos — horas exibidas por contexto ────────────────────────────
         val KEY_HOME_GRAPH_HOURS      = intPreferencesKey("home_graph_hours")
@@ -435,6 +436,8 @@ class AppPreferences @Inject constructor(
     val termsAcceptedVersion: Flow<Int>   = dataStore.data.safeMap(0) { it[KEY_TERMS_VERSION]        ?: 0 }
     val termsAcceptedAt: Flow<Long>       = dataStore.data.safeMap(0L) { it[KEY_TERMS_ACCEPTED_AT]    ?: 0L }
     val termsAcceptedEmail: Flow<String>  = dataStore.data.safeMap("") { it[KEY_TERMS_ACCEPTED_EMAIL] ?: "" }
+    val termsRecordedVersion: Flow<Int>   = dataStore.data.safeMap(0) { it[KEY_TERMS_RECORDED_VERSION] ?: 0 }
+    suspend fun saveTermsRecordedVersion(version: Int) = dataStore.edit { it[KEY_TERMS_RECORDED_VERSION] = version }
 
     // ── Gráficos ──────────────────────────────────────────────────────────────
     val homeGraphHours:   Flow<Int> = dataStore.data.safeMap(3) { it[KEY_HOME_GRAPH_HOURS]   ?: 3 }

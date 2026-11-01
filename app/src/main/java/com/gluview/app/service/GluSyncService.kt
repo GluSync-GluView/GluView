@@ -28,6 +28,7 @@ import com.gluview.app.util.applyDisplayMode
 import com.gluview.app.util.toGraphReading
 import com.gluview.app.data.remote.GluSyncUploader
 import com.gluview.app.data.repository.CloudAccessRepository
+import com.gluview.app.data.repository.TermsRepository
 import com.gluview.app.data.remote.auth.TokenRefresher
 import com.gluview.app.data.remote.dto.NovaMedicaoDto
 import com.gluview.app.data.repository.GlucoseRepository
@@ -95,6 +96,7 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var sensorHistory: SensorHistoryRepository
     @Inject lateinit var gluSyncUploader: GluSyncUploader
     @Inject lateinit var cloudAccess: CloudAccessRepository
+    @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var tokenRefresher: TokenRefresher
@@ -334,6 +336,7 @@ class GluSyncService : LifecycleService() {
         // Antes, confere se a conta tem a nuvem liberada (ADR-0030) — sem isso o lote nem sai.
         lifecycleScope.launch {
             runCatching { cloudAccess.refreshIfStale() }
+            runCatching { termsRepository.syncAcceptance() } // aceite feito antes do login
             maybeFlushPendingUploads()
         }
         // Poupa dados móveis: ao vivo só por Wi-Fi (uploadReadingToCloud); em dados móveis o

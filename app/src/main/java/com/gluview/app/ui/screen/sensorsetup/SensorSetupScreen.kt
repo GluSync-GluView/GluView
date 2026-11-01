@@ -246,6 +246,8 @@ private fun ColumnScope.StepHeader(title: String, body: String) {
 @Composable
 private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: (SensorOption) -> Unit) {
     StepHeader(stringResource(R.string.setup_choose_title), stringResource(R.string.setup_choose_body))
+    // Boa-fé: o GluView complementa, não substitui, o app oficial do fabricante.
+    GluCallout(stringResource(R.string.sensor_official_app_notice), tone = Tone.Info)
     if (options.isEmpty()) {
         ListSkeleton(rows = 2)
         return

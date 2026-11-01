@@ -3,6 +3,12 @@
 Permite que uma pessoa (seguidor) acompanhe a glicemia de outra (paciente) em tempo real —
 por exemplo, um pai/mãe acompanhando um filho, ou um cônjuge/cuidador.
 
+## Antes de começar
+
+O acompanhamento usa a nuvem, então o **paciente** precisa ter a nuvem liberada (Ajustes › Conta
+› Nuvem e acompanhamento › Pedir). O **seguidor** não precisa pedir nada. Se o paciente ainda não
+estiver liberado, o convite é recusado com essa explicação.
+
 ## Convidar ou ser convidado
 
 Em **Ajustes → Acompanhamento → Gerenciar acompanhamento**:

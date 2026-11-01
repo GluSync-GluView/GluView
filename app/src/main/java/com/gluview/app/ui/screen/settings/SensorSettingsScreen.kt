@@ -44,12 +44,14 @@ import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.data.source.SensorVariant
 import com.gluview.app.data.source.SensorVariantCatalog
 import com.gluview.app.ui.components.label
+import com.gluview.app.ui.components.kit.GluCallout
 import com.gluview.app.ui.components.kit.GluCard
 import com.gluview.app.ui.components.kit.GluSection
 import com.gluview.app.ui.components.kit.Page
 import com.gluview.app.ui.components.kit.RadioRow
 import com.gluview.app.ui.components.kit.SliderRow
 import com.gluview.app.ui.components.kit.SwitchRow
+import com.gluview.app.ui.components.kit.Tone
 
 /** Estado do Sensor (para o harness desenhar sem ViewModel). */
 internal data class SensorUi(
@@ -191,6 +193,8 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
     // Aba principal da barra inferior: sem seta (o voltar do sistema continua).
     Page(title = stringResource(R.string.settings_sensor_section_title), onBack = onBack, snackbarHostState = snackbarHostState) {
         GluSection(stringResource(R.string.settings_data_source)) {
+            // Boa-fé: o GluView complementa, não substitui, o app oficial do fabricante.
+            GluCallout(stringResource(R.string.sensor_official_app_notice), tone = Tone.Info)
             // T12 — seleção por dropdown (antes eram chips/botões).
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {

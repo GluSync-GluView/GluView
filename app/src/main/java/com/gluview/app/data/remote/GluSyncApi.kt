@@ -243,6 +243,10 @@ interface GluSyncApi {
     suspend fun testPushover(@Body request: TestPushoverRequestDto): TestPushoverResponseDto
 
     // ADR-0029 — cadastro por convite em camadas + beta da bomba de insulina/sensores.
+    // F7 / LGPD — registro do aceite dos termos (versão + hash do texto + idioma)
+    @POST("terms/accept")
+    suspend fun acceptTerms(@Body request: AcceptTermsDto): Response<Unit>
+
     @GET("config/features")
     suspend fun getFeatureFlags(): FeatureFlagsDto
 
