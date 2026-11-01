@@ -9,6 +9,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import com.gluview.app.BuildConfig
 import com.gluview.app.alert.AlertManager
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.local.dao.AlertLogDao
@@ -878,6 +879,8 @@ class GluSyncService : LifecycleService() {
     private fun startSignalR() {
         hubConnection?.stop()
         hubConnection = null
+        // Build demo: não há servidor de tempo real (o DemoBackend só responde HTTP); o polling basta.
+        if (BuildConfig.DEMO_MODE) return
 
         lifecycleScope.launch(Dispatchers.IO) {
             val baseUrl = preferences.baseUrl.first().trimEnd('/')
