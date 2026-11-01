@@ -4,7 +4,7 @@ O GluView é gratuito, de código aberto e não está na Google Play Store. O ap
 nas [Releases do GitHub](https://github.com/GluSync-GluView/GluView/releases/latest); depois de
 instalado, ele mesmo se atualiza, sem cabo e sem baixar nada à mão.
 
-Requer Android 8.0 (API 26) ou mais recente. A leitura direta de sensores (FreeStyle Libre 2 Plus e
+Requer Android 9 (API 28) ou mais recente. A leitura direta de sensores (FreeStyle Libre 2 Plus e
 Sibionics) exige aparelho de 64 bits; em aparelhos de 32 bits o app funciona como seguidor e com a
 nuvem.
 
@@ -18,12 +18,34 @@ Baixe sempre deste endereço. Versões modificadas por terceiros, mesmo com o me
 GluView oficial. Quem quiser conferir o arquivo encontra o SHA-256 ao lado dele, no arquivo
 `.sha256`.
 
+### Chave de assinatura
+
+Desde a versão 1.0.11, o GluView oficial é assinado com esta chave (SHA-256 do certificado):
+
+```
+EC:EB:6C:6B:D9:12:89:59:48:3C:DF:9D:CB:56:28:EF:C3:51:3B:EA:73:DB:86:13:02:47:69:BB:01:B5:E0:34
+```
+
+Até a 1.0.10 ele usava outra chave. A 1.0.11 leva junto a autorização da chave antiga para a nova,
+então quem tem a 1.0.10 ou anterior atualiza por cima, como sempre, sem perder dados, conta nem
+pareamento do sensor. Se o Android recusar a atualização por "assinatura diferente", o app instalado
+não é o oficial: exporte o que precisar, desinstale e instale o oficial.
+
 ## 2. Permita a instalação
 
 Ao abrir o arquivo, o Android pede permissão para "instalar apps desconhecidos" — é normal para
 apps fora da Play Store. Autorize só para o app usado para abrir o arquivo (navegador ou
 gerenciador de arquivos). O Play Protect pode mostrar um aviso de app desconhecido; para instalar,
 toque em **Mais detalhes › Instalar mesmo assim**.
+
+### Verificação de desenvolvedor do Google
+
+Desde 30/09/2026, no Brasil, o Google exige que apps Android venham de desenvolvedores registrados
+([página do Google](https://developer.android.com/developer-verification)). Por enquanto a regra
+vale para as lojas participantes (Google Play, Galaxy Store, Xiaomi GetApps e outras); em 2027 ela
+passa a valer para todos os apps, no mundo todo. O registro do GluView está em andamento. Se o seu
+aparelho mostrar que o app é de um **desenvolvedor não verificado**, o arquivo continua sendo o
+oficial desde que tenha vindo do endereço acima; confira o SHA-256 se quiser ter certeza.
 
 ## 3. Abra o app e crie sua conta grátis
 
@@ -61,4 +83,6 @@ do tipo **Organização**, com número D-U-N-S
 O GluView é um projeto individual e sem fins lucrativos, por isso a distribuição é direta, pelo
 GitHub, com a atualização feita pelo próprio app.
 
-Para quem publica versões: veja `tools/publish-release.ps1`.
+Para quem publica versões: veja `tools/publish-release.ps1` (assinatura com a chave B:
+`-Signer B`) e, para a prova de posse do pacote no registro do Google,
+`tools/prova-registro-google.ps1`.

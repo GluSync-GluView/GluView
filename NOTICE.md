@@ -39,6 +39,8 @@ por nenhum desses fabricantes.
 ## Uso do nome GluView
 
 A licença cobre o código, não o nome nem o ícone. Versões modificadas distribuídas por terceiros
-devem usar **outro nome e outro ícone** e deixar claro que não são o GluView oficial. O GluView é um
+devem usar **outro nome, outro ícone e outro nome de pacote** (o `com.gluview.app` é do GluView
+oficial e está sendo registrado na verificação de desenvolvedor do Google; no build, por exemplo,
+`-Pgluview.applicationIdSuffix=.meufork`) e deixar claro que não são o GluView oficial. O GluView é um
 projeto sem fins lucrativos; o nome não pode ser usado para vender o app ou sugerir uma versão
 oficial paga.

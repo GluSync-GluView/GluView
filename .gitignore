@@ -38,3 +38,6 @@ build_log*.txt
 # Bibliotecas proprietárias (Abbott/Sibionics): nunca no repositório. Gere com
 # tools/extract_native_libs.py a partir dos APKs oficiais (ver docs/build-native-libs.md).
 /app/src/main/jniLibs/
+
+# Arquivo do Google para a prova de posse do pacote (tools/prova-registro-google.ps1 copia e apaga).
+/app/src/main/assets/adi-registration.properties

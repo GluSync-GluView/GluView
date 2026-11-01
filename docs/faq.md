@@ -31,6 +31,15 @@ Pra poupar dados móveis, o app manda só a leitura mais recente a cada alguns m
 o histórico completo é sincronizado de uma vez ao conectar no Wi-Fi. Dá pra ajustar o intervalo em
 **Ajustes › Sincronização**.
 
+**O Android disse que o app é de um "desenvolvedor não verificado". É seguro?**
+Se o arquivo veio das [Releases do GitHub](https://github.com/GluSync-GluView/GluView/releases/latest),
+é o app oficial: o aviso aparece porque o registro do GluView na verificação de desenvolvedor do
+Google ainda está em andamento. Veja [Instalação](instalacao.md#verificação-de-desenvolvedor-do-google).
+
+**A versão 1.0.11 trocou a chave de assinatura. Preciso fazer alguma coisa?**
+Não. A atualização instala por cima, como sempre, e mantém dados, conta e pareamento. A chave nova
+está em [Instalação](instalacao.md#chave-de-assinatura).
+
 **Posso ser paciente e seguidor ao mesmo tempo?**
 Sim — marque os dois perfis ao criar a conta.
 
