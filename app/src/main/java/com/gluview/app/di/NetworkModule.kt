@@ -6,6 +6,7 @@ import com.gluview.app.data.remote.GluSyncApi
 import com.gluview.app.data.remote.auth.AuthInterceptor
 import com.gluview.app.data.remote.auth.BaseUrlRewriter
 import com.gluview.app.data.remote.auth.TokenAuthenticator
+import com.gluview.app.demo.DemoBackend
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,6 +59,8 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         loggingInterceptor: Interceptor
     ): OkHttpClient = OkHttpClient.Builder()
+        // Build demo: o servidor falso responde antes de tudo (nada vai para a rede).
+        .apply { DemoBackend.seAtivo()?.let { addInterceptor(it) } }
         .addInterceptor(authInterceptor)
         .authenticator(tokenAuthenticator)
         .addInterceptor(loggingInterceptor)
@@ -90,6 +93,7 @@ object NetworkModule {
         preferences: AppPreferences,
         loggingInterceptor: Interceptor
     ): OkHttpClient = OkHttpClient.Builder()
+        .apply { DemoBackend.seAtivo()?.let { addInterceptor(it) } }
         .addInterceptor { chain ->
             val baseUrl = runBlocking { preferences.baseUrl.first() }
             chain.proceed(BaseUrlRewriter.rewrite(chain.request(), baseUrl))

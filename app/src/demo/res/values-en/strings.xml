@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Build demo: nome próprio no lançador para não confundir com o app real. -->
+<resources>
+    <string name="app_name">GluView Demo</string>
+</resources>

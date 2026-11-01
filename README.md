@@ -53,6 +53,12 @@ indisponíveis. Para incluí-las, extraia dos APKs oficiais que você mesmo baix
 **Servidor.** O build usa o servidor oficial por padrão. Para outro servidor GluSync:
 `./gradlew :app:assembleDebug -Pgluview.serverUrl=https://seu-servidor`.
 
+**Modo demonstração.** `./gradlew :app:assembleDemo` gera o "GluView Demo" (pacote
+`com.gluview.app.demo`, instala ao lado do app real): glicemia sintética servida por um servidor falso
+embutido, sem sensor, sem rede e sem dados reais — para gravar telas e vídeos de divulgação. Entra com
+qualquer e-mail e senha; a conta demo também acompanha a paciente fictícia "Ana". Não é publicado nas
+Releases.
+
 Stack: Kotlin, Jetpack Compose, Hilt, Room, Retrofit, SignalR, C++ (NDK).
 
 ## Licença

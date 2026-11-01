@@ -1,5 +1,6 @@
 package com.gluview.app.data.repository
 
+import com.gluview.app.BuildConfig
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.local.dao.GlucoseDao
 import com.gluview.app.data.local.entity.DayStats
@@ -238,15 +239,18 @@ class GlucoseRepository @Inject constructor(
 
     suspend fun backfillIfNeeded() {
         val owner = preferences.userEmail.first()
-        val last = dao.getLatest(owner) ?: return
         val now  = System.currentTimeMillis()
-        val gapMs = now - last.dateMs
+        // Build demo: banco vazio na primeira abertura também puxa as últimas 24h, para o gráfico
+        // já nascer cheio (no app real, sem leitura local não há buraco a preencher).
+        val lastMs = dao.getLatest(owner)?.dateMs
+            ?: if (BuildConfig.DEMO_MODE) now - TimeUnit.HOURS.toMillis(24) - 60_000L else return
+        val gapMs = now - lastMs
 
         // Nenhum buraco significativo — não vale a chamada de rede
         if (gapMs < TimeUnit.MINUTES.toMillis(5)) return
 
         // Cap em 24h: não faz sentido buscar mais do que o período exibido nos gráficos
-        val fromMs = maxOf(last.dateMs + 60_000L, now - TimeUnit.HOURS.toMillis(24))
+        val fromMs = maxOf(lastMs + 60_000L, now - TimeUnit.HOURS.toMillis(24))
 
         val entries = runCatching {
             api.getRange(

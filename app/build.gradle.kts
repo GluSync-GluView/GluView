@@ -67,6 +67,9 @@ android {
             "libnative-encrypy-decrypt-v110.so", "libnative-sensitivity-v110.so",
             "libnative-struct2json.so").toString())
 
+        // Modo demonstração: só o build "demo" liga (ver buildTypes e com.gluview.app.demo).
+        buildConfigField("boolean", "DEMO_MODE", "false")
+
         // Módulo nativo da ponte Abbott (fake JavaVM/JNIEnv p/ inicializar o WhiteCryption SKB).
         // arm64-v8a: todas as bibliotecas (sensores Sibionics e Libre 2). armeabi-v7a: só uma
         // biblioteca de marcação (ver CMakeLists.txt) — o bastante para o APK instalar em aparelho
@@ -128,6 +131,20 @@ android {
             if (localProps.containsKey("KEYSTORE_PATH")) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // Modo demonstração (divulgação): glicemia sintética servida por um servidor falso embutido
+        // (com.gluview.app.demo.DemoBackend), sem rede e sem sensor. Pacote próprio (.demo), então
+        // instala ao lado do app real sem tocar nos dados dele. Nunca é publicado nas Releases.
+        // Gerar: gradlew :app:assembleDemo
+        create("demo") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".demo"
+            versionNameSuffix   = "-demo"
+            matchingFallbacks  += listOf("debug")
+            buildConfigField("boolean", "DEMO_MODE", "true")
+            // Endereço que não existe: o SignalR e qualquer chamada que escape do DemoBackend falham
+            // na hora, sem levar o token falso a um servidor de verdade.
+            buildConfigField("String", "GLUSYNC_BASE_URL", "\"https://demo.gluview.invalid\"")
         }
     }
 

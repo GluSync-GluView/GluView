@@ -1,6 +1,7 @@
 package com.gluview.app.di
 
 import com.gluview.app.data.donation.DonationApi
+import com.gluview.app.demo.DemoBackend
 import com.gluview.app.util.GluSyncConstants
 import dagger.Module
 import dagger.Provides
@@ -24,6 +25,7 @@ object DonationModule {
         .baseUrl("${GluSyncConstants.BASE_URL}/")
         .client(
             OkHttpClient.Builder()
+                .apply { DemoBackend.seAtivo()?.let { addInterceptor(it) } }
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(90, TimeUnit.SECONDS)
                 .callTimeout(120, TimeUnit.SECONDS)
