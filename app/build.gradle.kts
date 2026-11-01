@@ -45,6 +45,9 @@ android {
         targetSdk     = 35
         versionCode   = gluviewVersionCode
         versionName   = gluviewVersionName
+        // Ensaio de rotação de chave (plano OTA, seção 6, passo 8): -Pgluview.applicationIdSuffix=.rotationtest
+        // gera um pacote separado, que se instala ao lado do app real sem tocá-lo.
+        (findProperty("gluview.applicationIdSuffix") as String?)?.let { applicationIdSuffix = it }
 
         // Servidor GluSync que o app usa. Padrão = instância oficial; quem compila um fork aponta
         // para o próprio servidor com -Pgluview.serverUrl=https://... (sem editar código).
