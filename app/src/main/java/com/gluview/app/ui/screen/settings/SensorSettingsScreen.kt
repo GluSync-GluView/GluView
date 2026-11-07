@@ -243,7 +243,10 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     // Uma linha por variante (modelo + região), agrupadas por modelo; variantes com o
                     // mesmo protocolo usam a mesma implementação (SensorVariant.source).
-                    SensorVariantCatalog.all.forEach { variant ->
+                    // GluSync (servidor) não é oferecido aqui (decisão do Felipe, 07/11/2026): continua sendo a
+                    // fonte inicial de quem instala e aparece no campo enquanto nenhum sensor é escolhido,
+                    // mas a lista só traz sensores.
+                    SensorVariantCatalog.all.filter { it.source != DataSourceType.GLUSYNC }.forEach { variant ->
                         val source = variant.source
                         val betaState = ui.betaStatus[AccessRequestFeatures.sensorBeta(source.id)]
                         val name = variant.label()
