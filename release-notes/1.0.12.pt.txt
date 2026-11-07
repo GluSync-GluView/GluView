@@ -1,0 +1,1 @@
+Prepara o suporte ao sensor Accu-Chek SmartGuide: leitura direta pelo Bluetooth, configuração com o código da embalagem e o PIN da tampa do aplicador, avisos do sensor e contagem do aquecimento. O SmartGuide continua como "Em breve" e, por enquanto, fica disponível só para quem for aprovado no teste. Nada muda para quem usa Libre 2 ou Sibionics.

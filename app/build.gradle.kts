@@ -23,7 +23,7 @@ val localProps = Properties().also { props ->
 // minuto e invalidaria o cache dos testes Robolectric/Roborazzi. -Pgluview.versionCode=N fixa o valor
 // (só para testes locais — a publicação usa a fórmula). versionName segue a série v1.0.x das releases
 // e precisa crescer junto (o Obtainium compara a string); sobrescrevível com -Pgluview.versionName.
-val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.0.11"
+val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.0.12"
 val gluviewVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.toInt() ?: run {
     val buildsApk = gradle.startParameter.taskNames.any {
         it.contains("assemble", ignoreCase = true) || it.contains("install", ignoreCase = true) ||

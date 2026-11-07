@@ -1,0 +1,1 @@
+Prepares support for the Accu-Chek SmartGuide sensor: direct Bluetooth reading, setup with the package code and the PIN on the applicator cap, sensor warnings and warm-up countdown. The SmartGuide is still marked "Coming soon" and, for now, is available only to people approved for the test. Nothing changes for Libre 2 or Sibionics users.
