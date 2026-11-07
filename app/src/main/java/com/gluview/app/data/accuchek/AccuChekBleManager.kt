@@ -17,451 +17,707 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
+import com.gluview.app.data.accuchek.cgm.CgmFeature
+import com.gluview.app.data.accuchek.cgm.CgmFeatureParser
+import com.gluview.app.data.accuchek.cgm.CgmMeasurement
+import com.gluview.app.data.accuchek.cgm.CgmMeasurementParser
+import com.gluview.app.data.accuchek.cgm.CgmParse
+import com.gluview.app.data.accuchek.cgm.CgmStatus
+import com.gluview.app.data.accuchek.cgm.CgmStatusParser
+import com.gluview.app.data.accuchek.cgm.CrcState
+import com.gluview.app.data.accuchek.cgm.Racp
+import com.gluview.app.data.accuchek.cgm.SessionRunTime
+import com.gluview.app.data.accuchek.cgm.SessionRunTimeParser
+import com.gluview.app.data.accuchek.cgm.SessionStartTime
+import com.gluview.app.data.accuchek.cgm.SessionStartTimeParser
+import com.gluview.app.data.accuchek.cgm.SmartGuideGatt
+import com.gluview.app.data.accuchek.cgm.SmartGuideIdentityMatcher
+import com.gluview.app.data.accuchek.cgm.Socp
+import com.gluview.app.data.sensor.SensorCode
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.time.LocalDateTime
+import java.util.ArrayDeque
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * GATT BLE do Accu-Chek SmartGuide — porta o fluxo real do Juggluco (`GlucoseMeterGatt.java` +
- * `MeterScanner.java`, GPLv3) para o perfil Bluetooth SIG "Glucose Service" (0x1808). Ver
- * [AccuChekGatt]/[AccuChekMeasurementParser]/[AccuChekRacp] para os UUIDs e o parsing de bytes.
+ * Bluetooth do Accu-Chek SmartGuide — serviço CGM padrão (0x181F). Ver o protocolo em
+ * [com.gluview.app.data.accuchek.cgm] e o plano em `Projeto DM1/GluView/12_sprint_accuchek_smartguide.md`.
  *
- * Fluxo (idêntico ao Juggluco, `discover()`/`handleManufactory()`/`startGlucoseService()`):
- *  1. connectGatt (autoConnect) → aguarda bond (o pareamento com PIN de 6 dígitos impresso na tampa
- *     azul do aplicador é feito pelo SISTEMA Android — sem código de PIN próprio aqui, igual ao
- *     Juggluco, que nunca chama `createBond()` para este perfil).
- *  2. discoverServices → lê Manufacturer Name (0x2A29); "Roche" confirma o SmartGuide.
- *  3. Lê Date/Time (0x2A08) se existir — usado só para log/diagnóstico de deriva de relógio.
- *  4. Habilita notificação em Glucose Measurement (0x2A18) [+ Context 0x2A34 antes, se existir].
- *  5. Habilita indicação no Record Access Control Point (0x2A52).
- *  6. Lê o Serial Number (0x2A25) se existir.
- *  7. Escreve no RACP "Report Stored Records ≥ sequence" (ver [AccuChekRacp]) — o sensor então
- *     notifica cada registro em 0x2A18 e finaliza com uma Response Code em 0x2A52.
+ * Referências: Juggluco `AccuGattCallback.java` (ordem dos comandos) e xDrip `libglupro`
+ * `GluProBle.java` (pareamento por PIN, reconexão alternando conexão direta e busca).
  *
- * IMPORTANTE (sem hardware para validar ainda): esta classe replica fielmente a MÁQUINA DE ESTADOS
- * do Juggluco, mas os bytes reais nunca foram capturados de um SmartGuide de verdade. Quando o
- * sensor chegar, ativar `AppLogger` em modo verboso e comparar o hex recebido em
- * [Listener.onRawGlucosePacket] com [AccuChekMeasurementParser] antes de confiar na glicemia.
+ * Fluxo:
+ *  1. Achar o sensor: pareado no celular (`AC-<serial>` em bondedDevices) → endereço salvo →
+ *     busca pelo nome. O endereço Bluetooth do sensor muda (privado resolvível); depois de pareado
+ *     o Android resolve pelo pareamento, então a reconexão usa o aparelho pareado. Tentativas
+ *     alternam conexão direta e "buscar e conectar" (xDrip `useScanConnectStrategy`).
+ *  2. Conectar → descobrir serviços. Sem pareamento: `createBond()` com o PIN de 6 dígitos da tampa
+ *     do aplicador já armado — o app responde ao pedido de pareamento do Android sozinho
+ *     ([BluetoothDevice.setPin]); sem PIN, ou se falhar, aparece a janela do sistema.
+ *  3. Pareado: liga notify no CGM Measurement e indicate no RACP e no SOCP; lê Feature (E2E-CRC),
+ *     Status (hora de início), Session Start/Run Time, serial/firmware; pede o intervalo ao SOCP
+ *     (só diagnóstico, como o Juggluco). Então [Listener.onReady] — a fonte pede o histórico com
+ *     [requestHistory].
+ *
+ * Todas as operações GATT passam por uma fila (o Android só aceita uma por vez); cada uma tem
+ * prazo de [OP_TIMEOUT_MS].
  */
 @Singleton
 class AccuChekBleManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val appLogger: AppLogger
 ) {
+    enum class PairingState { BONDING, BONDED, FAILED, LOST }
+
     interface Listener {
+        /** true só depois da configuração completa ([onReady]); false em qualquer queda. */
         fun onConnectionChanged(connected: Boolean)
-        fun onReading(reading: AccuChekReading)
-        /** Pacote cru da 0x2A18 antes do parse — para diagnóstico/oráculo quando o sensor chegar. */
-        fun onRawGlucosePacket(bytes: ByteArray) {}
-        fun onSerialNumber(serial: String) {}
-        /** RACP terminou o ciclo de busca (com ou sem registros novos) — o chamador decide se avança o cursor. */
-        fun onFetchComplete() {}
+        fun onPairingStateChanged(state: PairingState) {}
+        fun onFeature(feature: CgmFeature) {}
+        /** [receivedAtMs] = quando o status chegou (o início do sensor é este instante − minutos). */
+        fun onStatus(status: CgmStatus, receivedAtMs: Long)
+        fun onSessionStartTime(start: SessionStartTime) {}
+        fun onSessionRunTime(runTime: SessionRunTime) {}
+        fun onDeviceInfo(serial: String?, firmware: String?) {}
+        /** Configuração concluída; [address] é o endereço do aparelho pareado (para reconectar). */
+        fun onReady(address: String, advertisedName: String?)
+        fun onMeasurements(records: List<CgmMeasurement>, receivedAtMs: Long)
+        fun onHistoryComplete(response: Racp.Response.Code) {}
         fun onRssi(rssi: Int) {}
         fun onBluetoothTurnedOn() {}
     }
 
-    companion object {
-        private const val LOG = "ACCUCHEK_BLE"
+    private companion object {
+        const val LOG = "ACCUCHEK_BLE"
+        const val OP_TIMEOUT_MS = 10_000L
+        const val SCAN_TIMEOUT_MS = 30_000L
+        const val DISCOVER_DELAY_MS = 600L
+        const val MAX_START_TRIES = 8
+        const val START_RETRY_MS = 100L
+
+        // Falhas de segurança do GATT (sensor que não reconhece mais o pareamento deste celular).
+        const val GATT_INSUFFICIENT_AUTHENTICATION = 5
+        const val GATT_INSUFFICIENT_ENCRYPTION = 15
+        const val GATT_AUTH_FAIL = 137
     }
 
     private val adapter: BluetoothAdapter? by lazy {
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
     }
+    private val handler = Handler(Looper.getMainLooper())
+    private val matcher = SmartGuideIdentityMatcher()
+    private val lock = Any()
 
-    private var gatt: BluetoothGatt? = null
-    private var glucoseChar: BluetoothGattCharacteristic? = null
-    private var contextChar: BluetoothGattCharacteristic? = null
-    private var racpChar: BluetoothGattCharacteristic? = null
-    private var dateTimeChar: BluetoothGattCharacteristic? = null
-    private var serialChar: BluetoothGattCharacteristic? = null
-    private var manufacturerChar: BluetoothGattCharacteristic? = null
-    private var listener: Listener? = null
-    private var isRocheDevice = false
-    @Volatile private var targetMac: String? = null
-    @Volatile private var fetchFromSequence: Int = 0
+    @Volatile private var listener: Listener? = null
+    @Volatile private var gatt: BluetoothGatt? = null
+    @Volatile private var targetSerial: String? = null
+    @Volatile private var targetAddress: String? = null
+    @Volatile private var pairingPin: String? = null
+    @Volatile private var e2eCrc = true
+    @Volatile private var ready = false
+    @Volatile private var setupStarted = false
+    @Volatile private var bondRequested = false
+    @Volatile private var deviceInfoRead = false
+    @Volatile private var connectAttempt = 0
+
+    private val chars = HashMap<UUID, BluetoothGattCharacteristic>()
 
     fun setListener(l: Listener?) { listener = l }
 
-    /** Próxima busca de RACP começará em >= [sequence] — chamado pela [AccuChekSource] com o cursor persistido. */
-    fun setFetchFromSequence(sequence: Int) { fetchFromSequence = sequence }
+    /** PIN de 6 dígitos da tampa do aplicador; null/vazio = deixa a janela de pareamento do sistema. */
+    fun setPairingPin(pin: String?) {
+        pairingPin = pin?.trim()?.takeIf { it.length == 6 && it.all(Char::isDigit) }
+    }
 
-    // ── Rádio do sistema ligado/desligado (mesmo padrão do SibionicsBleManager) ──────────────────
+    val isReady: Boolean get() = ready
+
+    // ── Receivers do sistema ─────────────────────────────────────────────────────────────────────
     init {
-        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
-                    BluetoothAdapter.STATE_OFF, BluetoothAdapter.STATE_TURNING_OFF -> {
-                        if (gatt != null) {
-                            appLogger.error(LOG, "Bluetooth do sistema desligado — forçando estado desconectado")
-                            disconnect()
-                        }
-                    }
-                    BluetoothAdapter.STATE_ON -> {
-                        appLogger.usage(LOG, "Bluetooth do sistema religado")
-                        listener?.onBluetoothTurnedOn()
-                    }
+        register(IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), exported = false) { intent ->
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
+                BluetoothAdapter.STATE_OFF, BluetoothAdapter.STATE_TURNING_OFF -> if (gatt != null) {
+                    appLogger.error(LOG, "Bluetooth do sistema desligado — fechando a conexão")
+                    closeGatt(notify = true)
+                }
+                BluetoothAdapter.STATE_ON -> {
+                    appLogger.usage(LOG, "Bluetooth do sistema religado")
+                    listener?.onBluetoothTurnedOn()
                 }
             }
         }
+        register(IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED), exported = true) { intent ->
+            val device = intent.device() ?: return@register
+            if (!device.address.equals(targetAddress, ignoreCase = true)) return@register
+            val state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+            val previous = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
+            appLogger.usage(LOG, "Estado do pareamento mudou", mapOf("estado" to state, "anterior" to previous))
+            onBondStateChanged(state, previous)
+        }
+        // Pedido de pareamento: ordered broadcast. Prioridade logo abaixo da do sistema para responder
+        // com o PIN antes do app Configurações e interromper o broadcast (sem janela) — mesmo
+        // mecanismo do cgm-probe e do xDrip (`setPin`).
+        register(
+            IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST).apply { priority = IntentFilter.SYSTEM_HIGH_PRIORITY - 1 },
+            exported = true
+        ) { intent -> onPairingRequest(intent) }
+    }
+
+    private fun register(filter: IntentFilter, exported: Boolean, body: BroadcastReceiver.(Intent) -> Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) = body(this, intent)
+        }
+        val flag = if (exported) ContextCompat.RECEIVER_EXPORTED else ContextCompat.RECEIVER_NOT_EXPORTED
+        runCatching { ContextCompat.registerReceiver(context, receiver, filter, flag) }
+            .onFailure { e -> appLogger.error(LOG, "Falha ao registrar receiver", mapOf("acao" to filter.getAction(0), "erro" to (e::class.simpleName ?: "?"))) }
+    }
+
+    private fun Intent.device(): BluetoothDevice? =
+        if (Build.VERSION.SDK_INT >= 34) getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        else @Suppress("DEPRECATION") getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+
+    @SuppressLint("MissingPermission")
+    private fun BroadcastReceiver.onPairingRequest(intent: Intent) {
+        val device = intent.device() ?: return
+        if (!device.address.equals(targetAddress, ignoreCase = true)) return
+        val variant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, -1)
+        val pin = pairingPin
+        appLogger.usage(LOG, "Pedido de pareamento do Android", mapOf("variante" to variant, "pinArmado" to (pin != null)))
+        // O SmartGuide pede passkey, que o Android entrega como a variante PIN. Outras: o sistema cuida.
+        if (pin == null || variant != BluetoothDevice.PAIRING_VARIANT_PIN) return
         runCatching {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        }.onFailure { e ->
-            appLogger.error(LOG, "Falha ao registrar receiver de estado do Bluetooth",
-                mapOf("erro" to (e::class.simpleName ?: "?")))
+            if (device.setPin(pin.toByteArray(Charsets.US_ASCII))) {
+                if (isOrderedBroadcast) abortBroadcast()
+                appLogger.usage(LOG, "PIN enviado pelo app (sem janela do sistema)")
+            } else {
+                appLogger.error(LOG, "setPin recusado — fica a janela do sistema")
+            }
+        }.onFailure { e -> appLogger.error(LOG, "setPin falhou", mapOf("erro" to (e::class.simpleName ?: "?"))) }
+    }
+
+    private fun onBondStateChanged(state: Int, previous: Int) {
+        when (state) {
+            BluetoothDevice.BOND_BONDING -> listener?.onPairingStateChanged(PairingState.BONDING)
+            BluetoothDevice.BOND_BONDED -> {
+                listener?.onPairingStateChanged(PairingState.BONDED)
+                val g = gatt
+                if (g != null && chars.isNotEmpty() && !setupStarted) startSetup(g)
+            }
+            BluetoothDevice.BOND_NONE -> if (previous == BluetoothDevice.BOND_BONDING) {
+                appLogger.error(LOG, "Pareamento falhou (PIN errado, cancelado ou sensor longe)")
+                listener?.onPairingStateChanged(PairingState.FAILED)
+                closeGatt(notify = true)
+            }
         }
     }
 
-    // ── Scan (filtra por nome "ACCU-CHEK…", igual MeterScanner.isRocheAccuChekName) ───────────────
-    private var scanCallback: ScanCallback? = null
+    // ── Localizar e conectar ─────────────────────────────────────────────────────────────────────
 
+    /**
+     * Conecta ao sensor de [serial] (pode ser null enquanto não há sensor configurado: aceita o
+     * primeiro `AC-…` encontrado). [savedAddress] = endereço salvo da última configuração.
+     * Tentativas ímpares conectam direto; pares buscam pelo nome antes (o endereço pode ter mudado).
+     */
     @SuppressLint("MissingPermission")
-    fun startScan(onFound: (name: String?, mac: String, rssi: Int) -> Unit) {
+    fun connectToSensor(serial: String?, savedAddress: String?) {
+        targetSerial = serial?.takeIf { it.isNotBlank() }
+        val attempt = ++connectAttempt
+        val bonded = findBondedSensor(targetSerial)
+        val direct = bonded?.address ?: savedAddress?.takeIf { it.isNotBlank() }
+        val scanFirst = direct == null || (attempt % 2 == 0 && bonded == null)
+        appLogger.usage(LOG, "Procurando o sensor", mapOf(
+            "tentativa" to attempt, "pareadoNoCelular" to (bonded != null),
+            "enderecoSalvo" to !savedAddress.isNullOrBlank(), "modo" to if (scanFirst) "busca" else "direto"
+        ))
+        if (scanFirst) {
+            startScan(targetSerial, onTimeout = { listener?.onConnectionChanged(false) }) { _, address, _ ->
+                stopScan()
+                connect(address)
+            }
+        } else {
+            connect(direct!!)
+        }
+    }
+
+    /** Sensor já pareado com este celular (por este app ou pelo app oficial — o pareamento é do celular). */
+    @SuppressLint("MissingPermission")
+    fun findBondedSensor(serial: String?): BluetoothDevice? = runCatching {
+        adapter?.bondedDevices?.firstOrNull { d -> nameMatches(d.name, serial) }
+    }.getOrNull()
+
+    private fun nameMatches(name: String?, serial: String?): Boolean =
+        if (serial.isNullOrBlank()) SmartGuideGatt.looksLikeSmartGuide(name)
+        else matcher.matches(name, SensorCode(connectionCode = serial, serial = serial))
+
+    private var scanCallback: ScanCallback? = null
+    @Volatile private var scanTimeoutAction: (() -> Unit)? = null
+    private val scanTimeout = Runnable {
+        if (scanCallback != null) {
+            appLogger.usage(LOG, "Busca terminou sem achar o sensor", mapOf("serial" to (targetSerial ?: "qualquer")))
+            val action = scanTimeoutAction
+            stopScan()
+            action?.invoke()
+        }
+    }
+
+    /**
+     * Busca `AC-<serial>` (ou qualquer `AC-…` sem serial). Para sozinha em [SCAN_TIMEOUT_MS] e então
+     * chama [onTimeout] (a reconexão usa isso para agendar a próxima tentativa).
+     */
+    @SuppressLint("MissingPermission")
+    fun startScan(
+        serial: String?,
+        onTimeout: (() -> Unit)? = null,
+        onFound: (name: String?, address: String, rssi: Int) -> Unit
+    ) {
         val scanner = adapter?.bluetoothLeScanner ?: run {
-            appLogger.error(LOG, "bluetoothLeScanner indisponível (BT desligado?)")
+            appLogger.error(LOG, "Scanner Bluetooth indisponível (Bluetooth desligado?)")
             return
         }
         stopScan()
-        val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         val cb = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val name = result.device.name ?: result.scanRecord?.deviceName
-                if (AccuChekGatt.isAccuChekName(name)) {
-                    appLogger.usage(LOG, "Scan encontrou possível SmartGuide",
-                        mapOf("name" to (name ?: "?"), "mac" to result.device.address, "rssi" to result.rssi))
-                    onFound(name, result.device.address, result.rssi)
-                }
+                val name = result.scanRecord?.deviceName ?: runCatching { result.device.name }.getOrNull()
+                if (!nameMatches(name, serial)) return
+                appLogger.usage(LOG, "Busca achou o sensor", mapOf("nome" to (name ?: "?"), "rssi" to result.rssi))
+                onFound(name, result.device.address, result.rssi)
             }
             override fun onScanFailed(errorCode: Int) {
-                appLogger.error(LOG, "Scan BLE falhou", mapOf("errorCode" to errorCode))
+                appLogger.error(LOG, "Busca Bluetooth falhou", mapOf("errorCode" to errorCode))
             }
         }
         scanCallback = cb
-        // Sem filtro de serviço no scanner do SO: o AccuChek pode não anunciar 0x1808 no advertisement
-        // principal (comum em meters — só aparece após conectar); filtramos por NOME no callback.
-        scanner.startScan(null, settings, cb)
-        appLogger.usage(LOG, "Scan iniciado (filtro por nome ACCU-CHEK)")
+        // Sem filtro no rádio: nem todo sensor põe o 0x181F no anúncio; filtra pelo nome aqui.
+        runCatching { scanner.startScan(null, settings, cb) }
+            .onFailure { e -> appLogger.error(LOG, "startScan lançou exceção", mapOf("erro" to (e::class.simpleName ?: "?"))); scanCallback = null; return }
+        scanTimeoutAction = onTimeout
+        handler.removeCallbacks(scanTimeout)
+        handler.postDelayed(scanTimeout, SCAN_TIMEOUT_MS)
+        appLogger.usage(LOG, "Busca iniciada", mapOf("serial" to (serial ?: "qualquer AC-")))
     }
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
-        scanCallback?.let { adapter?.bluetoothLeScanner?.stopScan(it) }
+        handler.removeCallbacks(scanTimeout)
+        scanTimeoutAction = null
+        scanCallback?.let { cb -> runCatching { adapter?.bluetoothLeScanner?.stopScan(cb) } }
         scanCallback = null
     }
 
-    // ── Conexão ──────────────────────────────────────────────────────────────────────────────────
     @SuppressLint("MissingPermission")
-    fun connect(mac: String) {
-        val a = adapter ?: run { appLogger.error(LOG, "BluetoothAdapter==null"); return }
-        gatt?.let { runCatching { it.close() } }
-        resetCharacteristics()
-        targetMac = mac
-        val device = runCatching { a.getRemoteDevice(mac) }.getOrNull() ?: run {
-            appLogger.error(LOG, "MAC inválido", mapOf("mac" to mac))
+    fun connect(address: String) {
+        val a = adapter ?: run { appLogger.error(LOG, "BluetoothAdapter indisponível"); return }
+        closeGatt(notify = false)
+        val device = runCatching { a.getRemoteDevice(address) }.getOrNull() ?: run {
+            appLogger.error(LOG, "Endereço inválido", mapOf("endereco" to address))
             return
         }
-        appLogger.usage(LOG, "Conectando", mapOf("mac" to mac))
-        gatt = device.connectGatt(context, true, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        targetAddress = device.address
+        appLogger.usage(LOG, "Conectando", mapOf("endereco" to device.address, "pareado" to (device.bondState == BluetoothDevice.BOND_BONDED)))
+        gatt = runCatching { device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE) }
+            .onFailure { e -> appLogger.error(LOG, "connectGatt lançou exceção", mapOf("erro" to (e::class.simpleName ?: "?"))) }
+            .getOrNull()
+    }
+
+    /** Desconecta a pedido (troca de fonte, app parando). Não mexe no pareamento. */
+    fun disconnect() {
+        appLogger.usage(LOG, "Desconectando (pedido)")
+        stopScan()
+        closeGatt(notify = true)
     }
 
     @SuppressLint("MissingPermission")
-    fun disconnect() {
-        appLogger.usage(LOG, "Desconectando (solicitação interna)")
-        gatt?.let { runCatching { it.disconnect(); it.close() } }
+    private fun closeGatt(notify: Boolean) {
+        val g = gatt
         gatt = null
-        resetCharacteristics()
-        listener?.onConnectionChanged(false)
+        synchronized(lock) {
+            queue.clear()
+            current = null
+        }
+        handler.removeCallbacks(opTimeout)
+        handler.removeCallbacks(retryNext)
+        chars.clear()
+        val wasReady = ready
+        ready = false
+        setupStarted = false
+        bondRequested = false
+        g?.let { runCatching { it.disconnect() }; runCatching { it.close() } }
+        if (notify && (g != null || wasReady)) listener?.onConnectionChanged(false)
     }
 
-    private fun resetCharacteristics() {
-        glucoseChar = null; contextChar = null; racpChar = null
-        dateTimeChar = null; serialChar = null; manufacturerChar = null
-        isRocheDevice = false
+    // ── Histórico ────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Pede ao sensor as leituras a partir do minuto [fromMinute] (null = tudo o que ele guarda,
+     * as últimas 8 h). Os registros chegam por [Listener.onMeasurements] e o fim por
+     * [Listener.onHistoryComplete].
+     */
+    fun requestHistory(fromMinute: Int?) {
+        val cmd = fromMinute?.let { Racp.reportFromMinute(it) } ?: Racp.reportAll()
+        appLogger.usage(LOG, "Pedindo histórico", mapOf("aPartirDoMinuto" to (fromMinute ?: "tudo"), "cmd" to cmd.toHexLog()))
+        enqueue(GattOp.Write(SmartGuideGatt.RACP, cmd))
     }
 
-    // ── GATT callback ────────────────────────────────────────────────────────────────────────────
+    // ── Fila de operações GATT ───────────────────────────────────────────────────────────────────
+
+    private sealed class GattOp(val label: String) {
+        class Notify(val uuid: UUID, val indicate: Boolean, val required: Boolean)
+            : GattOp("${if (indicate) "indicate" else "notify"} ${uuid.short()}")
+        class Read(val uuid: UUID) : GattOp("read ${uuid.short()}")
+        class Write(val uuid: UUID, val bytes: ByteArray) : GattOp("write ${uuid.short()}")
+        class Rssi : GattOp("rssi")
+        class Action(label: String, val block: () -> Unit) : GattOp(label)
+
+        /** Tentativas de iniciar (o Android recusa enquanto outra operação termina). */
+        var startTries = 0
+    }
+
+    private val queue = ArrayDeque<GattOp>()
+    private var current: GattOp? = null
+    private val retryNext = Runnable { next() }
+    private val opTimeout = Runnable {
+        val op = synchronized(lock) { current }
+        appLogger.error(LOG, "Operação GATT sem resposta — reconectando", mapOf("op" to (op?.label ?: "?")))
+        closeGatt(notify = true)
+    }
+
+    private fun enqueue(op: GattOp) {
+        synchronized(lock) { queue.addLast(op) }
+        next()
+    }
+
+    private fun completeCurrent() {
+        handler.removeCallbacks(opTimeout)
+        synchronized(lock) { current = null }
+        next()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun next() {
+        val g = gatt ?: return
+        val op = synchronized(lock) {
+            if (current != null) return
+            queue.pollFirst()?.also { current = it }
+        } ?: return
+        val started: Boolean = when (op) {
+            is GattOp.Action -> { op.block(); synchronized(lock) { current = null }; next(); return }
+            is GattOp.Notify -> {
+                val c = chars[op.uuid]
+                if (c == null) {
+                    if (op.required) { appLogger.error(LOG, "Característica obrigatória ausente", mapOf("op" to op.label)); closeGatt(true); return }
+                    false
+                } else writeCccd(g, c, op.indicate)
+            }
+            is GattOp.Read -> chars[op.uuid]?.let { g.readCharacteristic(it) } ?: false
+            is GattOp.Write -> chars[op.uuid]?.let { writeChar(g, it, op.bytes) } ?: false
+            is GattOp.Rssi -> g.readRemoteRssi()
+        }
+        if (!started) {
+            val missing = when (op) {
+                is GattOp.Notify -> chars[op.uuid] == null
+                is GattOp.Read -> chars[op.uuid] == null
+                is GattOp.Write -> chars[op.uuid] == null
+                else -> false
+            }
+            // Recusa do Android (ocupado): tenta de novo, como o `tryer` do Juggluco.
+            if (!missing && ++op.startTries < MAX_START_TRIES) {
+                synchronized(lock) { current = null; queue.addFirst(op) }
+                handler.postDelayed(retryNext, START_RETRY_MS)
+                return
+            }
+            appLogger.usage(LOG, "Operação pulada", mapOf("op" to op.label, "motivo" to if (missing) "característica ausente" else "recusada ${op.startTries}x"))
+            completeCurrent()
+            return
+        }
+        handler.removeCallbacks(opTimeout)
+        handler.postDelayed(opTimeout, OP_TIMEOUT_MS)
+    }
+
+    /** Erro de segurança num sensor que o celular acha que está pareado = o sensor foi pareado em outro lugar. */
+    private fun handleOpError(op: String, status: Int): Boolean {
+        val authError = status == GATT_INSUFFICIENT_AUTHENTICATION || status == GATT_INSUFFICIENT_ENCRYPTION || status == GATT_AUTH_FAIL
+        if (!authError) return false
+        val bonded = gatt?.device?.bondState == BluetoothDevice.BOND_BONDED
+        appLogger.error(LOG, "Sensor recusou por segurança", mapOf("op" to op, "status" to status, "pareadoNoCelular" to bonded))
+        if (bonded) {
+            listener?.onPairingStateChanged(PairingState.LOST)
+            closeGatt(notify = true)
+        } else {
+            requestBond(gatt ?: return true)
+        }
+        return true
+    }
+
+    // ── Configuração depois de conectar ──────────────────────────────────────────────────────────
+
+    @SuppressLint("MissingPermission")
+    private fun requestBond(g: BluetoothGatt) {
+        if (bondRequested) return
+        bondRequested = true
+        appLogger.usage(LOG, "Pareando com o sensor", mapOf("pinArmado" to (pairingPin != null)))
+        val ok = runCatching { g.device.createBond() }.getOrDefault(false)
+        if (!ok) {
+            appLogger.error(LOG, "createBond recusado")
+            listener?.onPairingStateChanged(PairingState.FAILED)
+            closeGatt(notify = true)
+        }
+    }
+
+    private fun startSetup(g: BluetoothGatt) {
+        if (setupStarted) return
+        setupStarted = true
+        appLogger.usage(LOG, "Configurando o sensor (pareado)")
+        enqueue(GattOp.Notify(SmartGuideGatt.CGM_MEASUREMENT, indicate = false, required = true))
+        enqueue(GattOp.Notify(SmartGuideGatt.RACP, indicate = true, required = true))
+        enqueue(GattOp.Notify(SmartGuideGatt.SOCP, indicate = true, required = false))
+        enqueue(GattOp.Read(SmartGuideGatt.CGM_FEATURE))
+        enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
+        enqueue(GattOp.Read(SmartGuideGatt.SESSION_START_TIME))
+        enqueue(GattOp.Read(SmartGuideGatt.SESSION_RUN_TIME))
+        if (!deviceInfoRead) {
+            enqueue(GattOp.Read(SmartGuideGatt.SERIAL_NUMBER))
+            enqueue(GattOp.Read(SmartGuideGatt.FIRMWARE_REVISION))
+            enqueue(GattOp.Read(SmartGuideGatt.MANUFACTURER_NAME))
+        }
+        enqueue(GattOp.Action("pedir intervalo ao SOCP") {
+            enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCommunicationInterval(e2eCrc)))
+            enqueue(GattOp.Action("pronto") { onSetupDone(g) })
+        })
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun onSetupDone(g: BluetoothGatt) {
+        if (gatt !== g) return
+        ready = true
+        connectAttempt = 0
+        val name = runCatching { g.device.name }.getOrNull()
+        appLogger.usage(LOG, "Sensor pronto", mapOf("endereco" to g.device.address, "nome" to (name ?: "?"), "e2eCrc" to e2eCrc))
+        listener?.onConnectionChanged(true)
+        listener?.onReady(g.device.address, name)
+    }
+
+    // ── Callback GATT ────────────────────────────────────────────────────────────────────────────
+
     private val gattCallback = object : BluetoothGattCallback() {
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            val bondState = g.device.bondState
-            appLogger.usage(LOG, "Estado GATT mudou", mapOf(
-                "mac" to (targetMac ?: "?"), "newState" to newState,
-                "gattStatus" to status, "bondState" to bondState
+            if (g !== gatt) { runCatching { g.close() }; return }
+            appLogger.usage(LOG, "Estado da conexão mudou", mapOf(
+                "novoEstado" to newState, "status" to status, "pareamento" to g.device.bondState
             ))
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                when (bondState) {
-                    BluetoothDevice.BOND_NONE, BluetoothDevice.BOND_BONDED -> {
-                        if (!g.discoverServices()) {
-                            appLogger.error(LOG, "discoverServices() falhou ao chamar")
-                            disconnect()
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED -> {
+                    // Pequena espera antes de descobrir serviços: alguns aparelhos ainda estão
+                    // trocando parâmetros/criptografia logo após conectar (sensor já pareado).
+                    handler.postDelayed({
+                        if (gatt === g && !g.discoverServices()) {
+                            appLogger.error(LOG, "discoverServices() recusado")
+                            closeGatt(notify = true)
                         }
-                    }
-                    BluetoothDevice.BOND_BONDING -> {
-                        // Aguarda o ACTION_BOND_STATE_CHANGED (registrado abaixo) chamar discoverServices().
-                        appLogger.usage(LOG, "Aguardando pareamento (PIN da tampa azul do aplicador)")
-                    }
+                    }, DISCOVER_DELAY_MS)
                 }
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                resetCharacteristics()
-                runCatching { g.close() }
-                gatt = null
-                listener?.onConnectionChanged(false)
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    if (handleOpError("conexão", status)) return
+                    closeGatt(notify = true)
+                }
             }
         }
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            if (g !== gatt) return
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 appLogger.error(LOG, "Descoberta de serviços falhou", mapOf("status" to status))
-                disconnect()
+                closeGatt(notify = true)
                 return
             }
-            val allServices = g.services.joinToString { s -> "${s.uuid}(chars=${s.characteristics.size})" }
-            appLogger.usage(LOG, "Serviços GATT descobertos", mapOf("services" to allServices))
-
-            val glucoseService = g.getService(AccuChekGatt.GLUCOSE_SERVICE)
-            glucoseChar = glucoseService?.getCharacteristic(AccuChekGatt.GLUCOSE_MEASUREMENT)
-            contextChar = glucoseService?.getCharacteristic(AccuChekGatt.GLUCOSE_MEASUREMENT_CONTEXT)
-            racpChar    = glucoseService?.getCharacteristic(AccuChekGatt.RECORD_ACCESS_CONTROL_POINT)
-            dateTimeChar = glucoseService?.getCharacteristic(AccuChekGatt.DATE_TIME)
-            serialChar   = glucoseService?.getCharacteristic(AccuChekGatt.SERIAL_NUMBER)
-
-            val infoService = g.getService(AccuChekGatt.DEVICE_INFO_SERVICE)
-            manufacturerChar = infoService?.getCharacteristic(AccuChekGatt.MANUFACTURER_NAME)
-
-            if (glucoseChar == null || racpChar == null) {
-                appLogger.error(LOG, "Serviço Glucose (0x1808) ou characteristics essenciais ausentes",
-                    mapOf("glucoseService" to (glucoseService != null),
-                          "glucoseChar" to (glucoseChar != null), "racpChar" to (racpChar != null)))
-                disconnect()
+            val cgm = g.getService(SmartGuideGatt.CGM_SERVICE)
+            if (cgm == null) {
+                appLogger.error(LOG, "Serviço CGM 0x181F ausente — não é um SmartGuide",
+                    mapOf("servicos" to g.services.joinToString { it.uuid.short() }))
+                closeGatt(notify = true)
                 return
             }
+            chars.clear()
+            cgm.characteristics.forEach { chars[it.uuid] = it }
+            g.getService(SmartGuideGatt.DEVICE_INFO_SERVICE)?.characteristics?.forEach { chars[it.uuid] = it }
+            appLogger.usage(LOG, "Serviços descobertos", mapOf("caracteristicas" to chars.keys.joinToString { it.short() }))
 
-            val mChar = manufacturerChar
-            if (mChar != null) {
-                g.readCharacteristic(mChar)
-            } else {
-                appLogger.usage(LOG, "Sem Manufacturer Name — assumindo AccuChek pelo filtro de nome do scan")
-                isRocheDevice = true
-                proceedAfterManufacturer(g)
+            when (g.device.bondState) {
+                BluetoothDevice.BOND_BONDED -> startSetup(g)
+                BluetoothDevice.BOND_BONDING -> appLogger.usage(LOG, "Aguardando o pareamento terminar")
+                else -> requestBond(g)
             }
         }
 
-        @SuppressLint("MissingPermission")
-        override fun onCharacteristicRead(
-            g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int
-        ) {
-            @Suppress("DEPRECATION")
-            val value = characteristic.value ?: ByteArray(0)
-            handleCharacteristicRead(g, characteristic, status, value)
-        }
-
-        override fun onCharacteristicRead(
-            g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int
-        ) {
-            handleCharacteristicRead(g, characteristic, status, value)
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun handleCharacteristicRead(
-            g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int, value: ByteArray
-        ) {
-            if (status == BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION) {
-                // Android deve disparar o diálogo de pareamento do sistema automaticamente; só aguardar.
-                appLogger.usage(LOG, "Leitura pediu autenticação — aguardando bond do sistema")
-                return
-            }
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                appLogger.error(LOG, "onCharacteristicRead falhou", mapOf("uuid" to characteristic.uuid, "status" to status))
-                disconnect()
-                return
-            }
-            when (characteristic.uuid) {
-                AccuChekGatt.MANUFACTURER_NAME -> {
-                    val manufacturer = runCatching { String(value) }.getOrDefault("")
-                    isRocheDevice = AccuChekGatt.isRocheManufacturer(manufacturer)
-                    appLogger.usage(LOG, "Manufacturer Name lido",
-                        mapOf("manufacturer" to manufacturer, "isRoche" to isRocheDevice))
-                    proceedAfterManufacturer(g)
-                }
-                AccuChekGatt.DATE_TIME -> {
-                    logSensorClockOffset(value)
-                    enableGlucoseNotifications(g)
-                }
-                AccuChekGatt.SERIAL_NUMBER -> {
-                    val serial = runCatching { String(value) }.getOrDefault("")
-                    appLogger.usage(LOG, "Serial number lido", mapOf("serial" to serial))
-                    listener?.onSerialNumber(serial)
-                    requestRecords(g)
-                }
-                else -> appLogger.usage(LOG, "onCharacteristicRead UUID desconhecido", mapOf("uuid" to characteristic.uuid))
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun proceedAfterManufacturer(g: BluetoothGatt) {
-            val dt = dateTimeChar
-            if (isRocheDevice && dt != null) {
-                g.readCharacteristic(dt)
-            } else {
-                enableGlucoseNotifications(g)
-            }
-        }
-
-        private fun logSensorClockOffset(value: ByteArray) {
-            if (value.size < 7) return
-            val year   = ((value[1].toInt() and 0xFF) shl 8) or (value[0].toInt() and 0xFF)
-            val month  = value[2].toInt() and 0xFF
-            val day    = value[3].toInt() and 0xFF
-            val hour   = value[4].toInt() and 0xFF
-            val minute = value[5].toInt() and 0xFF
-            val second = value[6].toInt() and 0xFF
-            val meterTime = runCatching { LocalDateTime.of(year, month, day, hour, minute, second) }.getOrNull()
-            if (meterTime != null) {
-                val offsetSec = java.time.Duration.between(meterTime, LocalDateTime.now()).seconds
-                appLogger.usage(LOG, "Hora do sensor lida", mapOf("meterTime" to meterTime.toString(), "offsetSec" to offsetSec))
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun enableGlucoseNotifications(g: BluetoothGatt) {
-            val ctx = contextChar
-            if (ctx != null) {
-                enableNotification(g, ctx)
-            } else {
-                val glu = glucoseChar ?: return
-                enableNotification(g, glu)
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun requestRecords(g: BluetoothGatt) {
-            val racp = racpChar ?: return
-            val cmd = AccuChekRacp.buildFetchFromSequence(fetchFromSequence)
-            writeChar(g, racp, cmd)
-            appLogger.usage(LOG, "RACP: pedindo registros", mapOf("fromSequence" to fetchFromSequence, "hex" to cmd.toHexLog()))
-        }
-
-        @SuppressLint("MissingPermission")
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            if (g !== gatt) return
             val uuid = descriptor.characteristic.uuid
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                appLogger.error(LOG, "onDescriptorWrite falhou", mapOf("uuid" to uuid, "status" to status))
-                return
+                if (handleOpError("cccd ${uuid.short()}", status)) return
+                appLogger.error(LOG, "Falha ao ligar avisos", mapOf("char" to uuid.short(), "status" to status))
+                val required = uuid == SmartGuideGatt.CGM_MEASUREMENT || uuid == SmartGuideGatt.RACP
+                if (required) { closeGatt(notify = true); return }
             }
-            when (uuid) {
-                AccuChekGatt.GLUCOSE_MEASUREMENT_CONTEXT -> enableNotification(g, glucoseChar ?: return)
-                AccuChekGatt.GLUCOSE_MEASUREMENT -> {
-                    val racp = racpChar
-                    if (racp != null) enableIndication(g, racp)
-                    listener?.onConnectionChanged(true)
-                    g.readRemoteRssi()
-                }
-                AccuChekGatt.RECORD_ACCESS_CONTROL_POINT -> {
-                    val serial = serialChar
-                    if (isRocheDevice && serial != null) g.readCharacteristic(serial) else requestRecords(g)
-                }
-                else -> {}
-            }
+            completeCurrent()
         }
 
-        override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            dispatchNotification(characteristic.uuid, value)
+        @Deprecated("API < 33")
+        override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
+            @Suppress("DEPRECATION")
+            handleRead(g, c.uuid, c.value ?: ByteArray(0), status)
         }
 
-        @Deprecated("Deprecated in Java")
-        @Suppress("DEPRECATION")
-        override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                val value = characteristic.value ?: return
-                dispatchNotification(characteristic.uuid, value)
-            }
+        override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            handleRead(g, c.uuid, value, status)
         }
 
-        private fun dispatchNotification(uuid: java.util.UUID, value: ByteArray) {
-            when (uuid) {
-                AccuChekGatt.GLUCOSE_MEASUREMENT -> {
-                    appLogger.usage(LOG, "Pacote Glucose Measurement", mapOf("bytes" to value.size, "hex" to value.toHexLog()))
-                    listener?.onRawGlucosePacket(value)
-                    when (val result = AccuChekMeasurementParser.parse(value)) {
-                        is AccuChekParseResult.Reading -> listener?.onReading(result.value)
-                        is AccuChekParseResult.NoGlucose -> appLogger.usage(LOG, "Registro sem glicemia", mapOf("seq" to result.sequenceNumber))
-                        is AccuChekParseResult.Invalid -> appLogger.error(LOG, "Registro inválido", mapOf("motivo" to result.reason, "hex" to value.toHexLog()))
-                    }
-                }
-                AccuChekGatt.RECORD_ACCESS_CONTROL_POINT -> {
-                    appLogger.usage(LOG, "RACP resposta", mapOf("hex" to value.toHexLog()))
-                    when {
-                        AccuChekRacp.isSuccessResponse(value) -> listener?.onFetchComplete()
-                        AccuChekRacp.isNoRecordsFound(value) -> {
-                            appLogger.usage(LOG, "RACP: nenhum registro novo")
-                            listener?.onFetchComplete()
-                        }
-                        else -> appLogger.usage(LOG, "RACP resposta não reconhecida")
-                    }
-                }
-                AccuChekGatt.GLUCOSE_MEASUREMENT_CONTEXT -> {
-                    // Log-only — contexto (refeição/insulina/etc.) não é usado para o valor de mg/dL.
-                    appLogger.usage(LOG, "Glucose Measurement Context (ignorado)", mapOf("bytes" to value.size))
-                }
+        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
+            if (g !== gatt) return
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                if (handleOpError("write ${c.uuid.short()}", status)) return
+                appLogger.error(LOG, "Escrita recusada", mapOf("char" to c.uuid.short(), "status" to status))
             }
+            completeCurrent()
+        }
+
+        @Deprecated("API < 33")
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
+            @Suppress("DEPRECATION")
+            dispatch(g, c.uuid, c.value ?: return)
+        }
+
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) {
+            dispatch(g, c.uuid, value)
         }
 
         override fun onReadRemoteRssi(g: BluetoothGatt, rssi: Int, status: Int) {
+            if (g !== gatt) return
             if (status == BluetoothGatt.GATT_SUCCESS) listener?.onRssi(rssi)
+            if (synchronized(lock) { current } is GattOp.Rssi) completeCurrent()
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun enableNotification(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        g.setCharacteristicNotification(characteristic, true)
-        writeCccd(g, characteristic, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun enableIndication(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        g.setCharacteristicNotification(characteristic, true)
-        writeCccd(g, characteristic, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun writeCccd(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, enableValue: ByteArray) {
-        val cccd = characteristic.getDescriptor(AccuChekGatt.CCCD) ?: run {
-            appLogger.error(LOG, "CCCD ausente", mapOf("uuid" to characteristic.uuid))
+    private fun handleRead(g: BluetoothGatt, uuid: UUID, value: ByteArray, status: Int) {
+        if (g !== gatt) return
+        if (status != BluetoothGatt.GATT_SUCCESS) {
+            if (handleOpError("read ${uuid.short()}", status)) return
+            appLogger.error(LOG, "Leitura recusada", mapOf("char" to uuid.short(), "status" to status))
+            completeCurrent()
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeDescriptor(cccd, enableValue)
-        } else {
-            @Suppress("DEPRECATION")
-            run {
-                cccd.value = enableValue
-                g.writeDescriptor(cccd)
+        appLogger.usage(LOG, "Leitura", mapOf("char" to uuid.short(), "hex" to value.toHexLog()))
+        val now = System.currentTimeMillis()
+        when (uuid) {
+            SmartGuideGatt.CGM_FEATURE -> CgmFeatureParser.parse(value).ok("Feature")?.let { f ->
+                e2eCrc = f.e2eCrcSupported
+                appLogger.usage(LOG, "Capacidades do sensor", mapOf(
+                    "e2eCrc" to f.e2eCrcSupported, "variosPareamentos" to f.multipleBondSupported,
+                    "tendencia" to f.trendSupported, "qualidade" to f.qualitySupported
+                ))
+                listener?.onFeature(f)
+            }
+            SmartGuideGatt.CGM_STATUS -> CgmStatusParser.parse(value).ok("Status")?.let { s ->
+                if (s.crc == CrcState.INVALID) appLogger.error(LOG, "Status com CRC errado — ignorado")
+                else {
+                    appLogger.usage(LOG, "Status do sensor", mapOf("minuto" to s.timeOffsetMinutes, "avisos" to s.annunciation.toString()))
+                    listener?.onStatus(s, now)
+                }
+            }
+            SmartGuideGatt.SESSION_START_TIME -> SessionStartTimeParser.parse(value).ok("Start Time")?.let { listener?.onSessionStartTime(it) }
+            SmartGuideGatt.SESSION_RUN_TIME -> SessionRunTimeParser.parse(value).ok("Run Time")?.let { listener?.onSessionRunTime(it) }
+            SmartGuideGatt.SERIAL_NUMBER -> {
+                deviceInfoRead = true
+                listener?.onDeviceInfo(serial = value.toAscii(), firmware = null)
+            }
+            SmartGuideGatt.FIRMWARE_REVISION -> listener?.onDeviceInfo(serial = null, firmware = value.toAscii())
+            SmartGuideGatt.MANUFACTURER_NAME -> appLogger.usage(LOG, "Fabricante", mapOf("nome" to value.toAscii()))
+        }
+        completeCurrent()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun dispatch(g: BluetoothGatt, uuid: UUID, value: ByteArray) {
+        if (g !== gatt) return
+        val now = System.currentTimeMillis()
+        when (uuid) {
+            SmartGuideGatt.CGM_MEASUREMENT -> {
+                appLogger.usage(LOG, "Medição recebida", mapOf("hex" to value.toHexLog()))
+                when (val r = CgmMeasurementParser.parse(value)) {
+                    is CgmParse.Ok -> {
+                        r.value.filter { it.crc == CrcState.INVALID }.forEach {
+                            appLogger.error(LOG, "Registro com CRC errado — descartado", mapOf("minuto" to it.timeOffsetMinutes))
+                        }
+                        val good = r.value.filter { it.crc != CrcState.INVALID }
+                        if (good.isNotEmpty()) listener?.onMeasurements(good, now)
+                    }
+                    is CgmParse.Invalid -> appLogger.error(LOG, "Medição ilegível", mapOf("motivo" to r.reason))
+                }
+                if (ready) enqueue(GattOp.Rssi())
+            }
+            SmartGuideGatt.RACP -> {
+                appLogger.usage(LOG, "Resposta do RACP", mapOf("hex" to value.toHexLog()))
+                when (val r = Racp.parseResponse(value)) {
+                    is CgmParse.Ok -> when (val resp = r.value) {
+                        is Racp.Response.Code -> listener?.onHistoryComplete(resp)
+                        is Racp.Response.NumberOfRecords -> appLogger.usage(LOG, "Registros guardados", mapOf("total" to resp.count))
+                    }
+                    is CgmParse.Invalid -> appLogger.error(LOG, "Resposta do RACP ilegível", mapOf("motivo" to r.reason))
+                }
+            }
+            SmartGuideGatt.SOCP -> {
+                val r = Socp.parseResponse(value, e2eCrc)
+                appLogger.usage(LOG, "Resposta do SOCP", mapOf("hex" to value.toHexLog(), "lido" to (r.getOrNull()?.toString() ?: r.toString())))
             }
         }
     }
 
+    private fun <T> CgmParse<T>.ok(what: String): T? = when (this) {
+        is CgmParse.Ok -> value
+        is CgmParse.Invalid -> { appLogger.error(LOG, "$what ilegível", mapOf("motivo" to reason)); null }
+    }
+
+    // ── Escritas de baixo nível ──────────────────────────────────────────────────────────────────
+
     @SuppressLint("MissingPermission")
-    private fun writeChar(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, bytes: ByteArray): Boolean {
+    private fun writeCccd(g: BluetoothGatt, c: BluetoothGattCharacteristic, indicate: Boolean): Boolean {
+        val cccd = c.getDescriptor(SmartGuideGatt.CCCD) ?: return false
+        if (!g.setCharacteristicNotification(c, true)) return false
+        val value = if (indicate) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
+            g.writeDescriptor(cccd, value) == BluetoothGatt.GATT_SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run { cccd.value = value; g.writeDescriptor(cccd) }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun writeChar(g: BluetoothGatt, c: BluetoothGattCharacteristic, bytes: ByteArray): Boolean {
+        appLogger.usage(LOG, "Escrevendo", mapOf("char" to c.uuid.short(), "hex" to bytes.toHexLog()))
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(c, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
         } else {
             @Suppress("DEPRECATION")
             run {
-                characteristic.value = bytes
-                characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                g.writeCharacteristic(characteristic)
+                c.value = bytes
+                c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                g.writeCharacteristic(c)
             }
         }
     }
 }
 
-private fun ByteArray.toHexLog(maxBytes: Int = size): String =
+private fun UUID.short(): String = toString().substring(4, 8)
+
+private fun ByteArray.toAscii(): String = String(this, Charsets.US_ASCII).trim { it <= ' ' }
+
+private fun ByteArray.toHexLog(maxBytes: Int = 64): String =
     take(maxBytes).joinToString(" ") { "%02X".format(it) } +
         if (size > maxBytes) " …+${size - maxBytes}" else ""

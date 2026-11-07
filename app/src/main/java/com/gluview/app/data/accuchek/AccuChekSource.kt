@@ -1,5 +1,13 @@
 package com.gluview.app.data.accuchek
 
+import com.gluview.app.data.accuchek.cgm.CgmFeature
+import com.gluview.app.data.accuchek.cgm.CgmMeasurement
+import com.gluview.app.data.accuchek.cgm.CgmStatus
+import com.gluview.app.data.accuchek.cgm.Racp
+import com.gluview.app.data.accuchek.cgm.SessionRunTime
+import com.gluview.app.data.accuchek.cgm.SessionStartTime
+import com.gluview.app.data.accuchek.cgm.SmartGuideClock
+import com.gluview.app.data.accuchek.cgm.SmartGuidePackageParser
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.GlucoseRepository
 import com.gluview.app.data.sibionics.SibionicsStatusHolder
@@ -16,26 +24,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Orquestrador da leitura direta do Accu-Chek SmartGuide — mesmo papel do
- * [com.gluview.app.data.libre2.Libre2Source]/[com.gluview.app.data.sibionics.SibionicsBleSource]:
- * conecta, reconecta (mesma grade tiered backoff), decodifica e cai no MESMO pipeline
- * (`storeExternalReading` + [SibionicsStatusHolder]).
+ * Fonte de glicemia do Accu-Chek SmartGuide (serviço CGM 0x181F) — mesmo papel do
+ * [com.gluview.app.data.libre2.Libre2Source]: conecta, reconecta, data as leituras e as entrega ao
+ * pipeline comum (`storeExternalReading` + [SibionicsStatusHolder]).
  *
- * Diferença de fluxo em relação aos outros dois: aqui não há sessão prévia (NFC) nem cripto —
- * o sensor é lido puramente via o perfil Bluetooth SIG padrão (ver [AccuChekBleManager]), e o
- * histórico é buscado via RACP com um CURSOR de número de sequência persistido (não um timestamp).
+ * Horários: o sensor manda "minutos desde o início"; o início vem do CGM Status
+ * ([SmartGuideClock]). Leituras que chegam antes do status ficam esperando por ele.
+ * Histórico: ao ficar pronto, pede ao sensor tudo depois do último minuto salvo (o sensor guarda
+ * 8 h); repetidas são ignoradas pelo minuto.
  *
- * ★ SEM HARDWARE PARA TESTE (27/07/2026): todo este pipeline foi construído a partir da spec
- * oficial + do código-fonte do Juggluco (ver [AccuChekBleManager]), mas nunca rodou contra um
- * SmartGuide real. Por isso [DataSourceType.ACCU_CHEK_SMARTGUIDE] continua com `comingSoon=true`
- * (mesmo padrão já usado para SIBIONICS_NACIONAL: implementado, não validado). Quando o sensor
- * chegar: parear pelas Configurações do Android (PIN de 6 dígitos da tampa azul do aplicador),
- * então trocar a fonte aqui e validar os logs `ACCUCHEK_BLE`/`ACCUCHEK_SRC` antes de tirar a flag.
+ * F2 do plano `12_sprint_accuchek_smartguide.md`. Ficam para a F3: LO/HI/erro na tela, avisos do
+ * sensor (sessão encerrada, defeito, temperatura), aquecimento de 60 min, dias restantes e histórico
+ * de sensores no GluSync. Até a validação com o sensor real (F5) a fonte continua "Em breve".
  */
 @Singleton
 class AccuChekSource @Inject constructor(
@@ -51,51 +58,51 @@ class AccuChekSource @Inject constructor(
         const val LOG = "ACCUCHEK_SRC"
         const val MMOL_TO_MGDL = 18.0182
         val PLAUSIBLE_MGDL = 20..600
+        /** Leitura mais velha que isto não vira a "atual" (é histórico). */
+        val CURRENT_MAX_AGE_MS = TimeUnit.MINUTES.toMillis(6)
         val RECONNECT_SCHEDULE_MS = buildList {
             repeat(5) { add(TimeUnit.MINUTES.toMillis(1)) }
             repeat(3) { add(TimeUnit.MINUTES.toMillis(5)) }
             repeat(4) { add(TimeUnit.MINUTES.toMillis(10)) }
         }
-        const val GATT_HANDSHAKE_MS = 20_000L
+        const val GATT_HANDSHAKE_MS = 40_000L
     }
 
     @Volatile private var scope: CoroutineScope? = null
     @Volatile private var reconnectJob: Job? = null
-    @Volatile private var currentMac: String? = null
     @Volatile private var stopped = false
+
+    @Volatile private var serial: String = ""
+    @Volatile private var address: String = ""
+    @Volatile private var startMs: Long = 0L
+    @Volatile private var lastMinute: Int = -1
     @Volatile private var lastSgv: Int = -1
-    @Volatile private var highestSeqSeen: Int = -1
+
+    private val mutex = Mutex()
+    /** Leituras que chegaram antes do CGM Status (sem início conhecido ainda não dá para datar). */
+    private val pending = mutableListOf<CgmMeasurement>()
 
     override fun start(type: DataSourceType) {
         if (scope != null) return
         stopped = false
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
-
         s.launch {
-            val savedMac = preferences.accuChekMac.first()
-            val lastSeq  = preferences.accuChekLastSequence.first()
-            highestSeqSeen = lastSeq - 1
-            ble.setFetchFromSequence(lastSeq)
+            serial = preferences.accuChekSerial.first()
+            address = preferences.accuChekMac.first()
+            startMs = preferences.accuChekStartMs.first()
+            lastMinute = preferences.accuChekLastMinute.first()
+            ble.setPairingPin(preferences.accuChekPin.first())
             ble.setListener(this@AccuChekSource)
-
-            appLogger.usage(LOG, "Iniciando Accu-Chek SmartGuide",
-                mapOf("macSalvo" to savedMac.isNotBlank(), "cursorSequencia" to lastSeq))
-
-            if (savedMac.isNotBlank()) {
-                appLogger.usage(LOG, "Conectando com MAC salvo (sem scan)", mapOf("mac" to savedMac))
-                currentMac = savedMac
-                ble.connect(savedMac)
-            } else {
-                appLogger.usage(LOG, "MAC não salvo — buscando sensor por scan (nome ACCU-CHEK…)")
-                ble.startScan { name, mac, _ ->
-                    ble.stopScan()
-                    appLogger.usage(LOG, "Sensor encontrado", mapOf("name" to (name ?: "?"), "mac" to mac))
-                    currentMac = mac
-                    s.launch { preferences.saveAccuChekMac(mac) }
-                    ble.connect(mac)
-                }
+            if (startMs > 0) statusHolder.restoreAnchor(serial, startMs) else statusHolder.resetForNewSensor(serial)
+            appLogger.usage(LOG, "Iniciando Accu-Chek SmartGuide", mapOf(
+                "serialConfigurado" to serial.isNotBlank(), "enderecoSalvo" to address.isNotBlank(),
+                "ultimoMinuto" to lastMinute, "inicioConhecido" to (startMs > 0)
+            ))
+            if (serial.isBlank()) {
+                appLogger.usage(LOG, "Sem serial configurado — aceita o primeiro sensor AC- encontrado")
             }
+            ble.connectToSensor(serial, address)
         }
     }
 
@@ -104,132 +111,208 @@ class AccuChekSource @Inject constructor(
         stopped = true
         reconnectJob?.cancel(); reconnectJob = null
         ble.setListener(null)
-        ble.stopScan()
         ble.disconnect()
         statusHolder.onConnectionChanged(false)
         notificationHelper.cancelSensorWarning()
         scope?.cancel(); scope = null
+        synchronized(pending) { pending.clear() }
         lastSgv = -1
-        highestSeqSeen = -1
-        currentMac = null
     }
 
-    // ── Listener ─────────────────────────────────────────────────────────────────
+    // ── Conexão e pareamento ─────────────────────────────────────────────────────────────────────
 
     override fun onConnectionChanged(connected: Boolean) {
         statusHolder.onConnectionChanged(connected)
         if (connected) {
             reconnectJob?.cancel(); reconnectJob = null
             notificationHelper.cancelSensorWarning()
-            appLogger.usage(LOG, "Sensor conectado (GATT + serviços OK)")
-        } else if (!stopped) {
-            appLogger.usage(LOG, "Sensor desconectado — agendando reconexão", mapOf("mac" to (currentMac ?: "?")))
-            currentMac?.let { startReconnect(it) }
+        } else if (!stopped && reconnectJob?.isActive != true) {
+            appLogger.usage(LOG, "Sensor desconectado — agendando reconexão")
+            startReconnect()
         }
     }
 
-    override fun onRssi(rssi: Int) {
-        statusHolder.onRssi(rssi)
+    override fun onPairingStateChanged(state: AccuChekBleManager.PairingState) {
+        appLogger.usage(LOG, "Pareamento", mapOf("estado" to state.name))
+        when (state) {
+            AccuChekBleManager.PairingState.FAILED -> notificationHelper.showSensorWarning(
+                "Pareamento do SmartGuide falhou",
+                "Confira o PIN de 6 dígitos da tampa do aplicador e deixe o celular perto do sensor."
+            )
+            AccuChekBleManager.PairingState.LOST -> notificationHelper.showSensorWarning(
+                "SmartGuide pareado em outro aparelho",
+                "O sensor só aceita um celular por vez. Pareie de novo neste celular para voltar a receber leituras."
+            )
+            else -> Unit
+        }
     }
+
+    override fun onRssi(rssi: Int) { statusHolder.onRssi(rssi) }
 
     override fun onBluetoothTurnedOn() {
         if (stopped) return
-        val mac = currentMac ?: return
-        appLogger.usage(LOG, "Bluetooth religado pelo sistema — reconectando imediatamente", mapOf("mac" to mac))
+        appLogger.usage(LOG, "Bluetooth religado — reconectando já")
         reconnectJob?.cancel(); reconnectJob = null
-        ble.connect(mac)
+        ble.connectToSensor(serial, address)
     }
 
-    override fun onSerialNumber(serial: String) {
-        scope?.launch { preferences.saveAccuChekSerial(serial) }
+    override fun onReady(address: String, advertisedName: String?) {
+        val s = scope ?: return
+        s.launch {
+            mutex.withLock {
+                if (address != this@AccuChekSource.address) {
+                    this@AccuChekSource.address = address
+                    preferences.saveAccuChekMac(address)
+                }
+                if (serial.isBlank()) {
+                    advertisedName?.let(SmartGuidePackageParser::normalizeSerial)?.let {
+                        serial = it
+                        preferences.saveAccuChekSerial(it)
+                        appLogger.usage(LOG, "Serial tirado do nome Bluetooth", mapOf("nome" to advertisedName))
+                    }
+                }
+                ble.requestHistory(SmartGuideClock.historyFromMinute(lastMinute))
+            }
+        }
     }
 
-    override fun onReading(reading: AccuChekReading) {
-        scope?.launch { persist(reading) }
+    // ── Informações do sensor ────────────────────────────────────────────────────────────────────
+
+    override fun onFeature(feature: CgmFeature) {
+        if (!feature.e2eCrcSupported) appLogger.usage(LOG, "Sensor sem E2E-CRC (inesperado no SmartGuide)")
+    }
+
+    override fun onStatus(status: CgmStatus, receivedAtMs: Long) {
+        val s = scope ?: return
+        s.launch {
+            mutex.withLock {
+                if (SmartGuideClock.isNewSession(lastMinute, status.timeOffsetMinutes)) {
+                    appLogger.usage(LOG, "Sensor recomeçou a contar — tratando como sensor novo", mapOf(
+                        "ultimoMinutoSalvo" to lastMinute, "minutoDoStatus" to status.timeOffsetMinutes
+                    ))
+                    lastMinute = -1
+                    lastSgv = -1
+                    startMs = 0L
+                    preferences.saveAccuChekLastMinute(-1)
+                    statusHolder.resetForNewSensor(serial)
+                }
+                val computed = SmartGuideClock.startFromStatus(receivedAtMs, status)
+                val chosen = SmartGuideClock.reconcileStart(startMs, computed)
+                if (chosen != startMs) {
+                    appLogger.usage(LOG, "Início do sensor definido", mapOf(
+                        "inicioMs" to chosen, "anteriorMs" to startMs, "minutoAtual" to status.timeOffsetMinutes
+                    ))
+                    startMs = chosen
+                    preferences.saveAccuChekStartMs(chosen)
+                    statusHolder.restoreAnchor(serial, chosen)
+                }
+                val waiting = synchronized(pending) { pending.toList().also { pending.clear() } }
+                if (waiting.isNotEmpty()) persistAll(waiting)
+            }
+        }
+    }
+
+    override fun onSessionStartTime(start: SessionStartTime) {
+        appLogger.usage(LOG, "Session Start Time do sensor", mapOf(
+            "utcMs" to start.utcMillis, "difDoInicioCalculadoS" to if (startMs > 0) (start.utcMillis - startMs) / 1000 else "?"
+        ))
+    }
+
+    override fun onSessionRunTime(runTime: SessionRunTime) {
+        appLogger.usage(LOG, "Vida útil do sensor", mapOf("horas" to runTime.hours))
+    }
+
+    override fun onDeviceInfo(serial: String?, firmware: String?) {
+        serial?.let { appLogger.usage(LOG, "Serial lido do sensor", mapOf("serialSensor" to it, "serialEmbalagem" to this.serial)) }
+        firmware?.let { appLogger.usage(LOG, "Firmware do sensor", mapOf("firmware" to it)) }
+    }
+
+    // ── Leituras ─────────────────────────────────────────────────────────────────────────────────
+
+    override fun onMeasurements(records: List<CgmMeasurement>, receivedAtMs: Long) {
+        val s = scope ?: return
+        s.launch {
+            mutex.withLock {
+                if (startMs <= 0L) {
+                    synchronized(pending) { pending.addAll(records) }
+                    appLogger.usage(LOG, "Leituras aguardando o início do sensor", mapOf("quantidade" to records.size))
+                    return@withLock
+                }
+                persistAll(records)
+            }
+        }
+    }
+
+    override fun onHistoryComplete(response: Racp.Response.Code) {
+        appLogger.usage(LOG, "Histórico concluído", mapOf(
+            "sucesso" to response.isSuccess, "semRegistros" to response.isNoRecords,
+            "codigo" to response.code, "ultimoMinuto" to lastMinute
+        ))
+    }
+
+    /** Chamar com [mutex] travado e [startMs] conhecido. */
+    private suspend fun persistAll(records: List<CgmMeasurement>) {
+        val now = System.currentTimeMillis()
+        val fresh = records.filter { it.timeOffsetMinutes > lastMinute }.sortedBy { it.timeOffsetMinutes }
+        if (fresh.isEmpty()) return
+        val newestMinute = fresh.last().timeOffsetMinutes
+        for (m in fresh) {
+            val atMs = SmartGuideClock.readingTimeMs(startMs, m.timeOffsetMinutes, now)
+            if (!m.hasValue) {
+                // F3: LO/HI/erro aparecerem na tela e nos alertas.
+                appLogger.usage(LOG, "Leitura sem valor numérico", mapOf(
+                    "minuto" to m.timeOffsetMinutes, "lo" to m.isLow, "hi" to m.isHigh, "avisos" to m.annunciation.toString()
+                ))
+                continue
+            }
+            val mgdl = m.glucoseMgDl
+            if (mgdl.toInt() !in PLAUSIBLE_MGDL) {
+                appLogger.usage(LOG, "Leitura descartada (fora da faixa)", mapOf("mgdl" to mgdl, "minuto" to m.timeOffsetMinutes))
+                continue
+            }
+            val isNewest = m.timeOffsetMinutes == newestMinute && now - atMs <= CURRENT_MAX_AGE_MS
+            val delta = if (lastSgv >= 0) mgdl.toInt() - lastSgv else 0
+            val mmol = mgdl / MMOL_TO_MGDL
+            repository.storeExternalReading(
+                dateMs       = atMs,
+                sgvMgDl      = mgdl.toDouble(),
+                arrow        = arrowFor(m.trendMgDlPerMin, delta),
+                delta        = delta,
+                makeCurrent  = isNewest,
+                rawMmol      = mmol,
+                calibFactor  = 1.0,
+                sensorMac    = address,
+                sensorAgeMin = m.timeOffsetMinutes,
+                confirmed    = null
+            )
+            lastSgv = mgdl.toInt()
+            if (isNewest) {
+                statusHolder.onRawMmol(mmol)
+                statusHolder.onReading(m.timeOffsetMinutes, startMs, atMs)
+            }
+            appLogger.usage(LOG, "Glicemia salva", mapOf(
+                "mgdl" to mgdl, "minuto" to m.timeOffsetMinutes, "tendencia" to (m.trendMgDlPerMin ?: "?"),
+                "qualidade" to (m.qualityPercent ?: "?"), "atual" to isNewest
+            ))
+        }
+        lastMinute = newestMinute
+        preferences.saveAccuChekLastMinute(newestMinute)
     }
 
     /**
-     * Avança o cursor de sequência persistido para depois do MAIOR índice visto nesta busca —
-     * `highestSeqSeen` já foi atualizado por [persist] a cada `onReading` recebido antes deste
-     * evento (o RACP só indica "Response Code" depois de notificar todos os registros).
+     * Seta pela tendência do próprio sensor (mg/dL/min), nos limites usuais de CGM (1, 2, 3 mg/dL/min).
+     * Sem tendência, cai na diferença para a leitura anterior. Revisar junto com os outros sensores na F3.
      */
-    override fun onFetchComplete() {
-        val next = highestSeqSeen + 1
-        if (next <= 0) {
-            appLogger.usage(LOG, "RACP: fetch concluído sem registros novos")
-            return
-        }
-        scope?.launch { preferences.saveAccuChekLastSequence(next) }
-        ble.setFetchFromSequence(next)
-        appLogger.usage(LOG, "RACP: fetch concluído", mapOf("proximaSequencia" to next))
-    }
-
-    // ── Persistência ─────────────────────────────────────────────────────────────
-
-    /**
-     * Persiste UMA leitura já em mg/dL — o SmartGuide entrega a glicemia já calibrada de fábrica
-     * (perfil Bluetooth SIG padrão), então não há `rawToMgdl` aqui (igual ao Libre 2 Plus).
-     */
-    private suspend fun persist(reading: AccuChekReading) {
-        val mgdl = reading.mgdl
-        if (mgdl.isNaN() || mgdl.toInt() !in PLAUSIBLE_MGDL) {
-            appLogger.usage(LOG, "Leitura descartada (fora da faixa ou NaN)",
-                mapOf("mgdl" to mgdl, "seq" to reading.sequenceNumber))
-            return
-        }
-        if (reading.sequenceNumber > highestSeqSeen) highestSeqSeen = reading.sequenceNumber
-
-        val atMs = reading.epochMillis()
-        // Sem ativação NFC (diferente do Libre2), não há timestamp de início conhecido a priori —
-        // usa o primeiro registro observado nesta sessão como âncora aproximada (só afeta a "idade" exibida).
-        val startMs = statusHolder.status.value.sensorStartMs.takeIf { it > 0L } ?: atMs
-        val ageMin  = ((atMs - startMs) / 60_000L).toInt().coerceAtLeast(0)
-        val delta   = if (lastSgv >= 0) mgdl.toInt() - lastSgv else 0
-        val mmol    = mgdl / MMOL_TO_MGDL
-
-        statusHolder.onRawMmol(mmol)
-        repository.storeExternalReading(
-            dateMs       = atMs,
-            sgvMgDl      = mgdl.toDouble(),
-            arrow        = arrowFromDelta(delta),
-            delta        = delta,
-            makeCurrent  = true,
-            rawMmol      = mmol,
-            calibFactor  = 1.0,
-            sensorMac    = currentMac ?: "",
-            sensorAgeMin = ageMin,
-            confirmed    = null
-        )
-        lastSgv = mgdl.toInt()
-        statusHolder.onReading(ageMin, startMs, atMs)
-        appLogger.usage(LOG, "Glicemia salva",
-            mapOf("mgdl" to mgdl, "seq" to reading.sequenceNumber, "ageMin" to ageMin))
-    }
-
-    // ── Reconexão (mesma grade do Sibionics/Libre2) ───────────────────────────────
-
-    private fun startReconnect(mac: String) {
-        reconnectJob?.cancel()
-        reconnectJob = scope?.launch {
-            appLogger.usage(LOG, "Agenda de reconexão iniciada",
-                mapOf("mac" to mac, "tentativas" to RECONNECT_SCHEDULE_MS.size))
-            RECONNECT_SCHEDULE_MS.forEachIndexed { idx, delayMs ->
-                delay(delayMs)
-                if (!isActive) return@launch
-                appLogger.usage(LOG, "Tentativa de reconexão BLE",
-                    mapOf("tentativa" to "${idx + 1}/${RECONNECT_SCHEDULE_MS.size}"))
-                ble.connect(mac)
-                delay(GATT_HANDSHAKE_MS)
-                if (!isActive) return@launch
-            }
-            if (!stopped) {
-                appLogger.error(LOG, "Sensor não reconectou após 60 min", mapOf("mac" to mac))
-                notificationHelper.showSensorWarning(
-                    "Sensor desconectado",
-                    "Não foi possível reconectar ao Accu-Chek SmartGuide após 60 minutos. " +
-                        "Verifique se o sensor está próximo e o Bluetooth está ativo."
-                )
-            }
+    private fun arrowFor(trend: Float?, delta: Int): String {
+        if (trend == null || trend.isNaN() || trend.isInfinite()) return arrowFromDelta(delta)
+        return when {
+            trend >= 3f  -> "↑↑"
+            trend >= 2f  -> "↑"
+            trend >= 1f  -> "↗"
+            trend > -1f  -> "→"
+            trend > -2f  -> "↘"
+            trend > -3f  -> "↓"
+            else         -> "↓↓"
         }
     }
 
@@ -241,5 +324,30 @@ class AccuChekSource @Inject constructor(
         delta > -7   -> "↘"
         delta > -15  -> "↓"
         else         -> "↓↓"
+    }
+
+    // ── Reconexão (mesma grade do Sibionics/Libre2) ──────────────────────────────────────────────
+
+    private fun startReconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = scope?.launch {
+            RECONNECT_SCHEDULE_MS.forEachIndexed { idx, delayMs ->
+                delay(delayMs)
+                if (!isActive) return@launch
+                if (ble.isReady) return@launch
+                appLogger.usage(LOG, "Tentativa de reconexão", mapOf("tentativa" to "${idx + 1}/${RECONNECT_SCHEDULE_MS.size}"))
+                ble.connectToSensor(serial, address)
+                delay(GATT_HANDSHAKE_MS)
+                if (!isActive || ble.isReady) return@launch
+            }
+            if (!stopped) {
+                appLogger.error(LOG, "Sensor não reconectou após 60 min")
+                notificationHelper.showSensorWarning(
+                    "Sensor desconectado",
+                    "Não foi possível reconectar ao Accu-Chek SmartGuide após 60 minutos. " +
+                        "Verifique se o sensor está próximo e o Bluetooth está ativo."
+                )
+            }
+        }
     }
 }

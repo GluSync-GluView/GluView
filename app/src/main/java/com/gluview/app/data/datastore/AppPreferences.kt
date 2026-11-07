@@ -220,12 +220,15 @@ class AppPreferences @Inject constructor(
         val KEY_LIBRE2_FRAM           = stringPreferencesKey("libre2_fram")           // FRAM 344B para reconstruir scanstate
         val KEY_LIBRE2_SENSOR_START   = longPreferencesKey("libre2_sensor_start_ms")  // ativação (epoch ms) p/ idade
         val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
-        // BLE Accu-Chek SmartGuide — perfil Bluetooth SIG "Glucose Service" padrão (0x1808), sem
-        // cripto proprietária. O histórico é buscado via RACP por número de SEQUÊNCIA (não por
-        // timestamp) — o cursor abaixo é o "próximo número esperado" (ver AccuChekSource).
-        val KEY_ACCUCHEK_MAC           = stringPreferencesKey("accuchek_mac")
-        val KEY_ACCUCHEK_SERIAL        = stringPreferencesKey("accuchek_serial")
-        val KEY_ACCUCHEK_LAST_SEQUENCE = intPreferencesKey("accuchek_last_sequence")
+        // BLE Accu-Chek SmartGuide — serviço CGM padrão (0x181F), sem cripto proprietária. O
+        // histórico vem pelo RACP filtrado por MINUTO desde o início do sensor (ver AccuChekSource).
+        val KEY_ACCUCHEK_MAC           = stringPreferencesKey("accuchek_mac")       // endereço do aparelho pareado
+        val KEY_ACCUCHEK_SERIAL        = stringPreferencesKey("accuchek_serial")    // serial da embalagem (nome AC-<serial>)
+        val KEY_ACCUCHEK_PIN           = stringPreferencesKey("accuchek_pin")       // PIN de 6 dígitos da tampa (re-parear)
+        val KEY_ACCUCHEK_LAST_MINUTE   = intPreferencesKey("accuchek_last_minute")  // minuto da última leitura salva
+        val KEY_ACCUCHEK_START_MS      = longPreferencesKey("accuchek_start_ms")    // início do sensor (epoch ms)
+        // Chave do driver antigo (perfil 0x1808, cursor por sequência) — só para apagar.
+        val KEY_ACCUCHEK_LAST_SEQUENCE_OLD = intPreferencesKey("accuchek_last_sequence")
         // BLE Smart 2.0 (MedLevensohn / Microtech MD AiDEX X-LinX-Lumi) — cripto própria
         // (MD5+AES-CFB128 derivados do serial). sessionKey é derivada no handshake; persistida
         // pra pular o handshake completo na próxima conexão (ver MedLevensohnBleManager).
@@ -503,7 +506,10 @@ class AppPreferences @Inject constructor(
 
     val accuChekMac: Flow<String>          = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_MAC]           ?: "" }
     val accuChekSerial: Flow<String>       = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_SERIAL]        ?: "" }
-    val accuChekLastSequence: Flow<Int>    = dataStore.data.safeMap(0)  { it[KEY_ACCUCHEK_LAST_SEQUENCE] ?: 0 }
+    val accuChekPin: Flow<String>          = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_PIN]           ?: "" }
+    /** -1 = nenhuma leitura salva ainda (pede todo o histórico guardado no sensor). */
+    val accuChekLastMinute: Flow<Int>      = dataStore.data.safeMap(-1) { it[KEY_ACCUCHEK_LAST_MINUTE]   ?: -1 }
+    val accuChekStartMs: Flow<Long>        = dataStore.data.safeMap(0L) { it[KEY_ACCUCHEK_START_MS]      ?: 0L }
 
     val medLevensohnSerial: Flow<String>     = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_SERIAL]      ?: "" }
     val medLevensohnMac: Flow<String>        = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_MAC]         ?: "" }
@@ -856,23 +862,44 @@ class AppPreferences @Inject constructor(
 
     // ── Accu-Chek SmartGuide ───────────────────────────────────────────────────
 
-    /** Salva o MAC do sensor encontrado por scan (evita novo scan nas próximas conexões). */
+    /** Endereço do aparelho pareado (o endereço anunciado muda; o do pareamento não). */
     suspend fun saveAccuChekMac(mac: String) =
         dataStore.edit { it[KEY_ACCUCHEK_MAC] = mac }
 
-    /** Salva o número de série lido da característica 0x2A25. */
+    /** Serial da embalagem — o sensor anuncia como `AC-<serial>`. */
     suspend fun saveAccuChekSerial(serial: String) =
         dataStore.edit { it[KEY_ACCUCHEK_SERIAL] = serial }
 
-    /** Persiste o cursor de sequência RACP (próximo número esperado no próximo fetch). */
-    suspend fun saveAccuChekLastSequence(sequence: Int) =
-        dataStore.edit { it[KEY_ACCUCHEK_LAST_SEQUENCE] = sequence }
+    suspend fun saveAccuChekPin(pin: String) =
+        dataStore.edit { it[KEY_ACCUCHEK_PIN] = pin }
 
-    /** Esquece o sensor Accu-Chek configurado (MAC + serial + cursor de sequência). */
+    suspend fun saveAccuChekLastMinute(minute: Int) =
+        dataStore.edit { it[KEY_ACCUCHEK_LAST_MINUTE] = minute }
+
+    suspend fun saveAccuChekStartMs(startMs: Long) =
+        dataStore.edit { it[KEY_ACCUCHEK_START_MS] = startMs }
+
+    /**
+     * Novo sensor configurado: grava serial/PIN e zera endereço, cursor e início do anterior.
+     * Também apaga a chave do driver antigo.
+     */
+    suspend fun setAccuChekSensor(serial: String, pin: String) = dataStore.edit {
+        it[KEY_ACCUCHEK_SERIAL] = serial
+        it[KEY_ACCUCHEK_PIN] = pin
+        it.remove(KEY_ACCUCHEK_MAC)
+        it.remove(KEY_ACCUCHEK_LAST_MINUTE)
+        it.remove(KEY_ACCUCHEK_START_MS)
+        it.remove(KEY_ACCUCHEK_LAST_SEQUENCE_OLD)
+    }
+
+    /** Esquece o sensor Accu-Chek configurado (não desfaz o pareamento no Android). */
     suspend fun clearAccuChekSensor() = dataStore.edit {
         it.remove(KEY_ACCUCHEK_MAC)
         it.remove(KEY_ACCUCHEK_SERIAL)
-        it.remove(KEY_ACCUCHEK_LAST_SEQUENCE)
+        it.remove(KEY_ACCUCHEK_PIN)
+        it.remove(KEY_ACCUCHEK_LAST_MINUTE)
+        it.remove(KEY_ACCUCHEK_START_MS)
+        it.remove(KEY_ACCUCHEK_LAST_SEQUENCE_OLD)
     }
 
     // ── Smart 2.0 (MedLevensohn) ───────────────────────────────────────────────

@@ -12,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec
  * reconhecido no Juggluco lado a lado com `"AiDEX X-"`/`"LinX-"`/`"Lumi-"`; (2) vídeo público
  * mostrando Smart 2.0 → Juggluco → xDrip funcionando (abr/2026).
  *
- * Diferente do [com.gluview.app.data.accuchek.AccuChekGatt] (perfil Bluetooth SIG padrão sem
+ * Diferente do [com.gluview.app.data.accuchek.cgm.SmartGuideGatt] (perfil Bluetooth SIG padrão sem
  * cripto), aqui HÁ cripto própria — mas é MD5 + AES-128-CFB128 com IV/chave DERIVADOS DO NÚMERO
  * DE SÉRIE do sensor (não ECDH nem white-box como o Libre 2 Plus, e não precisa de nenhuma .so
  * proprietária: dá para portar 100% em Kotlin puro usando `javax.crypto`).

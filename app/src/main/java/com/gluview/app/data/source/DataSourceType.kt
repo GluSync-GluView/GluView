@@ -13,9 +13,9 @@ import com.gluview.app.R
  *                         [comingSoon] — implementado, mas nunca testado num sensor real.
  * - SIBIONICS_CHINES:     BLE direto, protocolo v1.1.2 com autenticação (hardware chinês)
  * - LIBRE2_PLUS:          BLE direto FreeStyle Libre 2 Plus (ativação NFC + streaming cifrado)
- * - ACCU_CHEK_SMARTGUIDE: BLE direto, perfil Bluetooth SIG "Glucose Service" padrão (0x1808) — sem
- *                         cripto proprietária. [comingSoon] — implementado (AccuChekSource), mas
- *                         nunca testado num sensor real (mesmo status que SIBIONICS_NACIONAL).
+ * - ACCU_CHEK_SMARTGUIDE: BLE direto, serviço CGM padrão da Bluetooth SIG (0x181F) — sem cripto
+ *                         proprietária nem .so. [comingSoon] até a validação no sensor real (F5 do
+ *                         plano 12_sprint_accuchek_smartguide.md).
  * - MEDLEVENSOHN_SMART2:  BLE direto, sensor Microtech MD (AiDEX X/LinX/Lumi rebrand) — cripto
  *                         própria (MD5 deriva IV+chave do serial, AES-128-CFB128, CRC8/16/32).
  *                         [comingSoon] — implementado (MedLevensohnSource; handshake+glicemia
