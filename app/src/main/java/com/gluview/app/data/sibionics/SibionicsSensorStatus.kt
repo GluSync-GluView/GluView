@@ -54,7 +54,14 @@ data class SibionicsSensorStatus(
     /** Última glicemia BRUTA do algoritmo (mmol/L, sem calibração do usuário). 0 = nenhuma. */
     val lastRawMmol: Double = 0.0,
     /** Última tensão de bateria do sensor em mV (protocolo v1.1.2). 0 = n/d. */
-    val batteryMv: Int = 0
+    val batteryMv: Int = 0,
+    /**
+     * Vida útil do firmware em minutos — fim real da leitura. Padrão = Sibionics ([EXPIRY_MINUTES]);
+     * o Accu-Chek SmartGuide informa a sua pelo Session Run Time (336 h = 20.160 min).
+     */
+    val expiryMinutes: Int = EXPIRY_MINUTES,
+    /** O próprio sensor anunciou que a sessão acabou (SmartGuide: bit "session stopped"). */
+    val sessionEnded: Boolean = false
 ) {
     /** Idade do sensor em dias inteiros, ou null se o início é desconhecido. */
     fun ageDays(nowMs: Long = System.currentTimeMillis()): Int? =
@@ -73,7 +80,7 @@ data class SibionicsSensorStatus(
      * do rótulo é informativo e o sensor segue medindo — passar do limite do firmware é o fim,
      * o sensor para de gerar glicemia e nenhuma reconexão traz dado de volta.
      */
-    fun isExpired(): Boolean = (lifetimeMinutes() ?: 0) >= EXPIRY_MINUTES
+    fun isExpired(): Boolean = sessionEnded || (lifetimeMinutes() ?: 0) >= expiryMinutes
 
     /** Minutos desde a última leitura, ou null se nunca recebeu. */
     fun minutesSinceReading(nowMs: Long = System.currentTimeMillis()): Long? =

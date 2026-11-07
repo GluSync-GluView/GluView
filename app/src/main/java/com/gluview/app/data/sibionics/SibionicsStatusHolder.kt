@@ -39,6 +39,25 @@ class SibionicsStatusHolder @Inject constructor() {
         )
     }
 
+    /**
+     * Relógio do sensor sem leitura (SmartGuide: CGM Status traz os minutos desde o início mesmo
+     * durante o aquecimento, quando ainda não há glicemia). Não mexe em [SibionicsSensorStatus.lastReadingMs].
+     */
+    fun onSensorClock(index: Int, sensorStartMs: Long) = _status.update {
+        it.copy(
+            lastIndex     = maxOf(it.lastIndex, index),
+            sensorStartMs = if (it.sensorStartMs > 0L) it.sensorStartMs else sensorStartMs
+        )
+    }
+
+    /** Vida útil e fim de sessão informados pelo próprio sensor (SmartGuide). */
+    fun onSensorLifetime(expiryMinutes: Int? = null, sessionEnded: Boolean? = null) = _status.update {
+        it.copy(
+            expiryMinutes = expiryMinutes?.takeIf { m -> m > 0 } ?: it.expiryMinutes,
+            sessionEnded  = sessionEnded ?: it.sessionEnded
+        )
+    }
+
     fun onConnectionChanged(connected: Boolean) = _status.update { it.copy(connected = connected) }
     fun onRssi(rssi: Int) = _status.update { it.copy(rssi = rssi) }
 

@@ -239,6 +239,23 @@
     <string name="data_source_sibionics_china">Sibionics China</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
+    <!-- Accu-Chek SmartGuide warnings (AccuChekSource) -->
+    <string name="accuchek_warn_pairing_failed_title">SmartGuide pairing failed</string>
+    <string name="accuchek_warn_pairing_failed_body">Check the 6-digit PIN on the applicator cap and keep the phone close to the sensor.</string>
+    <string name="accuchek_warn_pairing_lost_title">SmartGuide paired with another device</string>
+    <string name="accuchek_warn_pairing_lost_body">The sensor accepts only one phone at a time. Pair it again on this phone to receive readings.</string>
+    <string name="accuchek_warn_session_ended_title">SmartGuide sensor ended</string>
+    <string name="accuchek_warn_session_ended_body">The sensor reported that its session ended and it will not measure anymore. Replace it with a new sensor.</string>
+    <string name="accuchek_warn_malfunction_title">SmartGuide has no valid reading</string>
+    <string name="accuchek_warn_malfunction_body">The sensor has been reporting an error for 15 minutes. Check that it is well attached; if it continues, do a fingerstick test and consider replacing the sensor.</string>
+    <string name="accuchek_warn_battery_title">SmartGuide battery low</string>
+    <string name="accuchek_warn_battery_body">The sensor reported a low battery. Keep a new sensor at hand.</string>
+    <string name="accuchek_warn_temperature_title">SmartGuide temperature out of range</string>
+    <string name="accuchek_warn_temperature_body">The sensor may pause readings until its temperature returns to normal (heat, sauna, very hot bath or intense cold).</string>
+    <string name="accuchek_warn_calibration_title">SmartGuide requests calibration</string>
+    <string name="accuchek_warn_calibration_body">The sensor requested a calibration. GluView does not calibrate the SmartGuide yet; confirm with a fingerstick test before making treatment decisions.</string>
+    <string name="accuchek_warn_disconnected_title">Sensor disconnected</string>
+    <string name="accuchek_warn_disconnected_body">Could not reconnect to the Accu-Chek SmartGuide after 60 minutes. Check that the sensor is nearby and Bluetooth is on.</string>
     <string name="data_source_medlevensohn_smart2">Smart 2.0 Medlevensohn</string>
     <string name="data_source_dexcom_g6">Dexcom G6</string>
     <string name="data_source_dexcom_g7">Dexcom G7</string>

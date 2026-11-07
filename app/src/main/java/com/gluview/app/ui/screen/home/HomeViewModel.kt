@@ -129,7 +129,7 @@ class HomeViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SensorAgingAlert())
 
     /**
-     * Sensor Sibionics dentro da janela de aquecimento (1ª hora). A idade vem do índice do
+     * Sensor Sibionics ou SmartGuide dentro da janela de aquecimento (1ª hora). A idade vem do índice do
      * último pacote quando já houve algum; enquanto o sensor novo está mudo, do instante do
      * pareamento (`sibionicsSensorPairedMs`). Tica a cada 30 s para a contagem regressiva andar.
      */
@@ -141,8 +141,8 @@ class HomeViewModel @Inject constructor(
         preferences.dataSource,
         flow { while (true) { emit(System.currentTimeMillis()); delay(30_000L) } }
     ) { status, pairedMs, dataSourceId, nowMs ->
-        val isSibionics = DataSourceType.fromId(dataSourceId).isSibionics
-        if (!isSibionics || !status.isWarmingUp(pairedMs, nowMs)) SensorWarmup()
+        val hasWarmup = DataSourceType.fromId(dataSourceId).hasWarmupWindow
+        if (!hasWarmup || !status.isWarmingUp(pairedMs, nowMs)) SensorWarmup()
         else SensorWarmup(
             active      = true,
             elapsedMin  = status.minutesSinceStart(pairedMs, nowMs) ?: 0,

@@ -1,20 +1,28 @@
 package com.gluview.app.data.accuchek
 
+import android.content.Context
+import com.gluview.app.R
 import com.gluview.app.data.accuchek.cgm.CgmFeature
 import com.gluview.app.data.accuchek.cgm.CgmMeasurement
 import com.gluview.app.data.accuchek.cgm.CgmStatus
+import com.gluview.app.data.accuchek.cgm.MalfunctionStreak
 import com.gluview.app.data.accuchek.cgm.Racp
+import com.gluview.app.data.accuchek.cgm.SensorAnnunciation
 import com.gluview.app.data.accuchek.cgm.SessionRunTime
 import com.gluview.app.data.accuchek.cgm.SessionStartTime
+import com.gluview.app.data.accuchek.cgm.SmartGuideAlert
 import com.gluview.app.data.accuchek.cgm.SmartGuideClock
 import com.gluview.app.data.accuchek.cgm.SmartGuidePackageParser
+import com.gluview.app.data.accuchek.cgm.SmartGuideRules
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.GlucoseRepository
+import com.gluview.app.data.repository.SensorHistoryRepository
 import com.gluview.app.data.sibionics.SibionicsStatusHolder
 import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.data.source.GlucoseSource
 import com.gluview.app.notification.NotificationHelper
 import com.gluview.app.util.AppLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,21 +43,26 @@ import javax.inject.Singleton
  * [com.gluview.app.data.libre2.Libre2Source]: conecta, reconecta, data as leituras e as entrega ao
  * pipeline comum (`storeExternalReading` + [SibionicsStatusHolder]).
  *
- * Horários: o sensor manda "minutos desde o início"; o início vem do CGM Status
- * ([SmartGuideClock]). Leituras que chegam antes do status ficam esperando por ele.
- * Histórico: ao ficar pronto, pede ao sensor tudo depois do último minuto salvo (o sensor guarda
- * 8 h); repetidas são ignoradas pelo minuto.
+ * - Horário: o sensor manda "minutos desde o início"; o início vem do CGM Status
+ *   ([SmartGuideClock]). Leituras que chegam antes do status esperam por ele.
+ * - Histórico: ao ficar pronto, pede tudo depois do último minuto salvo (o sensor guarda 8 h).
+ * - LO/HI/erro: [SmartGuideRules.glucoseToStore] (LO = 39 com a regra do Juggluco, HI = 401).
+ * - Avisos do sensor (sessão encerrada, bateria, temperatura, calibração) viram notificação na
+ *   hora em que aparecem; defeito só depois de 15 min seguidos ([MalfunctionStreak]).
+ * - Aquecimento e fim de vida aparecem na Home pelo [SibionicsStatusHolder] (minutos do sensor,
+ *   vida útil do Session Run Time e o bit "sessão encerrada").
+ * - Histórico de sensores (local + GluSync) registra um período novo a cada sensor.
  *
- * F2 do plano `12_sprint_accuchek_smartguide.md`. Ficam para a F3: LO/HI/erro na tela, avisos do
- * sensor (sessão encerrada, defeito, temperatura), aquecimento de 60 min, dias restantes e histórico
- * de sensores no GluSync. Até a validação com o sensor real (F5) a fonte continua "Em breve".
+ * Até a validação com o sensor real (F5 de `12_sprint_accuchek_smartguide.md`) a fonte segue "Em breve".
  */
 @Singleton
 class AccuChekSource @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val ble: AccuChekBleManager,
     private val repository: GlucoseRepository,
     private val statusHolder: SibionicsStatusHolder,
     private val preferences: AppPreferences,
+    private val sensorHistory: SensorHistoryRepository,
     private val notificationHelper: NotificationHelper,
     private val appLogger: AppLogger
 ) : AccuChekBleManager.Listener, GlucoseSource {
@@ -58,8 +71,8 @@ class AccuChekSource @Inject constructor(
         const val LOG = "ACCUCHEK_SRC"
         const val MMOL_TO_MGDL = 18.0182
         val PLAUSIBLE_MGDL = 20..600
-        /** Leitura mais velha que isto não vira a "atual" (é histórico). */
-        val CURRENT_MAX_AGE_MS = TimeUnit.MINUTES.toMillis(6)
+        /** Leitura mais velha que isto é histórico: não vira a "atual" nem conta para avisos ao vivo. */
+        val LIVE_MAX_AGE_MS = TimeUnit.MINUTES.toMillis(6)
         val RECONNECT_SCHEDULE_MS = buildList {
             repeat(5) { add(TimeUnit.MINUTES.toMillis(1)) }
             repeat(3) { add(TimeUnit.MINUTES.toMillis(5)) }
@@ -76,11 +89,17 @@ class AccuChekSource @Inject constructor(
     @Volatile private var address: String = ""
     @Volatile private var startMs: Long = 0L
     @Volatile private var lastMinute: Int = -1
-    @Volatile private var lastSgv: Int = -1
+    /** Última leitura gravada (valida LO/HI e calcula o delta). */
+    @Volatile private var previous: SmartGuideRules.Previous? = null
+    /** Sensor novo detectado pelo status: abrir um período novo no histórico de sensores. */
+    @Volatile private var newSensorPending = false
 
     private val mutex = Mutex()
     /** Leituras que chegaram antes do CGM Status (sem início conhecido ainda não dá para datar). */
     private val pending = mutableListOf<CgmMeasurement>()
+    private val malfunction = MalfunctionStreak()
+    /** Avisos já notificados e ainda ativos (não repete a notificação a cada leitura). */
+    private val activeAlerts = mutableSetOf<SmartGuideAlert>()
 
     override fun start(type: DataSourceType) {
         if (scope != null) return
@@ -116,7 +135,9 @@ class AccuChekSource @Inject constructor(
         notificationHelper.cancelSensorWarning()
         scope?.cancel(); scope = null
         synchronized(pending) { pending.clear() }
-        lastSgv = -1
+        synchronized(activeAlerts) { activeAlerts.clear() }
+        malfunction.reset()
+        previous = null
     }
 
     // ── Conexão e pareamento ─────────────────────────────────────────────────────────────────────
@@ -125,7 +146,10 @@ class AccuChekSource @Inject constructor(
         statusHolder.onConnectionChanged(connected)
         if (connected) {
             reconnectJob?.cancel(); reconnectJob = null
-            notificationHelper.cancelSensorWarning()
+            // Some o aviso de desconexão/pareamento, mas não um aviso do sensor ainda valendo
+            // (a notificação é uma só para todos os avisos de sensor).
+            val sensorAlertActive = synchronized(activeAlerts) { activeAlerts.isNotEmpty() } || malfunction.isActive
+            if (!sensorAlertActive) notificationHelper.cancelSensorWarning()
         } else if (!stopped && reconnectJob?.isActive != true) {
             appLogger.usage(LOG, "Sensor desconectado — agendando reconexão")
             startReconnect()
@@ -135,14 +159,11 @@ class AccuChekSource @Inject constructor(
     override fun onPairingStateChanged(state: AccuChekBleManager.PairingState) {
         appLogger.usage(LOG, "Pareamento", mapOf("estado" to state.name))
         when (state) {
-            AccuChekBleManager.PairingState.FAILED -> notificationHelper.showSensorWarning(
-                "Pareamento do SmartGuide falhou",
-                "Confira o PIN de 6 dígitos da tampa do aplicador e deixe o celular perto do sensor."
-            )
-            AccuChekBleManager.PairingState.LOST -> notificationHelper.showSensorWarning(
-                "SmartGuide pareado em outro aparelho",
-                "O sensor só aceita um celular por vez. Pareie de novo neste celular para voltar a receber leituras."
-            )
+            AccuChekBleManager.PairingState.FAILED ->
+                warn(R.string.accuchek_warn_pairing_failed_title, R.string.accuchek_warn_pairing_failed_body)
+            AccuChekBleManager.PairingState.LOST ->
+                warn(R.string.accuchek_warn_pairing_lost_title, R.string.accuchek_warn_pairing_lost_body)
+            AccuChekBleManager.PairingState.BONDED -> notificationHelper.cancelSensorWarning()
             else -> Unit
         }
     }
@@ -173,7 +194,24 @@ class AccuChekSource @Inject constructor(
                 }
                 ble.requestHistory(SmartGuideClock.historyFromMinute(lastMinute))
             }
+            registerSensorPeriodIfNeeded(address)
         }
+    }
+
+    /**
+     * Abre um período no histórico de sensores (Room + GluSync) quando o sensor ativo registrado não
+     * é este — primeiro uso, troca de sensor ou contagem que recomeçou. Fora do [mutex]: faz rede.
+     */
+    private suspend fun registerSensorPeriodIfNeeded(address: String) {
+        val active = sensorHistory.observeActive().first()
+        val source = DataSourceType.ACCU_CHEK_SMARTGUIDE.id
+        val sameSensor = active != null && active.source == source &&
+            (serial.isBlank() || active.serial == serial) && !newSensorPending
+        if (sameSensor) return
+        newSensorPending = false
+        appLogger.usage(LOG, "Registrando sensor no histórico de sensores", mapOf("temSerial" to serial.isNotBlank()))
+        runCatching { sensorHistory.startNew(address, serial.ifBlank { null }, null, source) }
+            .onFailure { e -> appLogger.error(LOG, "Falha ao registrar sensor no histórico", mapOf("erro" to (e::class.simpleName ?: "?"))) }
     }
 
     // ── Informações do sensor ────────────────────────────────────────────────────────────────────
@@ -191,8 +229,11 @@ class AccuChekSource @Inject constructor(
                         "ultimoMinutoSalvo" to lastMinute, "minutoDoStatus" to status.timeOffsetMinutes
                     ))
                     lastMinute = -1
-                    lastSgv = -1
+                    previous = null
                     startMs = 0L
+                    newSensorPending = true
+                    malfunction.reset()
+                    synchronized(activeAlerts) { activeAlerts.clear() }
                     preferences.saveAccuChekLastMinute(-1)
                     statusHolder.resetForNewSensor(serial)
                 }
@@ -206,6 +247,16 @@ class AccuChekSource @Inject constructor(
                     preferences.saveAccuChekStartMs(chosen)
                     statusHolder.restoreAnchor(serial, chosen)
                 }
+                // Minutos do sensor mesmo sem glicemia: é o que faz a contagem do aquecimento andar.
+                statusHolder.onSensorClock(status.timeOffsetMinutes, startMs)
+                // Depois de reiniciar o app, a leitura anterior (que valida LO/HI) vem da última gravada.
+                if (previous == null && lastMinute >= 0) {
+                    repository.currentReading.value?.takeIf { it.epochMs > startMs }?.let { r ->
+                        val minute = ((r.epochMs - startMs) / 60_000L).toInt()
+                        if (minute in (lastMinute - 2)..lastMinute) previous = SmartGuideRules.Previous(r.sgvMgDl.toInt(), lastMinute)
+                    }
+                }
+                applyAnnunciation(status.annunciation)
                 val waiting = synchronized(pending) { pending.toList().also { pending.clear() } }
                 if (waiting.isNotEmpty()) persistAll(waiting)
             }
@@ -220,6 +271,7 @@ class AccuChekSource @Inject constructor(
 
     override fun onSessionRunTime(runTime: SessionRunTime) {
         appLogger.usage(LOG, "Vida útil do sensor", mapOf("horas" to runTime.hours))
+        if (runTime.hours > 0) statusHolder.onSensorLifetime(expiryMinutes = runTime.hours * 60)
     }
 
     override fun onDeviceInfo(serial: String?, firmware: String?) {
@@ -258,64 +310,84 @@ class AccuChekSource @Inject constructor(
         val newestMinute = fresh.last().timeOffsetMinutes
         for (m in fresh) {
             val atMs = SmartGuideClock.readingTimeMs(startMs, m.timeOffsetMinutes, now)
-            if (!m.hasValue) {
-                // F3: LO/HI/erro aparecerem na tela e nos alertas.
-                appLogger.usage(LOG, "Leitura sem valor numérico", mapOf(
-                    "minuto" to m.timeOffsetMinutes, "lo" to m.isLow, "hi" to m.isHigh, "avisos" to m.annunciation.toString()
+            val live = now - atMs <= LIVE_MAX_AGE_MS
+            val mgdl = SmartGuideRules.glucoseToStore(m, previous)?.takeIf { it in PLAUSIBLE_MGDL }
+            if (live) {
+                if (malfunction.onLiveRecord(stored = mgdl != null, malfunction = SmartGuideRules.isMalfunction(m.annunciation))) {
+                    appLogger.error(LOG, "Defeito do sensor há 15 min", mapOf("avisos" to m.annunciation.toString()))
+                    warn(R.string.accuchek_warn_malfunction_title, R.string.accuchek_warn_malfunction_body)
+                }
+                if (m.timeOffsetMinutes == newestMinute) applyAnnunciation(m.annunciation)
+            }
+            if (mgdl == null) {
+                appLogger.usage(LOG, "Leitura sem valor para gravar", mapOf(
+                    "minuto" to m.timeOffsetMinutes, "lo" to m.isLow, "hi" to m.isHigh,
+                    "mgdl" to m.glucoseMgDl, "avisos" to m.annunciation.toString()
                 ))
                 continue
             }
-            val mgdl = m.glucoseMgDl
-            if (mgdl.toInt() !in PLAUSIBLE_MGDL) {
-                appLogger.usage(LOG, "Leitura descartada (fora da faixa)", mapOf("mgdl" to mgdl, "minuto" to m.timeOffsetMinutes))
-                continue
-            }
-            val isNewest = m.timeOffsetMinutes == newestMinute && now - atMs <= CURRENT_MAX_AGE_MS
-            val delta = if (lastSgv >= 0) mgdl.toInt() - lastSgv else 0
+            val isCurrent = live && m.timeOffsetMinutes == newestMinute
+            val prev = previous
+            val delta = if (prev != null) mgdl - prev.mgdl else 0
             val mmol = mgdl / MMOL_TO_MGDL
             repository.storeExternalReading(
                 dateMs       = atMs,
                 sgvMgDl      = mgdl.toDouble(),
-                arrow        = arrowFor(m.trendMgDlPerMin, delta),
+                arrow        = SmartGuideRules.arrowFor(m.trendMgDlPerMin) ?: arrowFromDelta(delta),
                 delta        = delta,
-                makeCurrent  = isNewest,
+                makeCurrent  = isCurrent,
                 rawMmol      = mmol,
                 calibFactor  = 1.0,
                 sensorMac    = address,
                 sensorAgeMin = m.timeOffsetMinutes,
                 confirmed    = null
             )
-            lastSgv = mgdl.toInt()
-            if (isNewest) {
+            previous = SmartGuideRules.Previous(mgdl, m.timeOffsetMinutes)
+            if (isCurrent) {
                 statusHolder.onRawMmol(mmol)
                 statusHolder.onReading(m.timeOffsetMinutes, startMs, atMs)
             }
             appLogger.usage(LOG, "Glicemia salva", mapOf(
-                "mgdl" to mgdl, "minuto" to m.timeOffsetMinutes, "tendencia" to (m.trendMgDlPerMin ?: "?"),
-                "qualidade" to (m.qualityPercent ?: "?"), "atual" to isNewest
+                "mgdl" to mgdl, "bruto" to m.glucoseMgDl, "minuto" to m.timeOffsetMinutes,
+                "tendencia" to (m.trendMgDlPerMin ?: "?"), "qualidade" to (m.qualityPercent ?: "?"), "atual" to isCurrent
             ))
         }
         lastMinute = newestMinute
         preferences.saveAccuChekLastMinute(newestMinute)
     }
 
-    /**
-     * Seta pela tendência do próprio sensor (mg/dL/min), nos limites usuais de CGM (1, 2, 3 mg/dL/min).
-     * Sem tendência, cai na diferença para a leitura anterior. Revisar junto com os outros sensores na F3.
-     */
-    private fun arrowFor(trend: Float?, delta: Int): String {
-        if (trend == null || trend.isNaN() || trend.isInfinite()) return arrowFromDelta(delta)
-        return when {
-            trend >= 3f  -> "↑↑"
-            trend >= 2f  -> "↑"
-            trend >= 1f  -> "↗"
-            trend > -1f  -> "→"
-            trend > -2f  -> "↘"
-            trend > -3f  -> "↓"
-            else         -> "↓↓"
+    // ── Avisos ───────────────────────────────────────────────────────────────────────────────────
+
+    /** Notifica os avisos que acabaram de aparecer; esquece os que sumiram (para avisar de novo se voltarem). */
+    private fun applyAnnunciation(a: SensorAnnunciation) {
+        val now = SmartGuideRules.alertsFor(a)
+        val appeared = synchronized(activeAlerts) {
+            val new = now - activeAlerts
+            activeAlerts.retainAll(now)
+            activeAlerts.addAll(now)
+            new
+        }
+        if (SmartGuideAlert.SESSION_ENDED in now) statusHolder.onSensorLifetime(sessionEnded = true)
+        for (alert in appeared) {
+            appLogger.error(LOG, "Aviso do sensor", mapOf("aviso" to alert.name, "anunciacao" to a.toString()))
+            when (alert) {
+                SmartGuideAlert.SESSION_ENDED ->
+                    warn(R.string.accuchek_warn_session_ended_title, R.string.accuchek_warn_session_ended_body)
+                SmartGuideAlert.BATTERY_LOW ->
+                    warn(R.string.accuchek_warn_battery_title, R.string.accuchek_warn_battery_body)
+                SmartGuideAlert.TEMPERATURE ->
+                    warn(R.string.accuchek_warn_temperature_title, R.string.accuchek_warn_temperature_body)
+                SmartGuideAlert.CALIBRATION_REQUIRED ->
+                    warn(R.string.accuchek_warn_calibration_title, R.string.accuchek_warn_calibration_body)
+                SmartGuideAlert.MALFUNCTION -> Unit // vem do MalfunctionStreak
+            }
         }
     }
 
+    private fun warn(titleRes: Int, bodyRes: Int) =
+        notificationHelper.showSensorWarning(context.getString(titleRes), context.getString(bodyRes))
+
+    /** Sem tendência do sensor: diferença para a leitura anterior (mesma regra do Libre2Source). */
     private fun arrowFromDelta(delta: Int): String = when {
         delta >= 15  -> "↑↑"
         delta >= 7   -> "↑"
@@ -342,11 +414,7 @@ class AccuChekSource @Inject constructor(
             }
             if (!stopped) {
                 appLogger.error(LOG, "Sensor não reconectou após 60 min")
-                notificationHelper.showSensorWarning(
-                    "Sensor desconectado",
-                    "Não foi possível reconectar ao Accu-Chek SmartGuide após 60 minutos. " +
-                        "Verifique se o sensor está próximo e o Bluetooth está ativo."
-                )
+                warn(R.string.accuchek_warn_disconnected_title, R.string.accuchek_warn_disconnected_body)
             }
         }
     }

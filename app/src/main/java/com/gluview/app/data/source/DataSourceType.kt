@@ -60,6 +60,13 @@ enum class DataSourceType(
     val isSibionics: Boolean get() = this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES
 
     /**
+     * Sensor com 1 h de aquecimento acompanhada pelo app (contagem na Home, sem alarme de "sem
+     * sinal" nesse período): Sibionics e Accu-Chek SmartGuide (aquecimento de 60 min, Juggluco
+     * `mkdatabaseAccu`). Os dois informam a idade em minutos, de onde sai a contagem.
+     */
+    val hasWarmupWindow: Boolean get() = isSibionics || this == ACCU_CHEK_SMARTGUIDE
+
+    /**
      * Verdadeiro para qualquer fonte de sensor lida localmente pelo aparelho (BLE direto):
      * Sibionics (×2) e Libre 2 Plus. Falso só para [GLUSYNC] (dado vem da nuvem).
      * É este o gate do caminho "sensor local" no serviço (FGS CONNECTED_DEVICE, upload à nuvem, etc.).
