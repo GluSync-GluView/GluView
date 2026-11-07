@@ -110,6 +110,11 @@ class SettingsCaptureTest {
             SensorContent(SensorUi("SIBIONICS_CHINES", true, 14, 20, "ALL", mapOf("sensor_beta:LIBRE2_PLUS" to "pending"), true),
                 SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
         }
+        shoot("sensor-smartguide") {
+            SensorContent(SensorUi("ACCU_CHEK_SMARTGUIDE", true, 14, 20, "ALL",
+                mapOf("sensor_beta:ACCU_CHEK_SMARTGUIDE" to "approved"), true, smartGuideSerial = "1R009999990"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
+        }
         shoot("sincronizacao") {
             SyncContent(SyncUi(false, "SIBIONICS_CHINES", true, 15, 3, 365, 60, now - 2 * 86_400_000L),
                 SyncActions({}, {}, {}, {}, {}), onBack = {})

@@ -39,6 +39,9 @@ import com.gluview.app.data.accuchek.cgm.Socp
 import com.gluview.app.data.sensor.SensorCode
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.util.ArrayDeque
 import java.util.UUID
 import javax.inject.Inject
@@ -73,6 +76,20 @@ class AccuChekBleManager @Inject constructor(
     private val appLogger: AppLogger
 ) {
     enum class PairingState { BONDING, BONDED, FAILED, LOST }
+
+    /** Eventos para quem acompanha o pareamento de fora da fonte (assistente de configuração). */
+    sealed interface LinkEvent {
+        data class Pairing(val state: PairingState) : LinkEvent
+        data object Ready : LinkEvent
+    }
+
+    private val _events = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 16)
+    val events: SharedFlow<LinkEvent> = _events.asSharedFlow()
+
+    private fun notifyPairing(state: PairingState) {
+        listener?.onPairingStateChanged(state)
+        _events.tryEmit(LinkEvent.Pairing(state))
+    }
 
     interface Listener {
         /** true só depois da configuração completa ([onReady]); false em qualquer queda. */
@@ -201,15 +218,15 @@ class AccuChekBleManager @Inject constructor(
 
     private fun onBondStateChanged(state: Int, previous: Int) {
         when (state) {
-            BluetoothDevice.BOND_BONDING -> listener?.onPairingStateChanged(PairingState.BONDING)
+            BluetoothDevice.BOND_BONDING -> notifyPairing(PairingState.BONDING)
             BluetoothDevice.BOND_BONDED -> {
-                listener?.onPairingStateChanged(PairingState.BONDED)
+                notifyPairing(PairingState.BONDED)
                 val g = gatt
                 if (g != null && chars.isNotEmpty() && !setupStarted) startSetup(g)
             }
             BluetoothDevice.BOND_NONE -> if (previous == BluetoothDevice.BOND_BONDING) {
                 appLogger.error(LOG, "Pareamento falhou (PIN errado, cancelado ou sensor longe)")
-                listener?.onPairingStateChanged(PairingState.FAILED)
+                notifyPairing(PairingState.FAILED)
                 closeGatt(notify = true)
             }
         }
@@ -445,7 +462,7 @@ class AccuChekBleManager @Inject constructor(
         val bonded = gatt?.device?.bondState == BluetoothDevice.BOND_BONDED
         appLogger.error(LOG, "Sensor recusou por segurança", mapOf("op" to op, "status" to status, "pareadoNoCelular" to bonded))
         if (bonded) {
-            listener?.onPairingStateChanged(PairingState.LOST)
+            notifyPairing(PairingState.LOST)
             closeGatt(notify = true)
         } else {
             requestBond(gatt ?: return true)
@@ -463,7 +480,7 @@ class AccuChekBleManager @Inject constructor(
         val ok = runCatching { g.device.createBond() }.getOrDefault(false)
         if (!ok) {
             appLogger.error(LOG, "createBond recusado")
-            listener?.onPairingStateChanged(PairingState.FAILED)
+            notifyPairing(PairingState.FAILED)
             closeGatt(notify = true)
         }
     }
@@ -499,6 +516,21 @@ class AccuChekBleManager @Inject constructor(
         appLogger.usage(LOG, "Sensor pronto", mapOf("endereco" to g.device.address, "nome" to (name ?: "?"), "e2eCrc" to e2eCrc))
         listener?.onConnectionChanged(true)
         listener?.onReady(g.device.address, name)
+        _events.tryEmit(LinkEvent.Ready)
+    }
+
+    /**
+     * Desfaz o pareamento do SmartGuide de [serial] neste celular (para parear de novo depois que o
+     * sensor foi levado a outro aparelho, ou ao esquecer o sensor). Usa `removeBond`, que não é API
+     * pública; devolve false se o Android não deixar — aí o usuário esquece o aparelho nos ajustes
+     * de Bluetooth.
+     */
+    @SuppressLint("MissingPermission")
+    fun forgetPairing(serial: String?): Boolean {
+        val device = findBondedSensor(serial) ?: return true // nada pareado: nada a desfazer
+        val ok = runCatching { device.javaClass.getMethod("removeBond").invoke(device) as? Boolean == true }.getOrDefault(false)
+        appLogger.usage(LOG, "Desfazendo pareamento", mapOf("ok" to ok))
+        return ok
     }
 
     // ── Callback GATT ────────────────────────────────────────────────────────────────────────────

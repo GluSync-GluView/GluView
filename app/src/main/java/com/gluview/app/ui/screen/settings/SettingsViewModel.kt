@@ -58,8 +58,34 @@ class SettingsViewModel @Inject constructor(
     private val accessRequestRepository: AccessRequestRepository,
     private val appConfigRepository: AppConfigRepository,
     private val cloudAccess: CloudAccessRepository,
+    private val accuChekBle: com.gluview.app.data.accuchek.AccuChekBleManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum) — seção "Sensor atual". */
+    val smartGuideSerial: StateFlow<String> = preferences.accuChekSerial
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /**
+     * Desfaz o pareamento do SmartGuide neste celular antes de parear de novo pelo assistente.
+     * [onResult] recebe false quando o Android não deixa desfazer (aí o usuário esquece o
+     * aparelho `AC-…` nos ajustes de Bluetooth).
+     */
+    fun forgetSmartGuidePairing(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = accuChekBle.forgetPairing(preferences.accuChekSerial.first())
+            onResult(ok)
+        }
+    }
+
+    /** Esquece o SmartGuide: desfaz o pareamento, apaga serial/PIN/cursor e reinicia o serviço. */
+    fun forgetSmartGuide() {
+        viewModelScope.launch {
+            accuChekBle.forgetPairing(preferences.accuChekSerial.first())
+            preferences.clearAccuChekSensor()
+            onDataSourceChange(preferences.dataSource.first())
+        }
+    }
 
     private val _state = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _state.asStateFlow()

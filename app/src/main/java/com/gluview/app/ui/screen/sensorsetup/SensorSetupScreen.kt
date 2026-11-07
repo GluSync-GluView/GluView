@@ -20,7 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -29,13 +32,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +56,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -61,6 +72,9 @@ import com.gluview.app.data.sensor.ScanNotice
 import com.gluview.app.data.sensor.SetupState
 import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.ui.components.label
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import com.gluview.app.ui.components.kit.GluCallout
 import com.gluview.app.ui.components.kit.GluCard
 import com.gluview.app.ui.components.kit.GluSection
@@ -143,6 +157,12 @@ fun SensorSetupScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { if (viewModel.retry()) scanWithPermissions() }
 
+    // SmartGuide: o PIN é digitado depois da caixa; a busca começa com ele.
+    var pendingPinForPerms by remember { mutableStateOf<String?>(null) }
+    val pinPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { pendingPinForPerms?.let(viewModel::onPinEntered); pendingPinForPerms = null }
+
     fun retry() {
         val failed = state as? SetupState.Failed
         if (failed?.code != null && !blePermsGranted()) retryPermLauncher.launch(blePerms)
@@ -168,7 +188,14 @@ fun SensorSetupScreen(
         onBluetoothSettings = {
             runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
         },
-        onAdvanced = onAdvanced
+        onAdvanced = onAdvanced,
+        onEnterSerial = viewModel::enterSerialManually,
+        onSerialEntered = viewModel::onSerialEntered,
+        // O PIN dispara a busca por Bluetooth: pede a permissão antes, se faltar.
+        onPinEntered = { pin ->
+            if (blePermsGranted()) viewModel.onPinEntered(pin)
+            else { pendingPinForPerms = pin; pinPermLauncher.launch(blePerms) }
+        }
     )
 }
 
@@ -190,17 +217,24 @@ internal fun SensorSetupContent(
     onDone: () -> Unit,
     onRetry: () -> Unit,
     onAdvanced: () -> Unit,
-    onBluetoothSettings: () -> Unit = {}
+    onBluetoothSettings: () -> Unit = {},
+    onEnterSerial: () -> Unit = {},
+    onSerialEntered: (String) -> Unit = {},
+    onPinEntered: (String) -> Unit = {}
 ) {
     Page(title = stringResource(R.string.setup_title), onBack = onBack) {
         stepOf(state)?.let { StepIndicator(it) }
         when (state) {
             is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose)
-            is SetupState.Instructions -> InstructionsStep(state.notice, onContinue)
+            is SetupState.Instructions -> InstructionsStep(state.type, state.notice, onContinue, onEnterSerial)
             is SetupState.ReadingPackage -> WaitingStep(Icons.Default.QrCodeScanner,
                 stringResource(R.string.setup_scanning_title), stringResource(R.string.setup_scanning_body), onCancel)
+            is SetupState.EnteringSerial -> SerialStep(state.invalid, onSerialEntered, onCancel)
+            is SetupState.EnteringPin -> PinStep(state, onPinEntered, onCancel)
             is SetupState.Searching -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_searching_title), stringResource(R.string.setup_searching_body), onCancel)
+            is SetupState.Pairing -> WaitingStep(Icons.Default.BluetoothConnected,
+                stringResource(R.string.setup_pairing_title), stringResource(R.string.setup_pairing_body), onCancel)
             is SetupState.Connecting -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_connecting_title), stringResource(R.string.setup_connecting_body), null)
             is SetupState.Ready -> ReadyStep(state.warmupMinutes, onDone)
@@ -212,8 +246,8 @@ internal fun SensorSetupContent(
 /** Passo só de apresentação: escolher → 1; caixa/câmera → 2; busca/conexão → 3. */
 private fun stepOf(state: SetupState): Int? = when (state) {
     is SetupState.Idle, is SetupState.ChoosingSensor -> 1
-    is SetupState.Instructions, is SetupState.ReadingPackage -> 2
-    is SetupState.Searching, is SetupState.Connecting -> 3
+    is SetupState.Instructions, is SetupState.ReadingPackage, is SetupState.EnteringSerial -> 2
+    is SetupState.EnteringPin, is SetupState.Searching, is SetupState.Connecting, is SetupState.Pairing -> 3
     is SetupState.Failed -> if (state.reason == FailureReason.INVALID_CODE) 2 else 3
     is SetupState.Ready -> null
 }
@@ -294,9 +328,18 @@ private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: 
 }
 
 @Composable
-private fun ColumnScope.InstructionsStep(notice: ScanNotice?, onContinue: () -> Unit) {
+private fun ColumnScope.InstructionsStep(
+    type: DataSourceType,
+    notice: ScanNotice?,
+    onContinue: () -> Unit,
+    onEnterSerial: () -> Unit = {}
+) {
+    val smartGuide = type == DataSourceType.ACCU_CHEK_SMARTGUIDE
     StepIcon(Icons.Default.QrCodeScanner)
-    StepHeader(stringResource(R.string.setup_package_title), stringResource(R.string.setup_package_body))
+    StepHeader(
+        stringResource(if (smartGuide) R.string.setup_package_title_smartguide else R.string.setup_package_title),
+        stringResource(if (smartGuide) R.string.setup_package_body_smartguide else R.string.setup_package_body)
+    )
     notice?.let {
         GluCallout(stringResource(when (it) {
             ScanNotice.PERMISSION_DENIED -> R.string.setup_notice_permission
@@ -309,6 +352,62 @@ private fun ColumnScope.InstructionsStep(notice: ScanNotice?, onContinue: () -> 
     }
     Text(stringResource(R.string.setup_package_hint), style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // SmartGuide: o serial impresso (SN) basta para achar o sensor — saída para embalagem ilegível.
+    if (smartGuide) {
+        TextButton(onClick = onEnterSerial, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.setup_type_serial_cta), textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.SerialStep(invalid: Boolean, onSerialEntered: (String) -> Unit, onCancel: () -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    StepIcon(Icons.Default.Keyboard)
+    StepHeader(stringResource(R.string.setup_serial_title), stringResource(R.string.setup_serial_body))
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v -> text = v.uppercase().filter { it.isLetterOrDigit() || it == '-' }.take(23) },
+        label = { Text(stringResource(R.string.setup_serial_label)) },
+        singleLine = true,
+        isError = invalid,
+        supportingText = if (invalid) { { Text(stringResource(R.string.setup_serial_invalid)) } } else null,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
+        modifier = Modifier.fillMaxWidth()
+    )
+    Button(onClick = { onSerialEntered(text) }, enabled = text.isNotBlank(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.setup_continue))
+    }
+    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_cancel)) }
+}
+
+/** PIN da tampa do aplicador + aviso de "um celular por vez" (o sensor só aceita um pareamento). */
+@Composable
+private fun ColumnScope.PinStep(state: SetupState.EnteringPin, onPinEntered: (String) -> Unit, onCancel: () -> Unit) {
+    var pin by rememberSaveable { mutableStateOf("") }
+    StepIcon(Icons.Default.Password)
+    StepHeader(stringResource(R.string.setup_pin_title), stringResource(R.string.setup_pin_body, state.code.serial))
+    state.expiry?.takeIf { it.isBefore(LocalDate.now()) }?.let { expiry ->
+        GluCallout(stringResource(R.string.setup_pin_expired,
+            expiry.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))), tone = Tone.Warning, announce = true)
+    }
+    GluCallout(stringResource(R.string.setup_pin_one_phone), tone = Tone.Info)
+    OutlinedTextField(
+        value = pin,
+        onValueChange = { v -> pin = v.filter(Char::isDigit).take(6) },
+        label = { Text(stringResource(R.string.setup_pin_label)) },
+        singleLine = true,
+        isError = state.invalid,
+        supportingText = if (state.invalid) { { Text(stringResource(R.string.setup_pin_invalid)) } } else null,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = Modifier.fillMaxWidth()
+    )
+    Button(onClick = { onPinEntered(pin) }, enabled = pin.length == 6,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.setup_pin_cta))
+    }
+    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_cancel)) }
 }
 
 @Composable
@@ -324,7 +423,9 @@ private fun ColumnScope.WaitingStep(icon: ImageVector, title: String, body: Stri
 @Composable
 private fun ColumnScope.ReadyStep(warmupMinutes: Int, onDone: () -> Unit) {
     StepIcon(Icons.Default.CheckCircle, tone = Tone.Success)
-    StepHeader(stringResource(R.string.setup_ready_title), stringResource(R.string.setup_ready_body, warmupMinutes))
+    StepHeader(stringResource(R.string.setup_ready_title),
+        if (warmupMinutes > 0) stringResource(R.string.setup_ready_body, warmupMinutes)
+        else stringResource(R.string.setup_ready_body_now))
     Button(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(stringResource(R.string.setup_ready_cta))
     }
@@ -339,6 +440,8 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.SENSOR_NOT_FOUND      -> R.string.setup_error_notfound_title
             FailureReason.BLUETOOTH_UNAVAILABLE -> R.string.setup_error_bluetooth_title
             FailureReason.BLUETOOTH_PERMISSION  -> R.string.setup_error_permission_title
+            FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_title
+            FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_title
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_title
         }),
         body = stringResource(when (reason) {
@@ -346,6 +449,8 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.SENSOR_NOT_FOUND      -> R.string.setup_error_notfound_body
             FailureReason.BLUETOOTH_UNAVAILABLE -> R.string.setup_error_bluetooth_body
             FailureReason.BLUETOOTH_PERMISSION  -> R.string.setup_error_permission_body
+            FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_body
+            FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_body
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_body
         })
     )

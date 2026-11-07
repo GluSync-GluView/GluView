@@ -239,6 +239,36 @@
     <string name="data_source_sibionics_china">Sibionics China</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
+    <!-- Accu-Chek SmartGuide: setup wizard and Sensor tab (F4) -->
+    <string name="setup_package_title_smartguide">Get the sensor package</string>
+    <string name="setup_package_body_smartguide">The SmartGuide code is on the white label of the sensor pouch, next to the UDI symbol. If it cannot be read, type the serial number (SN).</string>
+    <string name="setup_type_serial_cta">Type the serial number</string>
+    <string name="setup_serial_title">Sensor serial number</string>
+    <string name="setup_serial_body">It is on the package label, after SN (21). Example: 1R001234567.</string>
+    <string name="setup_serial_label">Serial number</string>
+    <string name="setup_serial_invalid">Use only letters and numbers, 6 to 20 characters.</string>
+    <string name="setup_continue">Continue</string>
+    <string name="setup_pin_title">Sensor PIN</string>
+    <string name="setup_pin_body">Type the 6 digits printed on the applicator cap. Sensor %1$s.</string>
+    <string name="setup_pin_label">6-digit PIN</string>
+    <string name="setup_pin_invalid">The PIN has 6 digits.</string>
+    <string name="setup_pin_one_phone">The SmartGuide stays paired with one phone at a time. Pairing here takes the sensor away from another phone, and the official app there stops receiving. On the same phone, GluView and the official app work together.</string>
+    <string name="setup_pin_expired">The package expired on %1$s. An expired sensor may measure incorrectly.</string>
+    <string name="setup_pin_cta">Pair</string>
+    <string name="setup_pairing_title">Pairing with the sensor</string>
+    <string name="setup_pairing_body">Keep the phone close to the sensor. If Android shows a pairing request, type the same PIN from the cap.</string>
+    <string name="setup_error_pairing_title">Pairing did not work</string>
+    <string name="setup_error_pairing_body">Check the PIN on the applicator cap and try again. If the sensor was paired with another phone, it needs to be paired again here.</string>
+    <string name="setup_error_pairing_timeout_title">Pairing took too long</string>
+    <string name="setup_error_pairing_timeout_body">The sensor did not answer in time. Keep the phone very close, confirm the pairing request if it appears and try again.</string>
+    <string name="setup_ready_body_now">The sensor is already measuring. Readings arrive every 5 minutes.</string>
+    <string name="settings_smartguide_serial">Sensor %1$s</string>
+    <string name="settings_smartguide_setup">Set up the SmartGuide</string>
+    <string name="settings_smartguide_repair">Pair again</string>
+    <string name="settings_smartguide_forget">Forget this sensor</string>
+    <string name="settings_smartguide_forget_title">Forget the SmartGuide?</string>
+    <string name="settings_smartguide_forget_body">GluView stops reading this sensor and removes the pairing on this phone. Readings already saved stay in the history.</string>
+    <string name="settings_smartguide_forget_confirm">Forget</string>
     <!-- Accu-Chek SmartGuide warnings (AccuChekSource) -->
     <string name="accuchek_warn_pairing_failed_title">SmartGuide pairing failed</string>
     <string name="accuchek_warn_pairing_failed_body">Check the 6-digit PIN on the applicator cap and keep the phone close to the sensor.</string>

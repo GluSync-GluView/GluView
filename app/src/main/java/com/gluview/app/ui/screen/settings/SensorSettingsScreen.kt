@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,7 +65,9 @@ internal data class SensorUi(
     val betaStatus: Map<String, String>,
     val betaEnabled: Boolean,
     /** Variante escolhida/detectada (modelo + região); "" = padrão da fonte. */
-    val sensorVariantId: String = ""
+    val sensorVariantId: String = "",
+    /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum). */
+    val smartGuideSerial: String = ""
 )
 
 internal data class SensorActions(
@@ -77,7 +80,11 @@ internal data class SensorActions(
     val onSensorSetup: () -> Unit,
     val onSensorScanner: () -> Unit,
     val onLibre2Activation: () -> Unit,
-    val onVariant: (SensorVariant) -> Unit = {}
+    val onVariant: (SensorVariant) -> Unit = {},
+    /** SmartGuide: desfaz o pareamento e abre o assistente para parear de novo com o PIN. */
+    val onSmartGuideRepair: () -> Unit = {},
+    /** SmartGuide: esquece o sensor configurado (serial, PIN, pareamento). */
+    val onSmartGuideForget: () -> Unit = {}
 )
 
 /**
@@ -107,6 +114,8 @@ fun SensorSettingsScreen(
     val sensorBetaEnabled    by viewModel.sensorBetaEnabled.collectAsState()
     var betaDialogSource by remember { mutableStateOf<DataSourceType?>(null) }
     val sensorBetaMessage by viewModel.sensorBetaMessage.collectAsState()
+    val smartGuideSerial by viewModel.smartGuideSerial.collectAsState()
+    var confirmForgetSmartGuide by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -117,13 +126,36 @@ fun SensorSettingsScreen(
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorBetaStatus, sensorBetaEnabled, sensorVariantId),
+            sensorBetaStatus, sensorBetaEnabled, sensorVariantId, smartGuideSerial),
         actions = SensorActions(viewModel::onDataSourceChange, { betaDialogSource = it }, viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
-            onSensorSetup, onSensorScanner, onLibre2Activation, viewModel::onSensorVariantChange),
+            onSensorSetup, onSensorScanner, onLibre2Activation, viewModel::onSensorVariantChange,
+            onSmartGuideRepair = {
+                viewModel.forgetSmartGuidePairing { ok ->
+                    if (ok) onSensorSetup()
+                    else runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
+                }
+            },
+            onSmartGuideForget = { confirmForgetSmartGuide = true }),
         onBack = onBack,
         snackbarHostState = snackbarHostState
     )
+
+    if (confirmForgetSmartGuide) {
+        AlertDialog(
+            onDismissRequest = { confirmForgetSmartGuide = false },
+            title = { Text(stringResource(R.string.settings_smartguide_forget_title)) },
+            text = { Text(stringResource(R.string.settings_smartguide_forget_body)) },
+            confirmButton = {
+                TextButton(onClick = { confirmForgetSmartGuide = false; viewModel.forgetSmartGuide() }) {
+                    Text(stringResource(R.string.settings_smartguide_forget_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmForgetSmartGuide = false }) { Text(stringResource(R.string.setup_cancel)) }
+            }
+        )
+    }
 
     // ADR-0029 — candidatura de beta de um sensor comingSoon. betaState é recarregado a partir
     // do MESMO GET /access-requests/me/status já usado pelos selos da lista.
@@ -235,7 +267,8 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                             enabled = variant.implemented && source.isUsableOnThisDevice && (!source.comingSoon || ui.betaEnabled),
                             onClick = {
                                 expanded = false
-                                if (source.comingSoon) actions.onBeta(source) else actions.onVariant(variant)
+                                val approved = betaState == "approved"
+                                if (source.comingSoon && !approved) actions.onBeta(source) else actions.onVariant(variant)
                             },
                             trailingIcon = {
                                 when {
@@ -253,6 +286,28 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                                 }
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        if (currentSource == DataSourceType.ACCU_CHEK_SMARTGUIDE) {
+            GluSection(stringResource(R.string.settings_current_sensor_section)) {
+                if (ui.smartGuideSerial.isNotBlank()) {
+                    Text(stringResource(R.string.settings_smartguide_serial, ui.smartGuideSerial),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                // Assistente: ler a embalagem (ou digitar o serial), PIN da tampa, parear.
+                Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(if (ui.smartGuideSerial.isBlank()) R.string.settings_smartguide_setup else R.string.settings_change_sensor))
+                }
+                if (ui.smartGuideSerial.isNotBlank()) {
+                    // Sensor levado a outro celular (ou pareamento corrompido): desfaz e pareia de novo.
+                    OutlinedButton(onClick = actions.onSmartGuideRepair, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.settings_smartguide_repair))
+                    }
+                    TextButton(onClick = actions.onSmartGuideForget, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.settings_smartguide_forget))
                     }
                 }
             }

@@ -245,6 +245,36 @@
     <string name="data_source_sibionics_china">Sibionics China</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
+    <!-- Accu-Chek SmartGuide: assistente e aba Sensor (F4) -->
+    <string name="setup_package_title_smartguide">Pegue a embalagem do sensor</string>
+    <string name="setup_package_body_smartguide">O código do SmartGuide fica na etiqueta branca do saquinho do sensor, ao lado do símbolo UDI. Se não der para ler, digite o número de série (SN).</string>
+    <string name="setup_type_serial_cta">Digitar o número de série</string>
+    <string name="setup_serial_title">Número de série do sensor</string>
+    <string name="setup_serial_body">Está na etiqueta da embalagem, depois de SN (21). Exemplo: 1R001234567.</string>
+    <string name="setup_serial_label">Número de série</string>
+    <string name="setup_serial_invalid">Use só letras e números, de 6 a 20 caracteres.</string>
+    <string name="setup_continue">Continuar</string>
+    <string name="setup_pin_title">PIN do sensor</string>
+    <string name="setup_pin_body">Digite os 6 números impressos na tampa do aplicador. Sensor %1$s.</string>
+    <string name="setup_pin_label">PIN de 6 dígitos</string>
+    <string name="setup_pin_invalid">O PIN tem 6 números.</string>
+    <string name="setup_pin_one_phone">O SmartGuide fica pareado com um celular por vez. Parear aqui tira o sensor de outro celular, e o app oficial nele para de receber. No mesmo celular, o GluView e o app oficial funcionam juntos.</string>
+    <string name="setup_pin_expired">A embalagem venceu em %1$s. Sensor vencido pode medir errado.</string>
+    <string name="setup_pin_cta">Parear</string>
+    <string name="setup_pairing_title">Pareando com o sensor</string>
+    <string name="setup_pairing_body">Deixe o celular perto do sensor. Se o Android mostrar um pedido de pareamento, digite o mesmo PIN da tampa.</string>
+    <string name="setup_error_pairing_title">O pareamento não deu certo</string>
+    <string name="setup_error_pairing_body">Confira o PIN da tampa do aplicador e tente de novo. Se o sensor estava pareado com outro celular, ele precisa ser pareado de novo aqui.</string>
+    <string name="setup_error_pairing_timeout_title">O pareamento demorou demais</string>
+    <string name="setup_error_pairing_timeout_body">O sensor não respondeu a tempo. Deixe o celular bem perto, confirme o pedido de pareamento se ele aparecer e tente de novo.</string>
+    <string name="setup_ready_body_now">O sensor já está medindo. As leituras chegam a cada 5 minutos.</string>
+    <string name="settings_smartguide_serial">Sensor %1$s</string>
+    <string name="settings_smartguide_setup">Configurar o SmartGuide</string>
+    <string name="settings_smartguide_repair">Parear de novo</string>
+    <string name="settings_smartguide_forget">Esquecer este sensor</string>
+    <string name="settings_smartguide_forget_title">Esquecer o SmartGuide?</string>
+    <string name="settings_smartguide_forget_body">O GluView para de ler este sensor e desfaz o pareamento neste celular. As leituras já salvas continuam no histórico.</string>
+    <string name="settings_smartguide_forget_confirm">Esquecer</string>
     <!-- Avisos do Accu-Chek SmartGuide (AccuChekSource) -->
     <string name="accuchek_warn_pairing_failed_title">Pareamento do SmartGuide falhou</string>
     <string name="accuchek_warn_pairing_failed_body">Confira o PIN de 6 dígitos da tampa do aplicador e deixe o celular perto do sensor.</string>

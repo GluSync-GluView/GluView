@@ -5,9 +5,12 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import com.gluview.app.data.accuchek.AccuChekBleManager
+import com.gluview.app.data.accuchek.cgm.SmartGuidePackageParser
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.SensorHistoryRepository
 import com.gluview.app.data.sibionics.SibionicsQrParser
+import com.gluview.app.data.sibionics.SibionicsStatusHolder
 import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.service.GluSyncService
 import com.gluview.app.service.ServiceWatchdogWorker
@@ -17,12 +20,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.LocalDate
+import kotlin.coroutines.resume
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,8 +55,28 @@ sealed interface SetupState {
     /** Câmera aberta, esperando o código da embalagem. */
     data class ReadingPackage(val type: DataSourceType) : SetupState
 
+    /**
+     * Digitando o número de série (embalagem ilegível ou câmera sem foco) — só para sensores que se
+     * identificam pelo serial (Accu-Chek SmartGuide). [invalid] = a última tentativa não valeu.
+     */
+    data class EnteringSerial(val type: DataSourceType, val invalid: Boolean = false) : SetupState
+
+    /**
+     * Digitando o PIN de pareamento (SmartGuide: 6 dígitos da tampa do aplicador), com o aviso de
+     * que o sensor só aceita um celular por vez. [expiry] = validade lida da embalagem.
+     */
+    data class EnteringPin(
+        val type: DataSourceType,
+        val code: SensorCode,
+        val expiry: LocalDate? = null,
+        val invalid: Boolean = false
+    ) : SetupState
+
     /** Procurando no ar o sensor que corresponde à embalagem. */
     data class Searching(val type: DataSourceType, val code: SensorCode) : SetupState
+
+    /** Sensor encontrado e configurado; esperando o pareamento com o PIN terminar. */
+    data class Pairing(val type: DataSourceType, val code: SensorCode) : SetupState
 
     /** Sensor encontrado; conectando e salvando a configuração. */
     data class Connecting(val type: DataSourceType, val code: SensorCode) : SetupState
@@ -73,6 +102,12 @@ enum class FailureReason {
     /** Bluetooth desligado. */
     BLUETOOTH_UNAVAILABLE,
 
+    /** O pareamento foi recusado (PIN errado, cancelado ou sensor preso a outro celular). */
+    PAIRING_FAILED,
+
+    /** O pareamento não terminou a tempo (janela do sistema sem resposta, sensor longe). */
+    PAIRING_TIMEOUT,
+
     /** Sem a permissão de procurar dispositivos por perto (L19: antes caía em "Bluetooth desligado"). */
     BLUETOOTH_PERMISSION,
 
@@ -94,6 +129,8 @@ class SensorSetupCoordinator @Inject constructor(
     private val preferences: AppPreferences,
     private val discovery: SensorDiscovery,
     private val sensorHistory: SensorHistoryRepository,
+    private val accuChekBle: AccuChekBleManager,
+    private val statusHolder: SibionicsStatusHolder,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
 ) {
@@ -105,6 +142,9 @@ class SensorSetupCoordinator @Inject constructor(
 
     /** Job da etapa em andamento — garante uma sessão por vez (clique duplo não duplica nada). */
     private var runningJob: Job? = null
+
+    /** PIN digitado para o SmartGuide — guardado para "tentar de novo" sem digitar outra vez. */
+    @Volatile private var pendingPin: String? = null
 
     // ── Transições dirigidas pela UI ───────────────────────────────────────────
 
@@ -137,7 +177,37 @@ class SensorSetupCoordinator @Inject constructor(
     fun cancel() {
         runningJob?.cancel()
         runningJob = null
+        pendingPin = null
         _state.value = SetupState.Idle
+    }
+
+    /** SmartGuide: digitar o número de série em vez de ler a embalagem. */
+    fun enterSerialManually() {
+        val type = currentType() ?: return
+        _state.value = SetupState.EnteringSerial(type)
+    }
+
+    fun onSerialEntered(text: String) {
+        val type = currentType() ?: return
+        val serial = SmartGuidePackageParser.normalizeSerial(text)
+        if (serial == null) {
+            _state.value = SetupState.EnteringSerial(type, invalid = true)
+            return
+        }
+        appLogger.usage(LOG, "Serial digitado à mão")
+        _state.value = SetupState.EnteringPin(type, SensorCode(connectionCode = serial, serial = serial))
+    }
+
+    /** PIN de 6 dígitos digitado: guarda e procura o sensor. */
+    fun onPinEntered(pin: String) {
+        val s = _state.value as? SetupState.EnteringPin ?: return
+        val clean = pin.trim()
+        if (clean.length != SMARTGUIDE_PIN_LENGTH || !clean.all(Char::isDigit)) {
+            _state.value = s.copy(invalid = true)
+            return
+        }
+        pendingPin = clean
+        search(s.type, s.code)
     }
 
     /**
@@ -151,6 +221,8 @@ class SensorSetupCoordinator @Inject constructor(
         val code = s.code
         return when {
             type == null -> { _state.value = SetupState.ChoosingSensor; false }
+            code != null && type == DataSourceType.ACCU_CHEK_SMARTGUIDE && pendingPin == null ->
+                { _state.value = SetupState.EnteringPin(type, code); false }
             code != null -> { search(type, code); false }
             else -> { _state.value = SetupState.ReadingPackage(type); true }
         }
@@ -165,6 +237,17 @@ class SensorSetupCoordinator @Inject constructor(
         if (runningJob?.isActive == true) return
 
         runningJob = scope.launch {
+            if (type == DataSourceType.ACCU_CHEK_SMARTGUIDE) {
+                val pkg = SmartGuidePackageParser.parse(rawValue)
+                if (pkg == null) {
+                    appLogger.error(LOG, "Código da embalagem não é de um SmartGuide")
+                    _state.value = SetupState.Failed(FailureReason.INVALID_CODE, type)
+                    return@launch
+                }
+                appLogger.usage(LOG, "Embalagem do SmartGuide lida", mapOf("validade" to (pkg.expiryDate?.toString() ?: "?")))
+                _state.value = SetupState.EnteringPin(type, pkg.toSensorCode(), pkg.expiryDate)
+                return@launch
+            }
             val parsed = SibionicsQrParser.parse(rawValue)
             val code = parsed?.let {
                 SensorCode(
@@ -200,6 +283,11 @@ class SensorSetupCoordinator @Inject constructor(
             return
         }
 
+        if (type == DataSourceType.ACCU_CHEK_SMARTGUIDE) {
+            runSmartGuideSearch(type, code)
+            return
+        }
+
         _state.value = SetupState.Searching(type, code)
 
         val found = runCatching { discovery.findSensor(code, SibionicsIdentityMatcher()) }
@@ -217,6 +305,77 @@ class SensorSetupCoordinator @Inject constructor(
         _state.value = SetupState.Connecting(type, code)
         applySensor(type, code, found)
         _state.value = SetupState.Ready(type, WARMUP_MINUTES)
+    }
+
+    // ── Accu-Chek SmartGuide ───────────────────────────────────────────────────
+
+    /**
+     * SmartGuide: acha o sensor (já pareado neste celular — pelo GluView ou pelo app oficial — ou
+     * anunciando `AC-<serial>`), grava serial + PIN, reinicia o serviço e espera o pareamento.
+     * O pareamento em si acontece no serviço ([AccuChekBleManager]), que responde ao Android com o PIN.
+     */
+    private suspend fun runSmartGuideSearch(type: DataSourceType, code: SensorCode) {
+        val pin = pendingPin ?: run { _state.value = SetupState.EnteringPin(type, code); return }
+        _state.value = SetupState.Searching(type, code)
+
+        val bonded = accuChekBle.findBondedSensor(code.serial)
+        val address = bonded?.address ?: scanSmartGuide(code)
+        if (address == null) {
+            _state.value = SetupState.Failed(FailureReason.SENSOR_NOT_FOUND, type, code)
+            return
+        }
+        appLogger.usage(LOG, "SmartGuide encontrado", mapOf("jaPareado" to (bonded != null)))
+
+        _state.value = SetupState.Connecting(type, code)
+        val sameSensor = preferences.accuChekSerial.first() == code.serial
+        if (sameSensor) preferences.saveAccuChekPin(pin) else preferences.setAccuChekSensor(code.serial, pin)
+        preferences.saveAccuChekMac(address)
+        if (preferences.dataSource.first() != type.id) preferences.saveDataSource(type.id)
+
+        _state.value = SetupState.Pairing(type, code)
+        // Assina os eventos ANTES de reiniciar o serviço, para não perder um pareamento rápido.
+        when (val outcome = awaitPairing { restartService() }) {
+            AccuChekBleManager.LinkEvent.Ready -> {
+                delay(READY_SETTLE_MS) // a fonte grava os minutos do sensor logo depois do "pronto"
+                val minute = statusHolder.status.value.lastIndex
+                val warmupLeft = if (minute < 0) WARMUP_MINUTES else (WARMUP_MINUTES - minute).coerceIn(0, WARMUP_MINUTES)
+                appLogger.usage(LOG, "SmartGuide pareado e lendo", mapOf("minutoDoSensor" to minute))
+                _state.value = SetupState.Ready(type, warmupLeft)
+            }
+            null -> {
+                appLogger.error(LOG, "Pareamento do SmartGuide não terminou a tempo")
+                _state.value = SetupState.Failed(FailureReason.PAIRING_TIMEOUT, type, code)
+            }
+            else -> {
+                appLogger.error(LOG, "Pareamento do SmartGuide falhou", mapOf("evento" to outcome.toString()))
+                pendingPin = null // provável PIN errado: pede de novo no "tentar de novo"
+                _state.value = SetupState.Failed(FailureReason.PAIRING_FAILED, type, code)
+            }
+        }
+    }
+
+    /** Roda [start] e espera o primeiro evento decisivo do pareamento (pronto ou falha), ou null no prazo. */
+    private suspend fun awaitPairing(start: suspend () -> Unit): AccuChekBleManager.LinkEvent? = coroutineScope {
+        val waiter = async {
+            withTimeoutOrNull(PAIRING_WINDOW_MS) {
+                accuChekBle.events.first { e ->
+                    e == AccuChekBleManager.LinkEvent.Ready ||
+                        (e is AccuChekBleManager.LinkEvent.Pairing &&
+                            (e.state == AccuChekBleManager.PairingState.FAILED || e.state == AccuChekBleManager.PairingState.LOST))
+                }
+            }
+        }
+        start()
+        waiter.await()
+    }
+
+    /** Busca `AC-<serial>` pela janela do gerenciador (30 s); null se não achar. */
+    private suspend fun scanSmartGuide(code: SensorCode): String? = suspendCancellableCoroutine { cont ->
+        accuChekBle.startScan(code.serial, onTimeout = { if (cont.isActive) cont.resume(null) }) { _, address, _ ->
+            accuChekBle.stopScan()
+            if (cont.isActive) cont.resume(address)
+        }
+        cont.invokeOnCancellation { accuChekBle.stopScan() }
     }
 
     // ── Efeitos ────────────────────────────────────────────────────────────────
@@ -298,8 +457,11 @@ class SensorSetupCoordinator @Inject constructor(
     private fun currentType(): DataSourceType? = when (val s = _state.value) {
         is SetupState.Instructions  -> s.type
         is SetupState.ReadingPackage -> s.type
+        is SetupState.EnteringSerial -> s.type
+        is SetupState.EnteringPin   -> s.type
         is SetupState.Searching     -> s.type
         is SetupState.Connecting    -> s.type
+        is SetupState.Pairing       -> s.type
         is SetupState.Failed        -> s.type
         else                        -> null
     }
@@ -307,7 +469,11 @@ class SensorSetupCoordinator @Inject constructor(
     private companion object {
         const val LOG = "SENSOR_SETUP"
         const val SERVICE_RESTART_DELAY_MS = 800L
-        /** Aquecimento do Sibionics, exibido na tela final (ver SibionicsSensorStatus.WARMUP_MINUTES). */
+        /** Aquecimento do Sibionics e do SmartGuide, exibido na tela final (ver SibionicsSensorStatus.WARMUP_MINUTES). */
         const val WARMUP_MINUTES = 60
+        const val SMARTGUIDE_PIN_LENGTH = 6
+        /** Prazo do pareamento: reiniciar o serviço, conectar e o usuário responder à janela do sistema. */
+        const val PAIRING_WINDOW_MS = 150_000L
+        const val READY_SETTLE_MS = 800L
     }
 }

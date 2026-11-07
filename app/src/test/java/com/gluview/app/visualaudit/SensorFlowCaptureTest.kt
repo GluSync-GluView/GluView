@@ -80,6 +80,19 @@ class SensorFlowCaptureTest {
         shoot("setup-pronto", setup(SetupState.Ready(type, 60)))
         shoot("setup-falha-bt", setup(SetupState.Failed(FailureReason.BLUETOOTH_UNAVAILABLE, type)))
 
+        // Accu-Chek SmartGuide (F4): caixa com "digitar serial", serial, PIN, pareando, falhas, pronto.
+        val sg = DataSourceType.ACCU_CHEK_SMARTGUIDE
+        val sgCode = SensorCode("1R009999990", "1R009999990")
+        shoot("sg-caixa", setup(SetupState.Instructions(sg)))
+        shoot("sg-serial", setup(SetupState.EnteringSerial(sg)))
+        shoot("sg-serial-invalido", setup(SetupState.EnteringSerial(sg, invalid = true)))
+        shoot("sg-pin", setup(SetupState.EnteringPin(sg, sgCode, java.time.LocalDate.of(2026, 12, 11))))
+        shoot("sg-pin-vencido", setup(SetupState.EnteringPin(sg, sgCode, java.time.LocalDate.of(2025, 1, 31), invalid = true)))
+        shoot("sg-pareando", setup(SetupState.Pairing(sg, sgCode)))
+        shoot("sg-falha-pin", setup(SetupState.Failed(FailureReason.PAIRING_FAILED, sg, sgCode)))
+        shoot("sg-falha-tempo", setup(SetupState.Failed(FailureReason.PAIRING_TIMEOUT, sg, sgCode)))
+        shoot("sg-pronto-ja-medindo", setup(SetupState.Ready(sg, 0)))
+
         val history = listOf(
             SensorHistoryEntity(1, "C8:2A:7F:10:44:9B", "2509461A2B3C4DEF12", "1A2B3C4D", "SIBIONICS_CHINES", now - 9 * day),
             SensorHistoryEntity(2, "C8:2A:7F:10:12:01", "2508212P3R6S9TVA34", "P3R6S9TV", "SIBIONICS_CHINES", now - 24 * day, now - 9 * day)
