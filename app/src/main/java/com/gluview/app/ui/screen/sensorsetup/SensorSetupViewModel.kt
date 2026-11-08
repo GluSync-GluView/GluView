@@ -105,6 +105,7 @@ class SensorSetupViewModel @Inject constructor(
     fun scanAborted(notice: ScanNotice) = coordinator.scanAborted(notice)
     fun cancel()                       = coordinator.cancel()
     fun enterSerialManually()          = coordinator.enterSerialManually()
+    fun searchNearby()                 = coordinator.searchNearby()
     fun onSerialEntered(text: String)  = coordinator.onSerialEntered(text)
     fun onPinEntered(pin: String)      = coordinator.onPinEntered(pin)
 }

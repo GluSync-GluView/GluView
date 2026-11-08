@@ -1,12 +1,17 @@
 package com.gluview.app.data.medlevensohn
 
+import android.content.Context
+import com.gluview.app.R
+import com.gluview.app.data.accuchek.cgm.SmartGuideRules
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.GlucoseRepository
+import com.gluview.app.data.repository.SensorHistoryRepository
 import com.gluview.app.data.sibionics.SibionicsStatusHolder
 import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.data.source.GlucoseSource
 import com.gluview.app.notification.NotificationHelper
 import com.gluview.app.util.AppLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,31 +21,32 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Orquestrador da leitura direta do Smart 2.0 (MedLevensohn) — mesmo papel do
- * [com.gluview.app.data.accuchek.AccuChekSource]/[com.gluview.app.data.libre2.Libre2Source]:
- * conecta, reconecta (mesma grade tiered backoff), decodifica e cai no MESMO pipeline
- * (`storeExternalReading` + [SibionicsStatusHolder]).
+ * Fonte de glicemia do Smart 2.0 (MedLevensohn) / AiDEX X / LinX / Lumi.
  *
- * Diferença de fluxo: aqui o "cadastro" do sensor é feito por SCAN pelo nome BLE
- * (`AiDEX X-`/`LinX-`/`Lumi-`/`Smart-` + serial), não por NFC nem input manual — o serial é
- * extraído do próprio nome do anúncio ([MedLevensohnGatt.extractSerial]) na primeira vez que o
- * sensor é encontrado, e persistido para reconexões futuras sem novo scan.
+ * - Horário: início do sensor vindo do próprio sensor (0x121, [MedLevState.startSec]) + minutos da
+ *   leitura; sem hora conhecida não grava (Juggluco `saveGlucose`).
+ * - Histórico: a sessão pede e pagina sozinha ([MedLevensohnSession]); aqui só grava.
+ * - Seta: tendência do sensor (décimos de mg/dL/min) com os cortes do Juggluco.
+ * - Sensor encerrado (tipo 3): "Sensor expirado" na Home + notificação.
+ * - Estado (chave-mestra, início, último minuto) persistido a cada mudança.
  *
- * ★ SEM HARDWARE PARA TESTE (27/07/2026): ver header de [MedLevensohnBleManager] para o que já
- * está validado (cripto, com vetor real) vs. o que só foi portado estruturalmente (state machine
- * do handshake/opcodes) e precisa de validação com o sensor físico.
+ * Até o teste de campo, segue "Em breve" (doc `Projeto DM1/GluView/13_medlevensohn_sibionics_sa_lacunas.md`).
  */
 @Singleton
 class MedLevensohnSource @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val ble: MedLevensohnBleManager,
     private val repository: GlucoseRepository,
     private val statusHolder: SibionicsStatusHolder,
     private val preferences: AppPreferences,
+    private val sensorHistory: SensorHistoryRepository,
     private val notificationHelper: NotificationHelper,
     private val appLogger: AppLogger
 ) : MedLevensohnBleManager.Listener, GlucoseSource {
@@ -48,55 +54,70 @@ class MedLevensohnSource @Inject constructor(
     private companion object {
         const val LOG = "MEDLEV_SRC"
         const val MMOL_TO_MGDL = 18.0182
-        val PLAUSIBLE_MGDL = 20..600
+        val LIVE_MAX_AGE_MS = TimeUnit.MINUTES.toMillis(6)
+        /** Primeira tentativa rápida: a sessão desconecta de propósito (ex.: para voltar já pareada). */
         val RECONNECT_SCHEDULE_MS = buildList {
-            repeat(5) { add(TimeUnit.MINUTES.toMillis(1)) }
+            add(TimeUnit.SECONDS.toMillis(5))
+            repeat(4) { add(TimeUnit.MINUTES.toMillis(1)) }
             repeat(3) { add(TimeUnit.MINUTES.toMillis(5)) }
             repeat(4) { add(TimeUnit.MINUTES.toMillis(10)) }
         }
-        const val GATT_HANDSHAKE_MS = 20_000L
+        const val GATT_HANDSHAKE_MS = 30_000L
     }
 
     @Volatile private var scope: CoroutineScope? = null
     @Volatile private var reconnectJob: Job? = null
-    @Volatile private var currentMac: String? = null
     @Volatile private var stopped = false
-    @Volatile private var lastSgv: Int = -1
+    @Volatile private var serial = ""
+    @Volatile private var mac = ""
+    @Volatile private var lastSgv = -1
+    @Volatile private var knownStartSec = 0L
+    private val mutex = Mutex()
 
     override fun start(type: DataSourceType) {
         if (scope != null) return
         stopped = false
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
-
         s.launch {
-            val savedSerial = preferences.medLevensohnSerial.first()
-            val savedMac = preferences.medLevensohnMac.first()
-            val savedSessionKey = preferences.medLevensohnSessionKey.first()
-
-            appLogger.usage(LOG, "Iniciando Smart 2.0 (MedLevensohn)",
-                mapOf("serialSalvo" to savedSerial.isNotBlank(), "macSalvo" to savedMac.isNotBlank(),
-                      "sessaoSalva" to savedSessionKey.isNotBlank()))
-
+            serial = preferences.medLevensohnSerial.first()
+            mac = preferences.medLevensohnMac.first()
+            val persisted = MedLevState(
+                hasTime = preferences.medLevensohnHasTime.first(),
+                startSec = preferences.medLevensohnStartSec.first(),
+                lastReceivedId = preferences.medLevensohnLastId.first()
+            )
+            knownStartSec = persisted.startSec
+            if (persisted.startSec > 0) statusHolder.restoreAnchor(serial, persisted.startSec * 1000) else statusHolder.resetForNewSensor(serial)
             ble.setListener(this@MedLevensohnSource)
-
-            if (savedSerial.isNotBlank() && savedMac.isNotBlank()) {
-                ble.configure(savedSerial, savedSessionKey.ifBlank { null })
-                currentMac = savedMac
-                ble.connect(savedMac)
+            appLogger.usage(LOG, "Iniciando Smart 2.0 (MedLevensohn)", mapOf(
+                "serialSalvo" to serial.isNotBlank(), "enderecoSalvo" to mac.isNotBlank(),
+                "horaConhecida" to persisted.hasTime, "ultimoMinuto" to persisted.lastReceivedId
+            ))
+            if (serial.isNotBlank() && mac.isNotBlank()) {
+                ble.configure(serial, preferences.medLevensohnMasterKey.first().ifBlank { null }, persisted)
+                ble.connect(mac)
             } else {
-                appLogger.usage(LOG, "Sensor não cadastrado — buscando por scan (nome AiDEX X/LinX/Lumi/Smart)")
-                ble.startScan { name, mac, _ ->
-                    ble.stopScan()
-                    val serial = MedLevensohnGatt.extractSerial(name)
-                    appLogger.usage(LOG, "Sensor encontrado", mapOf("name" to name, "mac" to mac, "serial" to serial))
-                    currentMac = mac
-                    ble.configure(serial, null)
-                    s.launch {
-                        preferences.saveMedLevensohnSensor(serial = serial, mac = mac, sessionKeyHex = "")
-                    }
-                    ble.connect(mac)
-                }
+                findAndConnect(persisted)
+            }
+        }
+    }
+
+    /** Sem sensor salvo: busca o primeiro da família, guarda serial (10 últimos do nome) e endereço. */
+    private fun findAndConnect(persisted: MedLevState) {
+        appLogger.usage(LOG, "Sensor não configurado — procurando AiDEX X/LinX/Lumi/Smart")
+        ble.startScan(serial.ifBlank { null }) { name, foundMac, _ ->
+            ble.stopScan()
+            val found = MedLevensohnGatt.extractSerial(name)
+            appLogger.usage(LOG, "Sensor encontrado", mapOf("nome" to name))
+            val isNew = found != serial
+            serial = found; mac = foundMac
+            scope?.launch {
+                preferences.saveMedLevensohnSensor(found, foundMac)
+                val state = if (isNew) MedLevState() else persisted
+                if (isNew) { knownStartSec = 0; statusHolder.resetForNewSensor(found) }
+                ble.configure(found, if (isNew) null else preferences.medLevensohnMasterKey.first().ifBlank { null }, state)
+                ble.connect(foundMac)
             }
         }
     }
@@ -106,137 +127,137 @@ class MedLevensohnSource @Inject constructor(
         stopped = true
         reconnectJob?.cancel(); reconnectJob = null
         ble.setListener(null)
-        ble.stopScan()
         ble.disconnect()
         statusHolder.onConnectionChanged(false)
         notificationHelper.cancelSensorWarning()
         scope?.cancel(); scope = null
         lastSgv = -1
-        currentMac = null
     }
 
-    // ── Listener ─────────────────────────────────────────────────────────────────
+    // ── Listener ─────────────────────────────────────────────────────────────────────────────────
 
     override fun onConnectionChanged(connected: Boolean) {
         statusHolder.onConnectionChanged(connected)
         if (connected) {
             reconnectJob?.cancel(); reconnectJob = null
-            notificationHelper.cancelSensorWarning()
-            appLogger.usage(LOG, "Sensor conectado (GATT + handshake OK)")
-            // sessionKey só existe depois do bootstrap — persiste pra pular o handshake completo na próxima.
-            ble.currentSessionKeyHex()?.let { keyHex ->
-                scope?.launch { preferences.saveMedLevensohnSessionKey(keyHex) }
-            }
-        } else if (!stopped) {
-            appLogger.usage(LOG, "Sensor desconectado — agendando reconexão", mapOf("mac" to (currentMac ?: "?")))
-            currentMac?.let { startReconnect(it) }
+            if (!statusHolder.status.value.sessionEnded) notificationHelper.cancelSensorWarning()
+            scope?.launch { registerSensorPeriodIfNeeded() }
+        } else if (!stopped && reconnectJob?.isActive != true) {
+            startReconnect()
         }
     }
 
-    override fun onRssi(rssi: Int) {
-        statusHolder.onRssi(rssi)
+    override fun onMasterKey(masterKeyHex: String) {
+        scope?.launch { preferences.saveMedLevensohnMasterKey(masterKeyHex) }
     }
 
+    override fun onStateChanged(state: MedLevState) {
+        val s = scope ?: return
+        s.launch {
+            preferences.saveMedLevensohnProgress(state.startSec, state.lastReceivedId, state.hasTime)
+            if (state.startSec > 0 && state.startSec != knownStartSec) {
+                appLogger.usage(LOG, "Início do sensor definido pelo sensor", mapOf("inicioSec" to state.startSec, "anterior" to knownStartSec))
+                knownStartSec = state.startSec
+                statusHolder.restoreAnchor(serial, state.startSec * 1000)
+            }
+        }
+    }
+
+    override fun onNotice(notice: MedLevNotice) {
+        when (notice) {
+            MedLevNotice.SENSOR_ENDED -> {
+                statusHolder.onSensorLifetime(sessionEnded = true)
+                notificationHelper.showSensorWarning(
+                    context.getString(R.string.medlev_warn_ended_title), context.getString(R.string.medlev_warn_ended_body))
+            }
+            MedLevNotice.UNPAIRED, MedLevNotice.CLEARED -> notificationHelper.showSensorWarning(
+                context.getString(R.string.medlev_warn_unpaired_title), context.getString(R.string.medlev_warn_unpaired_body))
+            MedLevNotice.UNPAIR_FAILED, MedLevNotice.CLEAR_FAILED -> notificationHelper.showSensorWarning(
+                context.getString(R.string.medlev_warn_unpair_failed_title), context.getString(R.string.medlev_warn_unpair_failed_body))
+            MedLevNotice.START_TIME_CHANGED -> Unit
+        }
+    }
+
+    override fun onRssi(rssi: Int) { statusHolder.onRssi(rssi) }
+
     override fun onBluetoothTurnedOn() {
-        if (stopped) return
-        val mac = currentMac ?: return
-        appLogger.usage(LOG, "Bluetooth religado pelo sistema — reconectando imediatamente", mapOf("mac" to mac))
+        if (stopped || mac.isBlank()) return
         reconnectJob?.cancel(); reconnectJob = null
         ble.connect(mac)
     }
 
-    override fun onCurrentReading(reading: CurrentGlucose) {
-        scope?.launch { persistCurrent(reading) }
+    override fun onReadings(readings: List<MedLevReading>, state: MedLevState) {
+        val s = scope ?: return
+        s.launch { mutex.withLock { persist(readings, state) } }
     }
 
-    override fun onHistoricalReading(minFromStart: Int, mgdl: Int) {
-        scope?.launch { persistHistorical(minFromStart, mgdl) }
-    }
+    // ── Persistência ─────────────────────────────────────────────────────────────────────────────
 
-    // ── Persistência ─────────────────────────────────────────────────────────────
-
-    private suspend fun persistCurrent(reading: CurrentGlucose) {
-        val mgdl = reading.glucoseMgDl
-        if (!reading.valid || mgdl !in PLAUSIBLE_MGDL) {
-            appLogger.usage(LOG, "Leitura atual descartada (inválida ou fora da faixa)", mapOf("mgdl" to mgdl, "valid" to reading.valid))
-            return
+    private suspend fun persist(readings: List<MedLevReading>, state: MedLevState) {
+        if (state.startSec <= 0) return
+        val now = System.currentTimeMillis()
+        val newestId = readings.maxOf { it.id }
+        for (r in readings.sortedBy { it.id }) {
+            val atMs = MedLevensohnSession.readingTimeMs(state, r.id, now)
+            val isCurrent = r.live && r.id == newestId && now - atMs <= LIVE_MAX_AGE_MS
+            val delta = if (lastSgv >= 0) r.mgdl - lastSgv else 0
+            val mmol = r.mgdl / MMOL_TO_MGDL
+            repository.storeExternalReading(
+                dateMs       = atMs,
+                sgvMgDl      = r.mgdl.toDouble(),
+                arrow        = r.trendTenths?.let { SmartGuideRules.arrowFor(it / 10f) } ?: arrowFromDelta(delta),
+                delta        = delta,
+                makeCurrent  = isCurrent,
+                rawMmol      = mmol,
+                calibFactor  = 1.0,
+                sensorMac    = mac,
+                sensorAgeMin = r.id,
+                confirmed    = null
+            )
+            lastSgv = r.mgdl
+            if (isCurrent) {
+                statusHolder.onRawMmol(mmol)
+                statusHolder.onReading(r.id, state.startSec * 1000, atMs)
+            }
         }
-        val startMs = statusHolder.status.value.sensorStartMs
-        val atMs = if (startMs > 0L) startMs + reading.minFromStart * 60_000L else System.currentTimeMillis()
-        val ageMin = ((atMs - (startMs.takeIf { it > 0L } ?: atMs)) / 60_000L).toInt().coerceAtLeast(0)
-        val delta = if (lastSgv >= 0) mgdl - lastSgv else 0
-        val mmol = mgdl / MMOL_TO_MGDL
-
-        statusHolder.onRawMmol(mmol)
-        repository.storeExternalReading(
-            dateMs       = atMs,
-            sgvMgDl      = mgdl.toDouble(),
-            arrow        = arrowFromTrend(reading.trend),
-            delta        = delta,
-            makeCurrent  = true,
-            rawMmol      = mmol,
-            calibFactor  = 1.0, // calibração de fábrica do próprio sensor
-            sensorMac    = currentMac ?: "",
-            sensorAgeMin = ageMin,
-            confirmed    = null
-        )
-        lastSgv = mgdl
-        statusHolder.onReading(ageMin, startMs.takeIf { it > 0L } ?: atMs, atMs)
-        appLogger.usage(LOG, "Glicemia atual salva", mapOf("mgdl" to mgdl, "trend" to reading.trend, "minFromStart" to reading.minFromStart))
+        appLogger.usage(LOG, "Leituras gravadas", mapOf("quantidade" to readings.size, "ultimoMinuto" to newestId))
     }
 
-    private suspend fun persistHistorical(minFromStart: Int, mgdl: Int) {
-        if (mgdl !in PLAUSIBLE_MGDL) return
-        val startMs = statusHolder.status.value.sensorStartMs.takeIf { it > 0L } ?: return
-        val atMs = startMs + minFromStart * 60_000L
-        repository.storeExternalReading(
-            dateMs       = atMs,
-            sgvMgDl      = mgdl.toDouble(),
-            arrow        = "→",
-            delta        = 0,
-            makeCurrent  = false,
-            rawMmol      = mgdl / MMOL_TO_MGDL,
-            calibFactor  = 1.0,
-            sensorMac    = currentMac ?: "",
-            sensorAgeMin = (minFromStart).coerceAtLeast(0),
-            confirmed    = null
-        )
-        appLogger.usage(LOG, "Glicemia histórica salva", mapOf("mgdl" to mgdl, "minFromStart" to minFromStart))
+    /** Período no histórico de sensores (Room + GluSync) quando o ativo não é este sensor. */
+    private suspend fun registerSensorPeriodIfNeeded() {
+        val active = sensorHistory.observeActive().first()
+        val source = DataSourceType.MEDLEVENSOHN_SMART2.id
+        if (active != null && active.source == source && active.serial == serial) return
+        runCatching { sensorHistory.startNew(mac, serial.ifBlank { null }, null, source) }
+            .onFailure { appLogger.error(LOG, "Falha ao registrar sensor no histórico") }
     }
 
-    // ── Reconexão (mesma grade dos outros sensores) ───────────────────────────────
+    private fun arrowFromDelta(delta: Int): String = when {
+        delta >= 15 -> "↑↑"; delta >= 7 -> "↑"; delta >= 3 -> "↗"
+        delta > -3 -> "→"; delta > -7 -> "↘"; delta > -15 -> "↓"; else -> "↓↓"
+    }
 
-    private fun startReconnect(mac: String) {
+    // ── Reconexão ────────────────────────────────────────────────────────────────────────────────
+
+    private fun startReconnect() {
         reconnectJob?.cancel()
         reconnectJob = scope?.launch {
-            appLogger.usage(LOG, "Agenda de reconexão iniciada", mapOf("mac" to mac, "tentativas" to RECONNECT_SCHEDULE_MS.size))
             RECONNECT_SCHEDULE_MS.forEachIndexed { idx, delayMs ->
                 delay(delayMs)
-                if (!isActive) return@launch
-                appLogger.usage(LOG, "Tentativa de reconexão BLE", mapOf("tentativa" to "${idx + 1}/${RECONNECT_SCHEDULE_MS.size}"))
-                ble.connect(mac)
+                if (!isActive || ble.isConnected) return@launch
+                appLogger.usage(LOG, "Tentativa de reconexão", mapOf("tentativa" to "${idx + 1}/${RECONNECT_SCHEDULE_MS.size}"))
+                if (mac.isNotBlank()) ble.connect(mac)
                 delay(GATT_HANDSHAKE_MS)
-                if (!isActive) return@launch
+                if (!isActive || ble.isConnected) return@launch
             }
-            if (!stopped) {
-                appLogger.error(LOG, "Sensor não reconectou após 60 min", mapOf("mac" to mac))
-                notificationHelper.showSensorWarning(
-                    "Sensor desconectado",
-                    "Não foi possível reconectar ao Smart 2.0 após 60 minutos. " +
-                        "Verifique se o sensor está próximo e o Bluetooth está ativo."
-                )
-            }
+            if (!stopped) notificationHelper.showSensorWarning(
+                context.getString(R.string.medlev_warn_disconnected_title), context.getString(R.string.medlev_warn_disconnected_body))
         }
     }
 
-    private fun arrowFromTrend(trend: Int): String = when {
-        // trend está em unidades de 0.1 mg/dL/min (AidexTrend2RateOfChange do Juggluco)
-        trend >= 30  -> "↑↑"
-        trend >= 15  -> "↑"
-        trend >= 7   -> "↗"
-        trend > -7   -> "→"
-        trend > -15  -> "↘"
-        trend > -30  -> "↓"
-        else         -> "↓↓"
+    /** Desparear o sensor (para usar em outro celular): o comando vai na próxima conexão. */
+    fun requestUnpair() {
+        ble.requestUnpair(clear = false)
+        if (!ble.isConnected && mac.isNotBlank()) ble.connect(mac) else ble.disconnect()
     }
 }

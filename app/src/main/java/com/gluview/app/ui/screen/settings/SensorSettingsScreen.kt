@@ -67,7 +67,9 @@ internal data class SensorUi(
     /** Variante escolhida/detectada (modelo + região); "" = padrão da fonte. */
     val sensorVariantId: String = "",
     /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum). */
-    val smartGuideSerial: String = ""
+    val smartGuideSerial: String = "",
+    /** Serial do Smart 2.0 configurado ("" = nenhum). */
+    val medLevSerial: String = ""
 )
 
 internal data class SensorActions(
@@ -84,7 +86,9 @@ internal data class SensorActions(
     /** SmartGuide: desfaz o pareamento e abre o assistente para parear de novo com o PIN. */
     val onSmartGuideRepair: () -> Unit = {},
     /** SmartGuide: esquece o sensor configurado (serial, PIN, pareamento). */
-    val onSmartGuideForget: () -> Unit = {}
+    val onSmartGuideForget: () -> Unit = {},
+    /** Smart 2.0: desparear (libera o sensor para outro celular). */
+    val onMedLevUnpair: () -> Unit = {}
 )
 
 /**
@@ -115,6 +119,8 @@ fun SensorSettingsScreen(
     var betaDialogSource by remember { mutableStateOf<DataSourceType?>(null) }
     val sensorBetaMessage by viewModel.sensorBetaMessage.collectAsState()
     val smartGuideSerial by viewModel.smartGuideSerial.collectAsState()
+    val medLevSerial by viewModel.medLevSerial.collectAsState()
+    var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -126,7 +132,7 @@ fun SensorSettingsScreen(
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorBetaStatus, sensorBetaEnabled, sensorVariantId, smartGuideSerial),
+            sensorBetaStatus, sensorBetaEnabled, sensorVariantId, smartGuideSerial, medLevSerial),
         actions = SensorActions(viewModel::onDataSourceChange, { betaDialogSource = it }, viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
             onSensorSetup, onSensorScanner, onLibre2Activation, viewModel::onSensorVariantChange,
@@ -136,10 +142,27 @@ fun SensorSettingsScreen(
                     else runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)) }
                 }
             },
-            onSmartGuideForget = { confirmForgetSmartGuide = true }),
+            onSmartGuideForget = { confirmForgetSmartGuide = true },
+            onMedLevUnpair = { confirmMedLevUnpair = true }),
         onBack = onBack,
         snackbarHostState = snackbarHostState
     )
+
+    if (confirmMedLevUnpair) {
+        AlertDialog(
+            onDismissRequest = { confirmMedLevUnpair = false },
+            title = { Text(stringResource(R.string.settings_medlev_unpair_title)) },
+            text = { Text(stringResource(R.string.settings_medlev_unpair_body)) },
+            confirmButton = {
+                TextButton(onClick = { confirmMedLevUnpair = false; viewModel.unpairMedLev() }) {
+                    Text(stringResource(R.string.settings_medlev_unpair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmMedLevUnpair = false }) { Text(stringResource(R.string.setup_cancel)) }
+            }
+        )
+    }
 
     if (confirmForgetSmartGuide) {
         AlertDialog(
@@ -289,6 +312,23 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                                 }
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        if (currentSource == DataSourceType.MEDLEVENSOHN_SMART2) {
+            GluSection(stringResource(R.string.settings_current_sensor_section)) {
+                if (ui.medLevSerial.isNotBlank()) {
+                    Text(stringResource(R.string.settings_smartguide_serial, ui.medLevSerial),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(if (ui.medLevSerial.isBlank()) R.string.settings_medlev_setup else R.string.settings_change_sensor))
+                }
+                if (ui.medLevSerial.isNotBlank()) {
+                    OutlinedButton(onClick = actions.onMedLevUnpair, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.settings_medlev_unpair))
                     }
                 }
             }

@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import com.gluview.app.data.accuchek.AccuChekBleManager
 import com.gluview.app.data.accuchek.cgm.SmartGuidePackageParser
 import com.gluview.app.data.datastore.AppPreferences
+import com.gluview.app.data.medlevensohn.MedLevensohnBleManager
+import com.gluview.app.data.medlevensohn.MedLevensohnGatt
 import com.gluview.app.data.repository.SensorHistoryRepository
 import com.gluview.app.data.sibionics.SibionicsQrParser
 import com.gluview.app.data.sibionics.SibionicsStatusHolder
@@ -130,6 +132,7 @@ class SensorSetupCoordinator @Inject constructor(
     private val discovery: SensorDiscovery,
     private val sensorHistory: SensorHistoryRepository,
     private val accuChekBle: AccuChekBleManager,
+    private val medLevBle: MedLevensohnBleManager,
     private val statusHolder: SibionicsStatusHolder,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
@@ -189,6 +192,15 @@ class SensorSetupCoordinator @Inject constructor(
 
     fun onSerialEntered(text: String) {
         val type = currentType() ?: return
+        if (type == DataSourceType.MEDLEVENSOHN_SMART2) {
+            val serial = text.trim().uppercase().filter { it.isLetterOrDigit() }
+            if (serial.length !in 6..MedLevensohnGatt.SERIAL_LENGTH) {
+                _state.value = SetupState.EnteringSerial(type, invalid = true)
+                return
+            }
+            search(type, SensorCode(connectionCode = serial, serial = serial))
+            return
+        }
         val serial = SmartGuidePackageParser.normalizeSerial(text)
         if (serial == null) {
             _state.value = SetupState.EnteringSerial(type, invalid = true)
@@ -196,6 +208,15 @@ class SensorSetupCoordinator @Inject constructor(
         }
         appLogger.usage(LOG, "Serial digitado à mão")
         _state.value = SetupState.EnteringPin(type, SensorCode(connectionCode = serial, serial = serial))
+    }
+
+    /**
+     * Smart 2.0: não há código de embalagem conhecido — procura o sensor da família mais perto
+     * (`AiDEX X-`/`LinX-`/`Lumi-`/`Smart-`).
+     */
+    fun searchNearby() {
+        val type = currentType() ?: return
+        search(type, SensorCode(connectionCode = ANY_SERIAL, serial = ""))
     }
 
     /** PIN de 6 dígitos digitado: guarda e procura o sensor. */
@@ -287,6 +308,10 @@ class SensorSetupCoordinator @Inject constructor(
             runSmartGuideSearch(type, code)
             return
         }
+        if (type == DataSourceType.MEDLEVENSOHN_SMART2) {
+            runMedLevSearch(type, code)
+            return
+        }
 
         _state.value = SetupState.Searching(type, code)
 
@@ -376,6 +401,61 @@ class SensorSetupCoordinator @Inject constructor(
             if (cont.isActive) cont.resume(address)
         }
         cont.invokeOnCancellation { accuChekBle.stopScan() }
+    }
+
+    // ── Smart 2.0 (MedLevensohn / AiDEX X) ─────────────────────────────────────
+
+    /**
+     * Procura o sensor (com [code].serial, só o que termina nele), guarda serial + endereço, reinicia o
+     * serviço e espera a sessão abrir. O pareamento do Android, quando houver, é feito pelo próprio
+     * sensor (o Juggluco não chama createBond).
+     */
+    private suspend fun runMedLevSearch(type: DataSourceType, code: SensorCode) {
+        _state.value = SetupState.Searching(type, code)
+        val wanted = code.serial.ifBlank { null }
+        val found = scanMedLev(wanted)
+        if (found == null) {
+            _state.value = SetupState.Failed(FailureReason.SENSOR_NOT_FOUND, type, code)
+            return
+        }
+        val (name, address) = found
+        val serial = MedLevensohnGatt.extractSerial(name)
+        val foundCode = SensorCode(connectionCode = serial, serial = serial)
+        appLogger.usage(LOG, "Smart 2.0 encontrado", mapOf("nome" to name))
+        _state.value = SetupState.Connecting(type, foundCode)
+        preferences.saveMedLevensohnSensor(serial, address)
+        if (preferences.dataSource.first() != type.id) preferences.saveDataSource(type.id)
+        _state.value = SetupState.Pairing(type, foundCode)
+        restartService()
+        val opened = withTimeoutOrNull(PAIRING_WINDOW_MS) {
+            while (!medLevBle.isConnected) delay(500)
+            true
+        } == true
+        if (opened) {
+            appLogger.usage(LOG, "Smart 2.0 conectado e com sessão aberta")
+            _state.value = SetupState.Ready(type, 0)
+        } else {
+            appLogger.error(LOG, "Smart 2.0 não abriu a sessão a tempo")
+            _state.value = SetupState.Failed(FailureReason.PAIRING_TIMEOUT, type, foundCode)
+        }
+    }
+
+    /**
+     * Busca pelo gerenciador do Smart 2.0 (30 s). Depois do primeiro achado espera um pouco para
+     * comparar a força do sinal e fica com o mais forte (o que está no corpo).
+     */
+    private suspend fun scanMedLev(serial: String?): Pair<String, String>? {
+        val candidates = LinkedHashMap<String, Triple<String, String, Int>>()
+        return try {
+            withTimeoutOrNull(MEDLEV_SCAN_WINDOW_MS) {
+                medLevBle.startScan(serial) { name, mac, rssi -> synchronized(candidates) { candidates[mac] = Triple(name, mac, rssi) } }
+                while (synchronized(candidates) { candidates.isEmpty() }) delay(250)
+                delay(MEDLEV_SETTLE_MS)
+                synchronized(candidates) { candidates.values.maxByOrNull { it.third } }?.let { it.first to it.second }
+            }
+        } finally {
+            medLevBle.stopScan()
+        }
     }
 
     // ── Efeitos ────────────────────────────────────────────────────────────────
@@ -475,5 +555,9 @@ class SensorSetupCoordinator @Inject constructor(
         /** Prazo do pareamento: reiniciar o serviço, conectar e o usuário responder à janela do sistema. */
         const val PAIRING_WINDOW_MS = 150_000L
         const val READY_SETTLE_MS = 800L
+        const val MEDLEV_SCAN_WINDOW_MS = 30_000L
+        const val MEDLEV_SETTLE_MS = 1_500L
+        /** Código de "qualquer sensor da família" (busca sem serial). */
+        const val ANY_SERIAL = "****"
     }
 }

@@ -59,12 +59,20 @@ class SettingsViewModel @Inject constructor(
     private val appConfigRepository: AppConfigRepository,
     private val cloudAccess: CloudAccessRepository,
     private val accuChekBle: com.gluview.app.data.accuchek.AccuChekBleManager,
+    private val medLevSource: com.gluview.app.data.medlevensohn.MedLevensohnSource,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum) — seção "Sensor atual". */
     val smartGuideSerial: StateFlow<String> = preferences.accuChekSerial
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /** Serial do Smart 2.0 configurado ("" = nenhum) — seção "Sensor atual". */
+    val medLevSerial: StateFlow<String> = preferences.medLevensohnSerial
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /** Smart 2.0: pede ao sensor para desparear na próxima conexão (resultado vem por notificação). */
+    fun unpairMedLev() = medLevSource.requestUnpair()
 
     /**
      * Desfaz o pareamento do SmartGuide neste celular antes de parear de novo pelo assistente.

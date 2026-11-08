@@ -1494,4 +1494,25 @@
     <string name="notif_channel_donation_desc">Agradecimento quando uma doação via Pix é confirmada</string>
     <string name="notif_donation_title">Obrigado pela sua doação!</string>
     <string name="notif_donation_text">Seu Pix de %1$s foi confirmado. O valor será revertido para o desenvolvimento e a manutenção do GluView.</string>
+    <!-- Smart 2.0 Medlevensohn (MedLevensohnSource) -->
+    <string name="medlev_warn_ended_title">Sensor Smart 2.0 encerrado</string>
+    <string name="medlev_warn_ended_body">O sensor avisou que terminou e não vai mais medir. Troque por um sensor novo.</string>
+    <string name="medlev_warn_unpaired_title">Smart 2.0 despareado</string>
+    <string name="medlev_warn_unpaired_body">O sensor foi liberado deste celular e já pode ser pareado em outro aparelho.</string>
+    <string name="medlev_warn_unpair_failed_title">Não deu para desparear o Smart 2.0</string>
+    <string name="medlev_warn_unpair_failed_body">O sensor recusou o pedido. Deixe o celular perto do sensor e tente de novo.</string>
+    <string name="medlev_warn_disconnected_title">Sensor desconectado</string>
+    <string name="medlev_warn_disconnected_body">Não foi possível reconectar ao Smart 2.0 após 60 minutos. Verifique se o sensor está próximo e o Bluetooth está ativo.</string>
+    <!-- Smart 2.0 Medlevensohn: assistente e aba Sensor -->
+    <string name="setup_nearby_title">Aproxime o celular do sensor</string>
+    <string name="setup_nearby_body">Com o sensor já aplicado, deixe o celular bem perto dele. O GluView procura o Smart 2.0 pelo Bluetooth e fica com o mais próximo.</string>
+    <string name="setup_nearby_cta">Procurar o sensor</string>
+    <string name="setup_serial_body_medlev">Digite o número de série do sensor: 10 letras e números, como aparece na embalagem ou no nome do sensor no Bluetooth (depois de \"Smart-\").</string>
+    <string name="setup_serial_invalid_medlev">Use só letras e números, de 6 a 10 caracteres.</string>
+    <string name="setup_ready_body_connected">O GluView já está conversando com o sensor. As leituras aparecem assim que ele terminar de aquecer.</string>
+    <string name="settings_medlev_setup">Configurar o Smart 2.0</string>
+    <string name="settings_medlev_unpair">Desparear este sensor</string>
+    <string name="settings_medlev_unpair_title">Desparear o Smart 2.0?</string>
+    <string name="settings_medlev_unpair_body">O sensor é liberado deste celular para poder ser usado em outro aparelho. O GluView para de receber leituras dele. As leituras já salvas continuam no histórico.</string>
+    <string name="settings_medlev_unpair_confirm">Desparear</string>
 </resources>

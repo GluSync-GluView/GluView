@@ -110,6 +110,11 @@ class SettingsCaptureTest {
             SensorContent(SensorUi("SIBIONICS_CHINES", true, 14, 20, "ALL", mapOf("sensor_beta:LIBRE2_PLUS" to "pending"), true),
                 SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
         }
+        shoot("sensor-medlev") {
+            SensorContent(SensorUi("MEDLEVENSOHN_SMART2", true, 14, 20, "ALL",
+                mapOf("sensor_beta:MEDLEVENSOHN_SMART2" to "approved"), true, medLevSerial = "22222A2WC8"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
+        }
         shoot("sensor-smartguide") {
             SensorContent(SensorUi("ACCU_CHEK_SMARTGUIDE", true, 14, 20, "ALL",
                 mapOf("sensor_beta:ACCU_CHEK_SMARTGUIDE" to "approved"), true, smartGuideSerial = "1R009999990"),

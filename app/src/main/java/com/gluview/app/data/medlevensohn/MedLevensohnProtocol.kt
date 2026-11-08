@@ -49,8 +49,18 @@ object MedLevensohnGatt {
     fun matchesSerial(name: String, serial: String): Boolean =
         name.length >= serial.length && name.takeLast(serial.length) == serial
 
-    /** Extrai o serial do nome de anúncio BLE — tudo após o último '-' (os 4 prefixos conhecidos terminam em '-'). */
-    fun extractSerial(deviceName: String): String = deviceName.substringAfterLast('-')
+    /** Tamanho do serial no nome anunciado (Juggluco `aidexXaddSensorByDeviceName`: os 10 últimos caracteres). */
+    const val SERIAL_LENGTH = 10
+
+    /**
+     * Serial do nome de anúncio BLE: os [SERIAL_LENGTH] últimos caracteres, como o Juggluco (é ele que
+     * entra no MD5 do IV e do pedido de chave). Nome com menos que isso depois do '-' (só visto em testes
+     * sintéticos): fica com o que vem depois do último '-'.
+     */
+    fun extractSerial(deviceName: String): String {
+        val afterDash = deviceName.substringAfterLast('-')
+        return if (afterDash.length >= SERIAL_LENGTH) deviceName.takeLast(SERIAL_LENGTH) else afterDash
+    }
 }
 
 /**

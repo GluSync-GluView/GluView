@@ -157,6 +157,11 @@ fun SensorSetupScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { if (viewModel.retry()) scanWithPermissions() }
 
+    // Smart 2.0: sem código de embalagem — a busca começa direto, depois da permissão.
+    val nearbyPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results -> if (results.values.all { it }) viewModel.searchNearby() }
+
     // SmartGuide: o PIN é digitado depois da caixa; a busca começa com ele.
     var pendingPinForPerms by remember { mutableStateOf<String?>(null) }
     val pinPermLauncher = rememberLauncherForActivityResult(
@@ -182,6 +187,9 @@ fun SensorSetupScreen(
             if (option.type == DataSourceType.LIBRE2_PLUS) { viewModel.cancel(); onLibre2Activation() } else viewModel.choose(option.type)
         },
         onContinue = { viewModel.readyToScan(); scanWithPermissions() },
+        onSearchNearby = {
+            if (blePermsGranted()) viewModel.searchNearby() else nearbyPermLauncher.launch(blePerms)
+        },
         onCancel = viewModel::cancel,
         onDone = { viewModel.cancel(); onDone() },
         onRetry = ::retry,
@@ -220,16 +228,20 @@ internal fun SensorSetupContent(
     onBluetoothSettings: () -> Unit = {},
     onEnterSerial: () -> Unit = {},
     onSerialEntered: (String) -> Unit = {},
-    onPinEntered: (String) -> Unit = {}
+    onPinEntered: (String) -> Unit = {},
+    onSearchNearby: () -> Unit = {}
 ) {
     Page(title = stringResource(R.string.setup_title), onBack = onBack) {
         stepOf(state)?.let { StepIndicator(it) }
         when (state) {
             is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose)
-            is SetupState.Instructions -> InstructionsStep(state.type, state.notice, onContinue, onEnterSerial)
+            is SetupState.Instructions ->
+                if (state.type == DataSourceType.MEDLEVENSOHN_SMART2) NearbyStep(onSearchNearby, onEnterSerial)
+                else InstructionsStep(state.type, state.notice, onContinue, onEnterSerial)
             is SetupState.ReadingPackage -> WaitingStep(Icons.Default.QrCodeScanner,
                 stringResource(R.string.setup_scanning_title), stringResource(R.string.setup_scanning_body), onCancel)
-            is SetupState.EnteringSerial -> SerialStep(state.invalid, onSerialEntered, onCancel)
+            is SetupState.EnteringSerial -> SerialStep(state.invalid, onSerialEntered, onCancel,
+                medLev = state.type == DataSourceType.MEDLEVENSOHN_SMART2)
             is SetupState.EnteringPin -> PinStep(state, onPinEntered, onCancel)
             is SetupState.Searching -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_searching_title), stringResource(R.string.setup_searching_body), onCancel)
@@ -237,7 +249,8 @@ internal fun SensorSetupContent(
                 stringResource(R.string.setup_pairing_title), stringResource(R.string.setup_pairing_body), onCancel)
             is SetupState.Connecting -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_connecting_title), stringResource(R.string.setup_connecting_body), null)
-            is SetupState.Ready -> ReadyStep(state.warmupMinutes, onDone)
+            is SetupState.Ready -> ReadyStep(state.warmupMinutes, onDone,
+                connectedOnly = state.type == DataSourceType.MEDLEVENSOHN_SMART2)
             is SetupState.Failed -> FailedStep(state.reason, onRetry, onAdvanced, onBluetoothSettings)
         }
     }
@@ -360,18 +373,32 @@ private fun ColumnScope.InstructionsStep(
     }
 }
 
+/** Smart 2.0: aproximar o celular e procurar (o sensor se identifica pelo nome), ou digitar o serial. */
 @Composable
-private fun ColumnScope.SerialStep(invalid: Boolean, onSerialEntered: (String) -> Unit, onCancel: () -> Unit) {
+private fun ColumnScope.NearbyStep(onSearchNearby: () -> Unit, onEnterSerial: () -> Unit) {
+    StepIcon(Icons.Default.BluetoothSearching)
+    StepHeader(stringResource(R.string.setup_nearby_title), stringResource(R.string.setup_nearby_body))
+    Button(onClick = onSearchNearby, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.setup_nearby_cta), textAlign = TextAlign.Center)
+    }
+    TextButton(onClick = onEnterSerial, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.setup_type_serial_cta), textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ColumnScope.SerialStep(invalid: Boolean, onSerialEntered: (String) -> Unit, onCancel: () -> Unit, medLev: Boolean = false) {
     var text by rememberSaveable { mutableStateOf("") }
     StepIcon(Icons.Default.Keyboard)
-    StepHeader(stringResource(R.string.setup_serial_title), stringResource(R.string.setup_serial_body))
+    StepHeader(stringResource(R.string.setup_serial_title),
+        stringResource(if (medLev) R.string.setup_serial_body_medlev else R.string.setup_serial_body))
     OutlinedTextField(
         value = text,
         onValueChange = { v -> text = v.uppercase().filter { it.isLetterOrDigit() || it == '-' }.take(23) },
         label = { Text(stringResource(R.string.setup_serial_label)) },
         singleLine = true,
         isError = invalid,
-        supportingText = if (invalid) { { Text(stringResource(R.string.setup_serial_invalid)) } } else null,
+        supportingText = if (invalid) { { Text(stringResource(if (medLev) R.string.setup_serial_invalid_medlev else R.string.setup_serial_invalid)) } } else null,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
         modifier = Modifier.fillMaxWidth()
     )
@@ -421,11 +448,14 @@ private fun ColumnScope.WaitingStep(icon: ImageVector, title: String, body: Stri
 }
 
 @Composable
-private fun ColumnScope.ReadyStep(warmupMinutes: Int, onDone: () -> Unit) {
+private fun ColumnScope.ReadyStep(warmupMinutes: Int, onDone: () -> Unit, connectedOnly: Boolean = false) {
     StepIcon(Icons.Default.CheckCircle, tone = Tone.Success)
     StepHeader(stringResource(R.string.setup_ready_title),
-        if (warmupMinutes > 0) stringResource(R.string.setup_ready_body, warmupMinutes)
-        else stringResource(R.string.setup_ready_body_now))
+        when {
+            connectedOnly -> stringResource(R.string.setup_ready_body_connected)
+            warmupMinutes > 0 -> stringResource(R.string.setup_ready_body, warmupMinutes)
+            else -> stringResource(R.string.setup_ready_body_now)
+        })
     Button(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(stringResource(R.string.setup_ready_cta))
     }

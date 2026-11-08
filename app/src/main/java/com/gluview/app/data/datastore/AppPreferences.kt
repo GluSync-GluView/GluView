@@ -234,7 +234,13 @@ class AppPreferences @Inject constructor(
         // pra pular o handshake completo na próxima conexão (ver MedLevensohnBleManager).
         val KEY_MEDLEVENSOHN_SERIAL      = stringPreferencesKey("medlevensohn_serial")
         val KEY_MEDLEVENSOHN_MAC         = stringPreferencesKey("medlevensohn_mac")
+        // Chave antiga: guardava a chave de SESSÃO (errado — ela muda a cada conexão). Só para apagar.
         val KEY_MEDLEVENSOHN_SESSION_KEY = stringPreferencesKey("medlevensohn_session_key")
+        // Chave-mestra (f001) — é ela que se guarda; a sessão é derivada de novo a cada conexão (Juggluco).
+        val KEY_MEDLEVENSOHN_MASTER_KEY  = stringPreferencesKey("medlevensohn_master_key")
+        val KEY_MEDLEVENSOHN_START_SEC   = longPreferencesKey("medlevensohn_start_sec")    // início do sensor (0x121)
+        val KEY_MEDLEVENSOHN_LAST_ID     = intPreferencesKey("medlevensohn_last_id")       // último minuto gravado
+        val KEY_MEDLEVENSOHN_HAS_TIME    = booleanPreferencesKey("medlevensohn_has_time")
         // BLE Dexcom G6 — handshake desafio-resposta AES-128 (chave derivada do Transmitter ID,
         // sem troca de chave). Transmitter ID é digitado pelo usuário (6 caracteres impressos no
         // transmissor), não descoberto por scan/NFC. Ver DexcomG6Source/DexcomG6BleManager.
@@ -513,7 +519,10 @@ class AppPreferences @Inject constructor(
 
     val medLevensohnSerial: Flow<String>     = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_SERIAL]      ?: "" }
     val medLevensohnMac: Flow<String>        = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_MAC]         ?: "" }
-    val medLevensohnSessionKey: Flow<String> = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_SESSION_KEY] ?: "" }
+    val medLevensohnMasterKey: Flow<String>  = dataStore.data.safeMap("") { it[KEY_MEDLEVENSOHN_MASTER_KEY]  ?: "" }
+    val medLevensohnStartSec: Flow<Long>     = dataStore.data.safeMap(0L) { it[KEY_MEDLEVENSOHN_START_SEC]   ?: 0L }
+    val medLevensohnLastId: Flow<Int>        = dataStore.data.safeMap(-1) { it[KEY_MEDLEVENSOHN_LAST_ID]     ?: -1 }
+    val medLevensohnHasTime: Flow<Boolean>   = dataStore.data.safeMap(false) { it[KEY_MEDLEVENSOHN_HAS_TIME] ?: false }
 
     val dexcomG6TransmitterId: Flow<String> = dataStore.data.safeMap("") { it[KEY_DEXCOM_G6_TRANSMITTER_ID] ?: "" }
     val dexcomG6Mac: Flow<String>           = dataStore.data.safeMap("") { it[KEY_DEXCOM_G6_MAC]            ?: "" }
@@ -904,25 +913,45 @@ class AppPreferences @Inject constructor(
 
     // ── Smart 2.0 (MedLevensohn) ───────────────────────────────────────────────
 
-    /** Salva o sensor encontrado por scan (serial extraído do nome BLE + MAC). */
-    suspend fun saveMedLevensohnSensor(serial: String, mac: String, sessionKeyHex: String) = dataStore.edit {
+    /**
+     * Salva o sensor (serial dos 10 últimos caracteres do nome BLE + endereço). Sensor diferente do
+     * salvo zera chave-mestra, início e cursor; a chave de sessão antiga é sempre apagada.
+     */
+    suspend fun saveMedLevensohnSensor(serial: String, mac: String) = dataStore.edit {
         val isNewSensor = it[KEY_MEDLEVENSOHN_SERIAL] != serial
         it[KEY_MEDLEVENSOHN_SERIAL] = serial
         it[KEY_MEDLEVENSOHN_MAC] = mac
-        if (isNewSensor || sessionKeyHex.isNotBlank()) {
-            it[KEY_MEDLEVENSOHN_SESSION_KEY] = sessionKeyHex
+        it.remove(KEY_MEDLEVENSOHN_SESSION_KEY)
+        if (isNewSensor) {
+            it.remove(KEY_MEDLEVENSOHN_MASTER_KEY)
+            it.remove(KEY_MEDLEVENSOHN_START_SEC)
+            it.remove(KEY_MEDLEVENSOHN_LAST_ID)
+            it.remove(KEY_MEDLEVENSOHN_HAS_TIME)
         }
     }
 
-    /** Persiste a sessionKey derivada no handshake (pula o handshake completo na próxima conexão). */
-    suspend fun saveMedLevensohnSessionKey(sessionKeyHex: String) =
-        dataStore.edit { it[KEY_MEDLEVENSOHN_SESSION_KEY] = sessionKeyHex }
+    /** Chave-mestra recebida em f001 ("" = esquecer). */
+    suspend fun saveMedLevensohnMasterKey(masterKeyHex: String) = dataStore.edit {
+        if (masterKeyHex.isBlank()) it.remove(KEY_MEDLEVENSOHN_MASTER_KEY) else it[KEY_MEDLEVENSOHN_MASTER_KEY] = masterKeyHex
+        it.remove(KEY_MEDLEVENSOHN_SESSION_KEY)
+    }
 
-    /** Esquece o sensor Smart 2.0 configurado (serial + MAC + sessionKey). */
+    /** Estado que sobrevive entre conexões: início do sensor, último minuto gravado e se a hora é conhecida. */
+    suspend fun saveMedLevensohnProgress(startSec: Long, lastId: Int, hasTime: Boolean) = dataStore.edit {
+        it[KEY_MEDLEVENSOHN_START_SEC] = startSec
+        it[KEY_MEDLEVENSOHN_LAST_ID] = lastId
+        it[KEY_MEDLEVENSOHN_HAS_TIME] = hasTime
+    }
+
+    /** Esquece o sensor Smart 2.0 configurado. */
     suspend fun clearMedLevensohnSensor() = dataStore.edit {
         it.remove(KEY_MEDLEVENSOHN_SERIAL)
         it.remove(KEY_MEDLEVENSOHN_MAC)
         it.remove(KEY_MEDLEVENSOHN_SESSION_KEY)
+        it.remove(KEY_MEDLEVENSOHN_MASTER_KEY)
+        it.remove(KEY_MEDLEVENSOHN_START_SEC)
+        it.remove(KEY_MEDLEVENSOHN_LAST_ID)
+        it.remove(KEY_MEDLEVENSOHN_HAS_TIME)
     }
 
     // ── Dexcom G6 ──────────────────────────────────────────────────────────────

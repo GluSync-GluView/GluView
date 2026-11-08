@@ -93,6 +93,14 @@ class SensorFlowCaptureTest {
         shoot("sg-falha-tempo", setup(SetupState.Failed(FailureReason.PAIRING_TIMEOUT, sg, sgCode)))
         shoot("sg-pronto-ja-medindo", setup(SetupState.Ready(sg, 0)))
 
+        // Smart 2.0 Medlevensohn: procurar por perto, serial digitado, pareando, pronto.
+        val ml = DataSourceType.MEDLEVENSOHN_SMART2
+        val mlCode = SensorCode("22222A2WC8", "22222A2WC8")
+        shoot("ml-procurar", setup(SetupState.Instructions(ml)))
+        shoot("ml-serial-invalido", setup(SetupState.EnteringSerial(ml, invalid = true)))
+        shoot("ml-pareando", setup(SetupState.Pairing(ml, mlCode)))
+        shoot("ml-pronto", setup(SetupState.Ready(ml, 0)))
+
         val history = listOf(
             SensorHistoryEntity(1, "C8:2A:7F:10:44:9B", "2509461A2B3C4DEF12", "1A2B3C4D", "SIBIONICS_CHINES", now - 9 * day),
             SensorHistoryEntity(2, "C8:2A:7F:10:12:01", "2508212P3R6S9TVA34", "P3R6S9TV", "SIBIONICS_CHINES", now - 24 * day, now - 9 * day)
