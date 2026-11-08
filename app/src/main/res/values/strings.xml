@@ -87,7 +87,7 @@
     <string name="sensor_region_sa">América do Sul</string>
     <string name="sensor_region_cn">China</string>
     <string name="sensor_variant_label">%1$s %2$s</string>
-    <string name="sensor_official_app_notice">O GluView não substitui o aplicativo oficial do fabricante do sensor. Use-o como complemento, mantenha o app ou leitor oficial como sua referência e siga as instruções do fabricante. Projeto independente, sem afiliação com os fabricantes.</string>
+    <string name="sensor_official_app_notice">Use um app por vez com o sensor: dois apps disputando o mesmo sensor causam falhas e leituras perdidas. Prefira o GluView como seu app principal. Siga as instruções do fabricante e confirme com o glicosímetro antes de decidir um tratamento. Projeto independente, sem afiliação com os fabricantes.</string>
     <string name="libre2_gen1_not_supported">Este é um FreeStyle Libre 2 europeu (geração 1). O GluView ainda não lê essa versão — por enquanto, só a da América do Norte e da América do Sul.</string>
     <string name="settings_cloud_state_follower">Para acompanhar alguém você não precisa pedir nada: basta que a pessoa acompanhada tenha a nuvem liberada.</string>
     <string name="login_verify_title">Confirme seu e-mail</string>
