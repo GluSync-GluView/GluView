@@ -7,6 +7,7 @@
   AVDs (criados na Fase 0, 07/11/2026):
     GluViewPhonePlay  celular Pixel 7, Android 15 (API 35) com Play Store  -> porta 5560
     GluViewWatchL     Wear OS 5.1 (API 35), redondo grande (~Galaxy Watch 6/7) -> porta 5562
+    GluViewWatch6     Wear OS 6 (API 36), redondo grande — o único com Watch Face Push (plano 16)
     GluViewWatchS     Wear OS 4 (API 33), redondo pequeno                       -> porta 5562
   Portas fora da 5554/5556 de propósito: outras sessões usam o GluViewHomolog na 5554.
 
@@ -24,7 +25,7 @@
   ArrayIndexOutOfBoundsException em ZipUtils), use -FixWatchGms: remove a atualização e reinicia.
 
 .PARAMETER Watch
-  L (padrão) ou S.
+  L (padrão), S ou 6 (Wear OS 6, para o Watch Face Push).
 .PARAMETER GluSyncPort
   Porta do GluSync local no PC (padrão 5000). O celular e o relógio acessam pelo `adb reverse`
   em http://localhost:<porta>; sem reverse, use http://10.0.2.2:<porta>.
@@ -45,7 +46,7 @@
   .\tools\wear-lab.ps1 -Stop
 #>
 param(
-    [ValidateSet('L', 'S')] [string] $Watch = 'L',
+    [ValidateSet('L', 'S', '6')] [string] $Watch = 'L',
     [int] $GluSyncPort = 5000,
     [switch] $Install,
     [switch] $Pair,
@@ -59,7 +60,7 @@ $adb = Join-Path $sdk 'platform-tools\adb.exe'
 $emulator = Join-Path $sdk 'emulator\emulator.exe'
 $phone = 'emulator-5560'
 $watchSerial = 'emulator-5562'
-$watchAvd = if ($Watch -eq 'L') { 'GluViewWatchL' } else { 'GluViewWatchS' }
+$watchAvd = switch ($Watch) { 'L' { 'GluViewWatchL' } 'S' { 'GluViewWatchS' } '6' { 'GluViewWatch6' } }
 $repo = Split-Path $PSScriptRoot -Parent
 
 function Invoke-Adb {
@@ -115,8 +116,12 @@ function Get-WatchNodeId {
 }
 
 function Test-Paired {
-    $out = Invoke-Adb -s $phone shell 'dumpsys activity service WearableService' | Out-String
-    return $out -match "$watchAvd\s*:\s*[0-9a-f]+\s*:\s*1\s*:\s*true\s*:\s*true"
+    # Os DOIS lados precisam se ver como vizinhos diretos (hops 1, isNearby true). Só o lado do
+    # celular não basta: ele pode guardar a conexão de um relógio anterior na mesma porta (08/11).
+    $phoneOut = Invoke-Adb -s $phone shell 'dumpsys activity service WearableService' | Out-String
+    $watchOut = Invoke-Adb -s $watchSerial shell 'dumpsys activity service WearableService' | Out-String
+    return ($phoneOut -match "$watchAvd\s*:\s*[0-9a-f]+\s*:\s*1\s*:\s*true\s*:\s*true") -and
+           ($watchOut -match "GluViewPhonePlay\s*:\s*[0-9a-f]+\s*:\s*1\s*:\s*true")
 }
 
 if ($FixWatchGms) {
