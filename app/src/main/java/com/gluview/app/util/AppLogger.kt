@@ -47,9 +47,7 @@ class AppLogger @Inject constructor(
 
     private fun write(level: String, tag: String, origin: String, msg: String, data: Map<String, Any>) {
         val ts = System.currentTimeMillis()
-        val dataJson = if (data.isEmpty()) "" else JSONObject().also { obj ->
-            data.forEach { (k, v) -> obj.put(k, v) }
-        }.toString()
+        val dataJson = logDataToJson(data)
 
         scope.launch {
             // T03 — sempre grava, sem depender de flag.
@@ -114,4 +112,24 @@ class AppLogger @Inject constructor(
         /** Dias de retenção dos logs (F1/T05). */
         const val RETENTION_DAYS = 7
     }
+}
+
+/**
+ * Dados do registro em JSON. Registro nunca pode derrubar o app: o org.json recusa NaN e infinito
+ * ("Forbidden numeric value") — um sensor manda NaN em leitura com erro e ±∞ em LO/HI (achado pelo
+ * SmartGuide virtual, 07/11/2026: o GluView travava na primeira leitura com erro). Esses números viram
+ * texto; qualquer outra recusa vira o texto do valor.
+ */
+internal fun logDataToJson(data: Map<String, Any>): String {
+    if (data.isEmpty()) return ""
+    val obj = JSONObject()
+    data.forEach { (k, v) ->
+        val safe: Any = when (v) {
+            is Double -> if (v.isFinite()) v else v.toString()
+            is Float -> if (v.isFinite()) v else v.toString()
+            else -> v
+        }
+        runCatching { obj.put(k, safe) }.onFailure { obj.put(k, safe.toString()) }
+    }
+    return obj.toString()
 }

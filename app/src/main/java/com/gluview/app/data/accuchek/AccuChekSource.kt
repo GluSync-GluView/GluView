@@ -84,6 +84,8 @@ class AccuChekSource @Inject constructor(
     @Volatile private var scope: CoroutineScope? = null
     @Volatile private var reconnectJob: Job? = null
     @Volatile private var stopped = false
+    /** O sensor recusou este celular (pareado em outro aparelho) e ainda não voltou a parear aqui. */
+    @Volatile private var pairingLost = false
 
     @Volatile private var serial: String = ""
     @Volatile private var address: String = ""
@@ -104,6 +106,7 @@ class AccuChekSource @Inject constructor(
     override fun start(type: DataSourceType) {
         if (scope != null) return
         stopped = false
+        pairingLost = false
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
         s.launch {
@@ -148,8 +151,7 @@ class AccuChekSource @Inject constructor(
             reconnectJob?.cancel(); reconnectJob = null
             // Some o aviso de desconexão/pareamento, mas não um aviso do sensor ainda valendo
             // (a notificação é uma só para todos os avisos de sensor).
-            val sensorAlertActive = synchronized(activeAlerts) { activeAlerts.isNotEmpty() } || malfunction.isActive
-            if (!sensorAlertActive) notificationHelper.cancelSensorWarning()
+            if (!sensorAlertActive()) notificationHelper.cancelSensorWarning()
         } else if (!stopped && reconnectJob?.isActive != true) {
             appLogger.usage(LOG, "Sensor desconectado — agendando reconexão")
             startReconnect()
@@ -159,11 +161,20 @@ class AccuChekSource @Inject constructor(
     override fun onPairingStateChanged(state: AccuChekBleManager.PairingState) {
         appLogger.usage(LOG, "Pareamento", mapOf("estado" to state.name))
         when (state) {
+            // Depois de um LOST o Android apaga o pareamento e a próxima tentativa pede PIN de novo; se o
+            // sensor recusar, o motivo continua sendo o outro aparelho — "confira o PIN" confundiria.
+            // (Achado no sensor virtual, plano 14_, cenário 14.)
             AccuChekBleManager.PairingState.FAILED ->
-                warn(R.string.accuchek_warn_pairing_failed_title, R.string.accuchek_warn_pairing_failed_body)
-            AccuChekBleManager.PairingState.LOST ->
+                if (pairingLost) warn(R.string.accuchek_warn_pairing_lost_title, R.string.accuchek_warn_pairing_lost_body)
+                else warn(R.string.accuchek_warn_pairing_failed_title, R.string.accuchek_warn_pairing_failed_body)
+            AccuChekBleManager.PairingState.LOST -> {
+                pairingLost = true
                 warn(R.string.accuchek_warn_pairing_lost_title, R.string.accuchek_warn_pairing_lost_body)
-            AccuChekBleManager.PairingState.BONDED -> notificationHelper.cancelSensorWarning()
+            }
+            AccuChekBleManager.PairingState.BONDED -> {
+                pairingLost = false
+                notificationHelper.cancelSensorWarning()
+            }
             else -> Unit
         }
     }
@@ -308,6 +319,7 @@ class AccuChekSource @Inject constructor(
         val fresh = records.filter { it.timeOffsetMinutes > lastMinute }.sortedBy { it.timeOffsetMinutes }
         if (fresh.isEmpty()) return
         val newestMinute = fresh.last().timeOffsetMinutes
+        val hadSensorAlert = sensorAlertActive()
         for (m in fresh) {
             val atMs = SmartGuideClock.readingTimeMs(startMs, m.timeOffsetMinutes, now)
             val live = now - atMs <= LIVE_MAX_AGE_MS
@@ -352,9 +364,18 @@ class AccuChekSource @Inject constructor(
                 "tendencia" to (m.trendMgDlPerMin ?: "?"), "qualidade" to (m.qualityPercent ?: "?"), "atual" to isCurrent
             ))
         }
+        // Defeito/temperatura/bateria/calibração acabaram com a conexão aberta: tira a notificação na
+        // hora (antes só saía na próxima reconexão). Achado no sensor virtual, plano 14_, cenários 10–11.
+        if (hadSensorAlert && !sensorAlertActive()) {
+            appLogger.usage(LOG, "Avisos do sensor resolvidos — notificação removida")
+            notificationHelper.cancelSensorWarning()
+        }
         lastMinute = newestMinute
         preferences.saveAccuChekLastMinute(newestMinute)
     }
+
+    private fun sensorAlertActive(): Boolean =
+        synchronized(activeAlerts) { activeAlerts.isNotEmpty() } || malfunction.isActive
 
     // ── Avisos ───────────────────────────────────────────────────────────────────────────────────
 

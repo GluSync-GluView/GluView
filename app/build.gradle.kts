@@ -70,6 +70,10 @@ android {
         // Modo demonstração: só o build "demo" liga (ver buildTypes e com.gluview.app.demo).
         buildConfigField("boolean", "DEMO_MODE", "false")
 
+        // Sensores "Em breve" escolhíveis sem beta aprovado — SÓ no build de depuração, para testar
+        // contra os sensores virtuais no emulador (tools/virtual-sensors, plano 14_). Release e demo: false.
+        buildConfigField("boolean", "DEV_SENSOR_UNLOCK", "false")
+
         // Módulo nativo da ponte Abbott (fake JavaVM/JNIEnv p/ inicializar o WhiteCryption SKB).
         // arm64-v8a: todas as bibliotecas (sensores Sibionics e Libre 2). armeabi-v7a: só uma
         // biblioteca de marcação (ver CMakeLists.txt) — o bastante para o APK instalar em aparelho
@@ -119,6 +123,7 @@ android {
             // detecta o processo depurável. Sem ptrace, não precisamos mais de debuggable=true.
             isDebuggable    = false
             isJniDebuggable = false
+            buildConfigField("boolean", "DEV_SENSOR_UNLOCK", "true")
         }
         release {
             isMinifyEnabled   = true
@@ -142,6 +147,7 @@ android {
             versionNameSuffix   = "-demo"
             matchingFallbacks  += listOf("debug")
             buildConfigField("boolean", "DEMO_MODE", "true")
+            buildConfigField("boolean", "DEV_SENSOR_UNLOCK", "false")
             // Endereço que não existe: o SignalR e qualquer chamada que escape do DemoBackend falham
             // na hora, sem levar o token falso a um servidor de verdade.
             buildConfigField("String", "GLUSYNC_BASE_URL", "\"https://demo.gluview.invalid\"")

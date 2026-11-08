@@ -1,0 +1,6 @@
+.venv/
+*.log
+control.txt
+__pycache__/
+*-pareamentos.json
+*-inicio.txt
