@@ -366,7 +366,9 @@ internal fun WatchFaceEditorContent(
 
     if (showAdd) {
         AppModalBottomSheet(onDismissRequest = { showAdd = false }) {
-            AddComponentSheet(runtime) { def -> actions.onAdd(def); showAdd = false }
+            // Plano 16 (W4): visor de relógio Wear OS só aceita o que existe no Watch Face Format.
+            val wearOs = com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(design.wearable.id)
+            AddComponentSheet(runtime, wearOs) { def -> actions.onAdd(def); showAdd = false }
         }
     }
     if (showPresets) {
@@ -568,7 +570,7 @@ private val COMPONENT_GROUPS: List<Pair<Int, List<String>>> = listOf(
 )
 
 @Composable
-private fun AddComponentSheet(runtime: WatchFaceRuntimeData, onAdd: (WatchFaceComponentDefinition) -> Unit) {
+private fun AddComponentSheet(runtime: WatchFaceRuntimeData, wearOs: Boolean = false, onAdd: (WatchFaceComponentDefinition) -> Unit) {
     var kind by remember { mutableStateOf<ComponentKind?>(null) }
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.lg).padding(bottom = Spacing.xl),
@@ -581,13 +583,15 @@ private fun AddComponentSheet(runtime: WatchFaceRuntimeData, onAdd: (WatchFaceCo
                 Text(stringResource(group), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = Spacing.xs).semantics { heading() })
                 ids.mapNotNull { id -> ComponentRegistry.all.firstOrNull { it.id == id } }.forEach { k ->
+                    val available = !wearOs || com.gluview.app.watchface.wff.WffCompiler.isSupported(k.id)
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { kind = k },
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = available) { kind = k },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                     ) {
                         Text(stringResource(componentNameRes(k.id)), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        if (isPumpComponent(k.id)) StatusBadge(stringResource(R.string.wf_pump_beta), tone = Tone.Neutral)
+                        if (!available) StatusBadge(stringResource(R.string.wear_component_unavailable), tone = Tone.Neutral)
+                        else if (isPumpComponent(k.id)) StatusBadge(stringResource(R.string.wf_pump_beta), tone = Tone.Neutral)
                     }
                 }
             }

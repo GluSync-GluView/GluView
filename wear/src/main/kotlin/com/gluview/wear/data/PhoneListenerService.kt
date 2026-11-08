@@ -1,7 +1,9 @@
 package com.gluview.wear.data
 
 import android.util.Log
+import com.gluview.wear.contract.FaceAck
 import com.gluview.wear.contract.WatchFaceSnapshot
+import com.gluview.wear.watchface.FacePusher
 import com.gluview.wear.contract.WearPaths
 import com.gluview.wear.contract.WearToken
 import com.google.android.gms.wearable.Asset
@@ -27,6 +29,8 @@ class PhoneListenerService : WearableListenerService() {
     private val tag = "GluViewWear"
 
     override fun onDataChanged(events: DataEventBuffer) {
+        events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WearPaths.WATCHFACE }
+            .forEach { event -> installFace(DataMapItem.fromDataItem(event.dataItem).dataMap, event.dataItem.uri.host) }
         events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WearPaths.READING }
             .forEach { event ->
                 val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
@@ -47,6 +51,31 @@ class PhoneListenerService : WearableListenerService() {
         val token = WearToken.decode(event.data) ?: return
         if (token.accessToken.isBlank()) TokenStore.clear(this) else TokenStore.save(this, token)
         CloudFetchWorker.schedule(this)
+    }
+
+    /**
+     * Plano 16, W3: visor personalizado vindo do celular (APK já validado + token). Instala pelo
+     * Watch Face Push e responde ao celular que mandou em [WearPaths.WATCHFACE_ACK].
+     */
+    private fun installFace(dataMap: DataMap, sourceNode: String?) {
+        val ack = runCatching {
+            val token = dataMap.getString(WearPaths.K_FACE_TOKEN).orEmpty()
+            val bytes = dataMap.getAsset(WearPaths.ASSET_FACE)?.let { readAsset(it) }
+            if (bytes == null || token.isBlank()) FaceAck.Failed("visor incompleto")
+            else {
+                val apk = java.io.File(filesDir, "visor.apk").apply { writeBytes(bytes) }
+                runBlocking { FacePusher.install(this@PhoneListenerService, apk, token) }
+            }
+        }.getOrElse { FaceAck.Failed(it.message ?: it::class.java.simpleName) }
+        Log.i(tag, "Visor recebido do celular -> $ack")
+        if (sourceNode != null) runCatching {
+            runBlocking {
+                withTimeoutOrNull(10_000) {
+                    Wearable.getMessageClient(this@PhoneListenerService)
+                        .sendMessage(sourceNode, WearPaths.WATCHFACE_ACK, FaceAck.encode(ack)).await()
+                }
+            }
+        }
     }
 
     private fun readAsset(asset: Asset): ByteArray? = runCatching {

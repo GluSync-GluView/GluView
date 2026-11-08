@@ -12,5 +12,10 @@
     <string name="wear_apply_unavailable">This phone doesn\'t have Google Play Services, which Wear OS requires</string>
     <string name="wear_apply_no_watch">No Wear OS watch connected to this phone</string>
     <string name="wear_apply_needs_app">Install GluView on the watch so it can receive glucose</string>
-    <string name="wear_apply_coming">Custom watch faces on Wear OS are coming soon. Glucose already shows up through the GluView complication on any watch face.</string>
+    <string name="wear_apply_needs_wear6">A custom watch face needs Wear OS 6. Glucose keeps showing through the GluView complication on any watch face.</string>
+    <string name="wear_face_installed_active">Watch face installed and active on the watch.</string>
+    <string name="wear_face_installed_activate">Watch face installed. Open GluView on the watch and tap "Use the GluView watch face".</string>
+    <string name="wear_face_sent_waiting">Watch face sent. The watch installs it as soon as it arrives.</string>
+    <string name="wear_face_no_slot">The watch has no room for another app watch face. Remove one installed by another app and try again.</string>
+    <string name="wear_component_unavailable">Not available on Wear OS</string>
 </resources>

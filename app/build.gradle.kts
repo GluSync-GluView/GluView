@@ -215,6 +215,13 @@ dependencies {
     // Fase 5: envio ao relógio pelo Data Layer (falha em silêncio em aparelho sem Play Services).
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)
+    // Plano 16 (W2): montar, assinar e validar no celular o visor do construtor para o Wear OS.
+    implementation(libs.apksig)
+    implementation(libs.wff.validator.push.android) {
+        // O validador declara o PROCESSADOR do AutoValue como dependência de runtime; ele só serve
+        // na compilação (as classes geradas já vêm no jar) e quebra o R8 do release (javax.lang.model).
+        exclude(group = "com.google.auto.value", module = "auto-value")
+    }
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

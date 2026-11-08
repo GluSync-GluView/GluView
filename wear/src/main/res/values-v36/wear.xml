@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Wear OS 6+ (API 36): além de gluview_wear, anuncia que tem Watch Face Push (plano 16).
+         Por recurso com qualificador -v36 em vez de addLocalCapability em tempo de execução: no
+         teste de 08/11 a chamada dinâmica não pegou e o celular não oferecia o envio. -->
+    <string-array name="android_wear_capabilities" translatable="false">
+        <item>gluview_wear</item>
+        <item>gluview_watchface_push</item>
+    </string-array>
+</resources>

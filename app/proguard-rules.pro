@@ -95,3 +95,14 @@
 # Mantém arquivo/linha; o mapping.txt de cada versão é arquivado pelo tools/publish-release.ps1.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# ── Plano 16 (visor no Wear OS): validador oficial do Watch Face Push no celular ──────────────
+# O validador e o Xerces (validação do XML do mostrador) carregam classes por reflexão/serviço;
+# sem isto o R8 pode cortar algo que só falha em tempo de execução, no release.
+-keep class com.google.android.wearable.watchface.validator.** { *; }
+-keep class org.apache.xerces.** { *; }
+-keep class org.eclipse.wst.xml.xpath2.** { *; }
+# Referência do Xerces (asserções XSD 1.1) a uma classe que não vem no jar do xpath2 — igual no debug.
+-dontwarn org.eclipse.wst.xml.xpath2.processor.PsychoPathXPathTypeHelper
+# Recurso opcional do Xerces (resolvedor de catálogos XML), não usado pelo validador e ausente do jar.
+-dontwarn org.apache.xml.resolver.**

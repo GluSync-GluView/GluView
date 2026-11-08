@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Substituído no celular pelo XML gerado pelo WffCompiler (WffPackager). -->
+<WatchFace width="450" height="450">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+    <Scene backgroundColor="#ff000000">
+        <DigitalClock x="75" y="170" width="300" height="110">
+            <TimeText format="hh:mm" align="CENTER" x="0" y="0" width="300" height="110">
+                <Font family="SYNC_TO_DEVICE" size="90" color="#ffffffff" />
+            </TimeText>
+        </DigitalClock>
+    </Scene>
+</WatchFace>

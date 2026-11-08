@@ -23,4 +23,20 @@ object WearPaths {
 
     /** Nome do Asset com o bitmap do minigráfico, desenhado NO CELULAR e anexado ao [READING]. */
     const val ASSET_GRAPH = "graph"
+
+    /**
+     * celular → relógio: visor personalizado pronto (plano 16, W3) — DataItem com o APK como Asset
+     * [ASSET_FACE], o token do validador em [K_FACE_TOKEN] e [K_FACE_SENT_AT] (força o evento mesmo
+     * reenviando o mesmo visor).
+     */
+    const val WATCHFACE = "/gluview/watchface"
+    const val ASSET_FACE = "face"
+    const val K_FACE_TOKEN = "token"
+    const val K_FACE_SENT_AT = "sentAt"
+
+    /** relógio → celular: resultado da instalação do visor ([FaceAck]). */
+    const val WATCHFACE_ACK = "/gluview/watchface/ack"
+
+    /** Anunciada pelo relógio só quando ele tem Watch Face Push (Wear OS 6+). */
+    const val CAPABILITY_FACE_PUSH = "gluview_watchface_push"
 }

@@ -1,24 +1,37 @@
 package com.gluview.app.watchface.apply
 
+import android.content.Context
 import com.gluview.app.R
+import com.gluview.app.data.datastore.AppPreferences
+import com.gluview.app.util.GlucoseUnit
 import com.gluview.app.watchface.WatchFaceDesign
+import com.gluview.app.watchface.wff.WatchFaceBuilder
+import com.gluview.app.watchface.wff.WffCompiler
 import com.gluview.app.wear.WearBridge
 import com.gluview.app.wear.WearStatus
+import com.gluview.wear.contract.FaceAck
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 /**
- * Relógios Wear OS (Fase 8 do plano 14). Hoje NÃO envia o visor desenhado — isso é o plano 16
- * (Watch Face Format + Watch Face Push, Wear OS 6). O que já funciona no Wear OS é a glicemia pela
- * complication/tile do app GluView do relógio, em qualquer mostrador; este applier diz isso com
- * clareza em vez de falhar em silêncio, e guia o usuário quando falta relógio ou o app nele.
+ * Relógios Wear OS (plano 14 Fase 8 + plano 16 W3). Envia o visor desenhado no construtor como um
+ * mostrador Watch Face Format, instalado pelo app GluView do relógio via Watch Face Push (Wear OS 6+).
+ * Antes disso guia o usuário: sem relógio, sem o app nele, ou relógio sem Wear OS 6 (a glicemia
+ * continua pela complication do GluView em qualquer mostrador).
  *
  * Fora daqui (registry → "sem envio automático"): Apple, Garmin, Galaxy Watch 3 ou anterior (Tizen)
  * e relógios Xiaomi com sistema próprio (Watch S1/S3).
  */
 @Singleton
 class WearOsWatchFaceApplier @Inject constructor(
-    private val bridge: WearBridge
+    @ApplicationContext private val context: Context,
+    private val bridge: WearBridge,
+    private val prefs: AppPreferences,
 ) : WatchFaceApplier {
     override val id = "wear_os"
     override val displayName = "Wear OS"
@@ -29,7 +42,36 @@ class WearOsWatchFaceApplier @Inject constructor(
         WearStatus.Unavailable -> ApplyResult.Unsupported("Play Services indisponível", R.string.wear_apply_unavailable)
         WearStatus.NoWatch -> ApplyResult.NeedsSetup("Nenhum relógio conectado", R.string.wear_apply_no_watch)
         is WearStatus.AppMissing -> ApplyResult.NeedsSetup("Instale o GluView no relógio", R.string.wear_apply_needs_app)
-        is WearStatus.Ready -> ApplyResult.Unsupported("Visor personalizado no Wear OS: em breve", R.string.wear_apply_coming)
+        is WearStatus.Ready -> sendFace(design)
+    }
+
+    private suspend fun sendFace(design: WatchFaceDesign): ApplyResult {
+        if (!bridge.watchSupportsFacePush()) {
+            return ApplyResult.Unsupported("Relógio sem Wear OS 6", R.string.wear_apply_needs_wear6)
+        }
+        val limits = prefs.glucoseThresholds.first()
+        val unit = GlucoseUnit.fromString(prefs.glucoseUnit.first())
+        val options = WffCompiler.Options(
+            appPackage = context.packageName,
+            unitLabel = unit.label,
+            targetLow = limits.low.roundToInt(),
+            targetHigh = limits.high.roundToInt(),
+        )
+        // Traduzir + assinar + validar é pesado (validador oficial): fora da thread principal.
+        val built = withContext(Dispatchers.IO) { runCatching { WatchFaceBuilder(context).build(design, options) } }
+            .getOrElse { return ApplyResult.Failure(it.message ?: it::class.java.simpleName) }
+        return when (built) {
+            is WatchFaceBuilder.Result.Rejected -> ApplyResult.Failure(built.problems.joinToString("; ").take(200))
+            is WatchFaceBuilder.Result.Built -> when (val ack = bridge.sendFace(built.apk, built.token)) {
+                null -> ApplyResult.Delivered(R.string.wear_face_sent_waiting)
+                is FaceAck.Installed -> ApplyResult.Delivered(
+                    if (ack.active) R.string.wear_face_installed_active else R.string.wear_face_installed_activate
+                )
+                FaceAck.Unsupported -> ApplyResult.Unsupported("Relógio sem Wear OS 6", R.string.wear_apply_needs_wear6)
+                FaceAck.NoSlot -> ApplyResult.Failure(context.getString(R.string.wear_face_no_slot))
+                is FaceAck.Failed -> ApplyResult.Failure(ack.reason.take(200))
+            }
+        }
     }
 
     companion object {

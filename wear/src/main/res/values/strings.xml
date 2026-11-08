@@ -15,4 +15,7 @@
     <string name="sync_no_token">Sem acesso à nuvem: abra o GluView no celular</string>
     <string name="sync_failed">Não consegui buscar agora</string>
     <string name="not_medical">Não é dispositivo médico</string>
+    <string name="face_use">Usar o visor do GluView</string>
+    <string name="face_activated">Visor do GluView ativo</string>
+    <string name="face_manual">Para usar o visor do GluView: toque e segure o mostrador e escolha "GluView".</string>
 </resources>

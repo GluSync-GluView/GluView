@@ -135,7 +135,7 @@ class WatchFaceRepository @Inject constructor(
      */
     suspend fun markApplyResult(face: WatchFaceEntity, result: ApplyResult) {
         val state = when (result) {
-            is ApplyResult.Success     -> "success"
+            is ApplyResult.Success, is ApplyResult.Delivered -> "success"
             is ApplyResult.NeedsSetup  -> "needs_setup"
             is ApplyResult.Unsupported -> "unsupported"
             is ApplyResult.InProgress  -> "in_progress"

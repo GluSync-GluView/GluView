@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,6 +44,7 @@ import com.gluview.wear.contract.SnapshotSource
 import com.gluview.wear.data.CloudFetcher
 import com.gluview.wear.data.SnapshotStore
 import com.gluview.wear.ui.Display
+import com.gluview.wear.watchface.FacePusher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -72,6 +75,20 @@ private fun GlucoseScreen() {
     var syncing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    // Plano 16 (W3): visor do GluView instalado mas não ativo → oferece "Usar". A permissão de
+    // ativar só pode ser pedida uma vez; negada, a tela ensina o caminho manual no seletor.
+    var faceInactive by remember { mutableStateOf(false) }
+    var faceMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { faceInactive = FacePusher.installedButInactive(context) }
+    val askActivate = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        FacePusher.markActivationAsked(context)
+        scope.launch {
+            val ok = granted && FacePusher.activate(context)
+            faceInactive = !ok
+            faceMessage = context.getString(if (ok) R.string.face_activated else R.string.face_manual)
+        }
+    }
+
     // Relógio da tela: reavalia a idade a cada 30 s (o valor vira "--" sem precisar de leitura nova).
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
 
@@ -101,6 +118,24 @@ private fun GlucoseScreen() {
             Text("${stringResource(R.string.measured_at, Display.measuredTime(s))} · $source",
                 fontSize = 12.sp, color = Color(Display.COLOR_TEXT_DIM))
         }
+
+        if (faceInactive) {
+            Chip(
+                onClick = {
+                    if (FacePusher.activationAsked(context)) {
+                        scope.launch {
+                            val ok = FacePusher.activate(context)
+                            faceInactive = !ok
+                            faceMessage = context.getString(if (ok) R.string.face_activated else R.string.face_manual)
+                        }
+                    } else askActivate.launch("com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE")
+                },
+                label = { Text(stringResource(R.string.face_use)) },
+                colors = ChipDefaults.primaryChipColors(),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        faceMessage?.let { Text(it, fontSize = 11.sp, textAlign = TextAlign.Center, color = Color(Display.COLOR_TEXT_DIM)) }
 
         Chip(
             onClick = {

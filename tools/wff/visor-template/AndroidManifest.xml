@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Modelo do APK do visor personalizado (plano 16, W2). @PKG@ = pacote do app GluView que instala
+     (com.gluview.app ou com.gluview.app.demo): o Watch Face Push exige <app>.watchfacepush.<nome>.
+     Um nome fixo só ("visor"), porque o Wear OS 6 tem 1 slot por app: trocar o visor é sempre update. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="@PKG@.watchfacepush.visor"
+    android:versionCode="1" android:versionName="1">
+    <uses-sdk android:minSdkVersion="33" android:targetSdkVersion="36" />
+    <uses-feature android:name="android.hardware.type.watch" />
+    <application android:label="GluView" android:hasCode="false">
+        <property android:name="com.google.wear.watchface.format.version" android:value="2" />
+        <property android:name="com.google.wear.watchface.format.publisher" android:value="GluView" />
+    </application>
+</manifest>

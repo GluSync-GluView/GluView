@@ -26,7 +26,7 @@ class WearOsApplierTest {
         val m = ApplyResult.NeedsSetup("x", R.string.wear_apply_needs_app).toMessage()
         assertEquals(UiText.Res(R.string.wear_apply_needs_app), m.text)
         assertNull(m.action)
-        assertEquals(UiText.Res(R.string.wear_apply_coming), ApplyResult.Unsupported("x", R.string.wear_apply_coming).toMessage().text)
+        assertEquals(UiText.Res(R.string.wear_apply_needs_wear6), ApplyResult.Unsupported("x", R.string.wear_apply_needs_wear6).toMessage().text)
     }
 
     @Test fun miBand_continuaComAFraseEOAtalhoDeSempre() {
@@ -34,5 +34,11 @@ class WearOsApplierTest {
         assertEquals(UiText.Res(R.string.wf_msg_needs_setup), m.text)
         assertEquals(WatchFaceMessageAction.SETUP_MIBAND, m.action)
         assertEquals(UiText.Res(R.string.wf_msg_unsupported), ApplyResult.Unsupported("x").toMessage().text)
+    }
+
+    @Test fun entregueNoRelogio_usaAFraseDoWearOs() {
+        assertEquals(UiText.Res(R.string.wear_face_installed_activate),
+            ApplyResult.Delivered(R.string.wear_face_installed_activate).toMessage().text)
+        assertNull(ApplyResult.Delivered(R.string.wear_face_installed_active).toMessage().action)
     }
 }

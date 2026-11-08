@@ -5,6 +5,8 @@ import com.gluview.app.watchface.WatchFaceDesign
 /** Resultado de uma tentativa de aplicar um visor a um wearable. */
 sealed interface ApplyResult {
     data object Success : ApplyResult
+    /** Entregue, com frase própria do applier (ex.: Wear OS: "instalado, ative no relógio"). */
+    data class Delivered(@androidx.annotation.StringRes val messageRes: Int) : ApplyResult
     /** Falta configuração do usuário (ex.: auth key/MAC da Mi Band). */
     /** [messageRes]: frase própria do applier (ex.: Wear OS); null = frase genérica da Mi Band. */
     data class NeedsSetup(val message: String, @androidx.annotation.StringRes val messageRes: Int? = null) : ApplyResult

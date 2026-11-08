@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Miniatura no seletor do relógio: gota azul do GluView sobre fundo preto. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="oval"><solid android:color="#FF000000" /></shape></item>
+    <item android:left="70dp" android:right="70dp" android:top="60dp" android:bottom="60dp">
+        <shape android:shape="oval"><solid android:color="#FF1E88E5" /></shape>
+    </item>
+</layer-list>

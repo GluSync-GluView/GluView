@@ -24,7 +24,8 @@ val wearVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.toI
 
 android {
     namespace  = "com.gluview.wear"
-    compileSdk = 35
+    // 36: exigido pela biblioteca Watch Face Push (plano 16). minSdk continua 30: o Push é opcional em runtime.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.gluview.app"
@@ -83,6 +84,8 @@ dependencies {
     implementation(libs.wear.protolayout.material)
     implementation(libs.wear.protolayout.expression)
     implementation(libs.androidx.concurrent.futures.ktx)
+    // Plano 16 (W3): instalar o visor desenhado pelo usuário (Wear OS 6+; opcional em runtime).
+    implementation(libs.wear.watchfacepush)
 
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.security.crypto)

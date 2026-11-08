@@ -14,4 +14,7 @@
     <string name="sync_no_token">No cloud access: open GluView on your phone</string>
     <string name="sync_failed">Couldn\'t fetch right now</string>
     <string name="not_medical">Not a medical device</string>
+    <string name="face_use">Use the GluView watch face</string>
+    <string name="face_activated">GluView watch face is active</string>
+    <string name="face_manual">To use the GluView watch face: touch and hold the watch face and pick "GluView".</string>
 </resources>

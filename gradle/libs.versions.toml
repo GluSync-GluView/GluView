@@ -38,6 +38,10 @@ wearComplications      = "1.2.1"
 wearTiles              = "1.4.1"
 wearProtolayout        = "1.2.1"
 concurrentFutures      = "1.2.0"
+# Plano 16 (visor no Wear OS): Watch Face Push, validador oficial e assinatura de APK no celular.
+watchFacePush          = "1.0.0"
+wffValidator           = "1.1.0-alpha01"
+apksig                 = "8.11.0"
 roborazzi              = "1.50.0"
 
 [libraries]
@@ -137,6 +141,9 @@ wear-tiles                    = { group = "androidx.wear.tiles", name = "tiles",
 wear-protolayout              = { group = "androidx.wear.protolayout", name = "protolayout", version.ref = "wearProtolayout" }
 wear-protolayout-material     = { group = "androidx.wear.protolayout", name = "protolayout-material", version.ref = "wearProtolayout" }
 wear-protolayout-expression   = { group = "androidx.wear.protolayout", name = "protolayout-expression", version.ref = "wearProtolayout" }
+wear-watchfacepush            = { group = "androidx.wear.watchfacepush", name = "watchfacepush", version.ref = "watchFacePush" }
+wff-validator-push-android    = { group = "com.google.android.wearable.watchface.validator", name = "validator-push-android", version.ref = "wffValidator" }
+apksig                        = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
 androidx-concurrent-futures-ktx = { group = "androidx.concurrent", name = "concurrent-futures-ktx", version.ref = "concurrentFutures" }
 
 [plugins]

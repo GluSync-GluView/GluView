@@ -14,6 +14,7 @@ import com.gluview.app.util.GlucoseGraphRenderer
 import com.gluview.app.util.GlucoseUnit
 import com.gluview.app.util.applyDisplayMode
 import com.gluview.app.util.toGraphReading
+import com.gluview.wear.contract.FaceAck
 import com.gluview.wear.contract.SnapshotSource
 import com.gluview.wear.contract.SnapshotUnit
 import com.gluview.wear.contract.SnapshotZone
@@ -109,6 +110,38 @@ class WearBridge @Inject constructor(
     }.getOrElse {
         Log.i(tag, "Wearable indisponível: ${it.message}")
         WearStatus.Unavailable
+    }
+
+    /** Algum relógio conectado tem Watch Face Push (Wear OS 6+ com o GluView)? */
+    suspend fun watchSupportsFacePush(): Boolean = runCatching {
+        val info = withTimeoutOrNull(5_000) {
+            capabilityClient.getCapability(WearPaths.CAPABILITY_FACE_PUSH, CapabilityClient.FILTER_REACHABLE).await()
+        }
+        info?.nodes?.any { it.isNearby } == true
+    }.getOrDefault(false)
+
+    /**
+     * Plano 16, W3: entrega o visor (APK validado + token) ao relógio como Asset em
+     * [WearPaths.WATCHFACE] e espera a resposta em [WearPaths.WATCHFACE_ACK]. null = sem resposta
+     * no prazo (o relógio pode instalar depois, quando o Data Layer entregar).
+     */
+    suspend fun sendFace(apk: java.io.File, token: String, timeoutMs: Long = 60_000): FaceAck? {
+        val answer = kotlinx.coroutines.CompletableDeferred<FaceAck>()
+        val listener = com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener { event ->
+            if (event.path == WearPaths.WATCHFACE_ACK) FaceAck.decode(event.data)?.let { answer.complete(it) }
+        }
+        messageClient.addListener(listener).await()
+        try {
+            val request = PutDataMapRequest.create(WearPaths.WATCHFACE).apply {
+                dataMap.putAsset(WearPaths.ASSET_FACE, Asset.createFromBytes(apk.readBytes()))
+                dataMap.putString(WearPaths.K_FACE_TOKEN, token)
+                dataMap.putLong(WearPaths.K_FACE_SENT_AT, System.currentTimeMillis())
+            }.asPutDataRequest().setUrgent()
+            dataClient.putDataItem(request).await()
+            return withTimeoutOrNull(timeoutMs) { answer.await() }
+        } finally {
+            messageClient.removeListener(listener)
+        }
     }
 
     /** (id, nome) dos relógios conectados que anunciam o GluView; null se a API não existe aqui. */
