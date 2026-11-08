@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 rootProject.name = "GluView"
 include(":app")
 include(":compiler-cli")
+include(":wear-contract")
