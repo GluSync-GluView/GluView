@@ -1,6 +1,11 @@
 package com.gluview.app.data.accuchek
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import com.gluview.app.R
 import com.gluview.app.data.accuchek.cgm.CgmFeature
 import com.gluview.app.data.accuchek.cgm.CgmMeasurement
@@ -86,6 +91,10 @@ class AccuChekSource @Inject constructor(
     @Volatile private var stopped = false
     /** O sensor recusou este celular (pareado em outro aparelho) e ainda não voltou a parear aqui. */
     @Volatile private var pairingLost = false
+    /** Âncora do relógio: hora de parede e monotônica do momento em que [startMs] foi confirmado. */
+    @Volatile private var anchorWallMs = 0L
+    @Volatile private var anchorElapsedMs = 0L
+    private var timeChangeReceiver: BroadcastReceiver? = null
 
     @Volatile private var serial: String = ""
     @Volatile private var address: String = ""
@@ -117,6 +126,7 @@ class AccuChekSource @Inject constructor(
             ble.setPairingPin(preferences.accuChekPin.first())
             ble.setListener(this@AccuChekSource)
             if (startMs > 0) statusHolder.restoreAnchor(serial, startMs) else statusHolder.resetForNewSensor(serial)
+            anchorClock()
             appLogger.usage(LOG, "Iniciando Accu-Chek SmartGuide", mapOf(
                 "serialConfigurado" to serial.isNotBlank(), "enderecoSalvo" to address.isNotBlank(),
                 "ultimoMinuto" to lastMinute, "inicioConhecido" to (startMs > 0)
@@ -126,6 +136,7 @@ class AccuChekSource @Inject constructor(
             }
             ble.connectToSensor(serial, address)
         }
+        registerTimeChange()
     }
 
     override fun stop() {
@@ -136,6 +147,8 @@ class AccuChekSource @Inject constructor(
         ble.disconnect()
         statusHolder.onConnectionChanged(false)
         notificationHelper.cancelSensorWarning()
+        timeChangeReceiver?.let { r -> runCatching { context.unregisterReceiver(r) } }
+        timeChangeReceiver = null
         scope?.cancel(); scope = null
         synchronized(pending) { pending.clear() }
         synchronized(activeAlerts) { activeAlerts.clear() }
@@ -258,6 +271,7 @@ class AccuChekSource @Inject constructor(
                     preferences.saveAccuChekStartMs(chosen)
                     statusHolder.restoreAnchor(serial, chosen)
                 }
+                anchorClock()
                 // Minutos do sensor mesmo sem glicemia: é o que faz a contagem do aquecimento andar.
                 statusHolder.onSensorClock(status.timeOffsetMinutes, startMs)
                 // Depois de reiniciar o app, a leitura anterior (que valida LO/HI) vem da última gravada.
@@ -402,6 +416,48 @@ class AccuChekSource @Inject constructor(
                     warn(R.string.accuchek_warn_calibration_title, R.string.accuchek_warn_calibration_body)
                 SmartGuideAlert.MALFUNCTION -> Unit // vem do MalfunctionStreak
             }
+        }
+    }
+
+    // ── Relógio do celular ───────────────────────────────────────────────────────────────────────
+
+    private fun anchorClock() {
+        anchorWallMs = System.currentTimeMillis()
+        anchorElapsedMs = SystemClock.elapsedRealtime()
+    }
+
+    /** Hora do celular acertada (pelo usuário ou pela rede) com a conexão aberta: desloca o início. */
+    private fun registerTimeChange() {
+        if (timeChangeReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                val s = scope ?: return
+                s.launch { mutex.withLock { onWallClockChanged() } }
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(context, receiver, IntentFilter(Intent.ACTION_TIME_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED)
+            timeChangeReceiver = receiver
+        }.onFailure { e -> appLogger.error(LOG, "Falha ao ouvir mudança de hora", mapOf("erro" to (e::class.simpleName ?: "?"))) }
+    }
+
+    private suspend fun onWallClockChanged() {
+        if (startMs <= 0 || anchorWallMs <= 0) { anchorClock(); return }
+        val jump = SmartGuideClock.wallClockJumpMs(anchorWallMs, anchorElapsedMs,
+            System.currentTimeMillis(), SystemClock.elapsedRealtime())
+        if (kotlin.math.abs(jump) < SmartGuideClock.CLOCK_JUMP_MIN_MS) return
+        val newStart = startMs + jump
+        appLogger.usage(LOG, "Hora do celular mudou — início do sensor ajustado", mapOf(
+            "puloS" to jump / 1000, "inicioMs" to newStart, "anteriorMs" to startMs
+        ))
+        startMs = newStart
+        preferences.saveAccuChekStartMs(newStart)
+        statusHolder.restoreAnchor(serial, newStart)
+        anchorClock()
+        if (jump < 0) {
+            val moved = repository.shiftFutureSensorReadings(address, System.currentTimeMillis(), jump)
+            if (moved > 0) appLogger.usage(LOG, "Leituras gravadas com a hora adiantada reposicionadas", mapOf("leituras" to moved))
         }
     }
 

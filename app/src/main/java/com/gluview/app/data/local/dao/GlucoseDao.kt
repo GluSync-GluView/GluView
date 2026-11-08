@@ -40,6 +40,14 @@ interface GlucoseDao {
     @Query("DELETE FROM glucose_readings WHERE dateMs < :cutoffMs")
     suspend fun deleteOlderThan(cutoffMs: Long)
 
+    // Relógio do celular voltou para trás: leituras deste sensor gravadas com a hora adiantada
+    // ficaram "no futuro" e prenderiam a leitura atual (observeLatest ordena por dateMs).
+    @Query("UPDATE OR IGNORE glucose_readings SET dateMs = dateMs + :shiftMs WHERE sensorMac = :mac AND dateMs > :afterMs")
+    suspend fun shiftSensorReadingsAfter(mac: String, afterMs: Long, shiftMs: Long): Int
+
+    @Query("DELETE FROM glucose_readings WHERE sensorMac = :mac AND dateMs > :afterMs")
+    suspend fun deleteSensorReadingsAfter(mac: String, afterMs: Long): Int
+
     // S27 — estatísticas do dia (min, max, avg, contagem) desde :startMs
     @Query("SELECT MIN(sgvMgDl) AS min_sgv, MAX(sgvMgDl) AS max_sgv, AVG(sgvMgDl) AS avg_sgv, COUNT(*) AS count FROM glucose_readings WHERE ownerEmail = :owner AND dateMs >= :startMs")
     fun observeDayStats(owner: String, startMs: Long): Flow<DayStats>

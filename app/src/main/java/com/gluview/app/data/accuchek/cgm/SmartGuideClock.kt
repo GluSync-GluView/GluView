@@ -43,4 +43,17 @@ object SmartGuideClock {
      */
     fun historyFromMinute(lastSavedMinute: Int): Int? =
         if (lastSavedMinute < 0) null else lastSavedMinute + 1
+
+    /** Pulo menor que isto é acerto fino do relógio (rede/NTP): não mexe no início. */
+    const val CLOCK_JUMP_MIN_MS = 60_000L
+
+    /**
+     * Quanto a hora do celular pulou desde a âncora: tempo de parede menos tempo monotônico
+     * (`elapsedRealtime`, que não muda quando o usuário ou a rede acertam o relógio). Com a conexão
+     * aberta o início não é recalculado; sem isso, depois de um pulo as leituras ficariam fora da
+     * janela de "ao vivo" (Home parada, sem alarme) até a próxima reconexão — achado no sensor
+     * virtual, plano 14_, cenário 16.
+     */
+    fun wallClockJumpMs(anchorWallMs: Long, anchorElapsedMs: Long, nowWallMs: Long, nowElapsedMs: Long): Long =
+        (nowWallMs - anchorWallMs) - (nowElapsedMs - anchorElapsedMs)
 }

@@ -224,6 +224,19 @@ class GlucoseRepository @Inject constructor(
         dao.deleteOlderThan(cutoff)
     }
 
+    /**
+     * O relógio do celular voltou [shiftMs] (negativo): leva para a hora certa as leituras de
+     * [sensorMac] que ficaram depois de [nowMs]; as que colidirem com uma leitura já existente
+     * na hora certa são descartadas. Devolve quantas foram reposicionadas.
+     */
+    suspend fun shiftFutureSensorReadings(sensorMac: String, nowMs: Long, shiftMs: Long): Int {
+        if (sensorMac.isBlank() || shiftMs >= 0) return 0
+        val afterMs = nowMs + TimeUnit.MINUTES.toMillis(1)
+        val moved = dao.shiftSensorReadingsAfter(sensorMac, afterMs, shiftMs)
+        dao.deleteSensorReadingsAfter(sensorMac, afterMs)
+        return moved
+    }
+
     // ── Backfill ──────────────────────────────────────────────────────────────
     //
     // Problema: quando o serviço fica offline (app fechado, SO matou o processo),

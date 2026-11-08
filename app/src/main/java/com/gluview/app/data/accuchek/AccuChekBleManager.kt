@@ -206,6 +206,13 @@ class AccuChekBleManager @Inject constructor(
         appLogger.usage(LOG, "Pedido de pareamento do Android", mapOf("variante" to variant, "pinArmado" to (pin != null)))
         // O SmartGuide pede passkey, que o Android entrega como a variante PIN. Outras: o sistema cuida.
         if (pin == null || variant != BluetoothDevice.PAIRING_VARIANT_PIN) return
+        // Só no build de teste: simula a falha da resposta automática (cenário 3 do plano 14_) para
+        // exercitar a janela do sistema. Ligado pelo arquivo files/dev-sem-pin-automatico.
+        if (com.gluview.app.BuildConfig.DEV_SENSOR_UNLOCK &&
+            java.io.File(context.getExternalFilesDir(null), "dev-sem-pin-automatico").exists()) {
+            appLogger.usage(LOG, "PIN automático desligado (teste) — fica a janela do sistema")
+            return
+        }
         runCatching {
             if (device.setPin(pin.toByteArray(Charsets.US_ASCII))) {
                 if (isOrderedBroadcast) abortBroadcast()

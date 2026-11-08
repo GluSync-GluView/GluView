@@ -43,4 +43,14 @@ class SmartGuideClockTest {
         assertNull(SmartGuideClock.historyFromMinute(-1))
         assertEquals(18611, SmartGuideClock.historyFromMinute(18610))
     }
+
+    @Test
+    fun `pulo do relogio desconta o tempo que passou de verdade`() {
+        // 10 min se passaram (monotônico) e a parede andou 2 h 10 min: pulo de +2 h.
+        assertEquals(7_200_000L, SmartGuideClock.wallClockJumpMs(1_000_000L, 50_000L, 1_000_000L + 7_800_000L, 50_000L + 600_000L))
+        // relógio atrasado 1 h
+        assertEquals(-3_600_000L, SmartGuideClock.wallClockJumpMs(1_000_000L, 50_000L, 1_000_000L - 3_000_000L, 50_000L + 600_000L))
+        // sem pulo
+        assertEquals(0L, SmartGuideClock.wallClockJumpMs(1_000_000L, 50_000L, 1_600_000L, 650_000L))
+    }
 }
