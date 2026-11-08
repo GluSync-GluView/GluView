@@ -186,7 +186,11 @@ class ChartViewModel @Inject constructor(
         val patientId = activePatientId()
         if (patientId == null) {
             val local = glucoseRepository.getReadingsBetween(startMs, endMs)
-            if (local.isNotEmpty() && local.first().dateMs <= startMs + LOCAL_COVERAGE_SLACK_MS) {
+            // Sem os próprios dados na nuvem (sem conta / nuvem não liberada, ADR-0030), o aparelho é
+            // a única fonte: mostra o que houver, mesmo cobrindo só parte da janela (1º dia de uso,
+            // troca de sensor), em vez de cair na nuvem e aparecer vazio ou com erro.
+            if ((local.isNotEmpty() && local.first().dateMs <= startMs + LOCAL_COVERAGE_SLACK_MS) ||
+                repository.ownDataIsLocal()) {
                 val mode = GlucoseDisplayMode.fromId(preferences.glucoseDisplayMode.first())
                 return local.map { it.toGraphReading(1.0) }.applyDisplayMode(mode)
             }

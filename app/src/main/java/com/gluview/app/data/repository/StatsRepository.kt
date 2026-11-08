@@ -1,8 +1,11 @@
 package com.gluview.app.data.repository
 
+import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.remote.GluSyncApi
 import com.gluview.app.data.remote.dto.*
+import kotlinx.coroutines.flow.first
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -13,7 +16,35 @@ data class ChartPoint(val index: Int, val timestampMs: Long, val sgvMgDl: Double
 data class DailyPatternPoint(val slotHour: Int, val avgSgv: Double, val label: String)
 
 @Singleton
-class StatsRepository @Inject constructor(private val api: GluSyncApi) {
+class StatsRepository @Inject constructor(
+    private val api: GluSyncApi,
+    private val glucose: GlucoseRepository,
+    private val preferences: AppPreferences,
+    private val cloudAccess: CloudAccessRepository
+) {
+
+    /**
+     * ADR-0030 — os dados da PRÓPRIA pessoa só estão na nuvem com conta e envio liberado. Sem conta
+     * (modo antigo 100% local) ou com o pedido não liberado/em análise/recusado/revogado, as telas de
+     * estatística calculam no aparelho ([LocalStats]) em vez de mostrar vazio ou erro. Estado ainda
+     * não consultado ("", ex.: sem rede) continua indo à nuvem, como antes.
+     */
+    suspend fun ownDataIsLocal(): Boolean {
+        if (!preferences.hasAccount.first()) return true
+        runCatching { cloudAccess.refreshIfStale() }
+        val state = preferences.cloudSyncState.first()
+        return state.isNotEmpty() && state != CloudAccessRepository.STATE_APPROVED
+    }
+
+    private suspend fun useLocal(patientId: String?) = patientId == null && ownDataIsLocal()
+
+    /** Leituras locais válidas (sem as "sem sinal" que o polling grava com a hora atual). */
+    private suspend fun localSamples(fromMs: Long, toMs: Long): List<LocalStats.Sample> =
+        glucose.getReadingsBetween(fromMs, toMs)
+            .filter { !it.isStale && it.sgvMgDl > 0 }
+            .map { LocalStats.Sample(it.dateMs, it.sgvMgDl) }
+
+    private val zone: ZoneId get() = ZoneId.systemDefault()
 
     // DateTimeFormatter é thread-safe; SimpleDateFormat NÃO é — singleton não pode compartilhá-lo
     private val isoFmt: DateTimeFormatter =
@@ -66,33 +97,37 @@ class StatsRepository @Inject constructor(private val api: GluSyncApi) {
 
     // S20 — curva média por slot de 3h (8 slots: 00, 03, 06, 09, 12, 15, 18, 21)
     suspend fun getDailyPattern(days: Int, patientId: String? = null): List<DailyPatternPoint> {
-        val rows = api.getPivot(dias = days, patientId = patientId)
-        return listOf(0, 3, 6, 9, 12, 15, 18, 21).map { hour ->
-            val values = rows.mapNotNull { row ->
-                val v = when (hour) {
-                    0  -> row.h00;  3 -> row.h03;  6 -> row.h06;  9 -> row.h09
-                    12 -> row.h12; 15 -> row.h15; 18 -> row.h18; 21 -> row.h21
-                    else -> 0.0
-                }
-                if (v > 0.0) v else null
-            }
-            DailyPatternPoint(
-                slotHour = hour,
-                avgSgv   = if (values.isEmpty()) 0.0 else values.average(),
-                label    = String.format("%02d:00", hour)
-            )
-        }
+        val rows = if (useLocal(patientId)) {
+            val now = System.currentTimeMillis()
+            LocalStats.pivot(localSamples(LocalStats.daysAgoMs(now, days, zone), now + 1), zone)
+        } else api.getPivot(dias = days, patientId = patientId)
+        return LocalStats.dailyPattern(rows)
     }
 
     // S21 — TIR detalhado (inclui MediaTIR, MediaHbA1c e per-day breakdown)
-    suspend fun getTirReport(days: Int, patientId: String? = null): TirReportDto =
-        api.getTirReport(dias = days, patientId = patientId)
+    suspend fun getTirReport(days: Int, patientId: String? = null): TirReportDto {
+        if (!useLocal(patientId)) return api.getTirReport(dias = days, patientId = patientId)
+        val now = System.currentTimeMillis()
+        return LocalStats.tirReport(localSamples(LocalStats.daysAgoMs(now, days, zone), now), days, zone)
+    }
 
     // S21 — Stats diárias para cards de resumo
-    suspend fun getDailyStats(days: Int, patientId: String? = null): List<DailyStatsDto> =
-        api.getDailyStats(dias = days, patientId = patientId)
+    suspend fun getDailyStats(days: Int, patientId: String? = null): List<DailyStatsDto> {
+        if (!useLocal(patientId)) return api.getDailyStats(dias = days, patientId = patientId)
+        val now = System.currentTimeMillis()
+        return LocalStats.dailyStats(localSamples(LocalStats.daysAgoMs(now, days, zone), now), zone)
+    }
 
     // S23 — Relatório completo para médico
-    suspend fun getSummaryReport(mes: Int? = null, ano: Int? = null, patientId: String? = null): SummaryReportDto =
-        api.getSummaryReport(mes = mes, ano = ano, patientId = patientId)
+    suspend fun getSummaryReport(mes: Int? = null, ano: Int? = null, patientId: String? = null): SummaryReportDto {
+        if (!useLocal(patientId)) return api.getSummaryReport(mes = mes, ano = ano, patientId = patientId)
+        val now = System.currentTimeMillis()
+        val today = java.time.LocalDate.now(zone)
+        val m = mes ?: today.monthValue
+        val a = ano ?: today.year
+        val window = LocalStats.monthWindow(m, a, now, zone) ?: error("mes/ano no futuro")
+        val monthSamples = localSamples(window.first - 3_600_000L, window.second)
+        val hbSamples = localSamples(LocalStats.daysAgoMs(window.second, 90, zone), window.second)
+        return LocalStats.summary(m, a, window, monthSamples, hbSamples, zone, now)
+    }
 }

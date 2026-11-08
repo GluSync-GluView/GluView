@@ -9,6 +9,7 @@ import com.gluview.app.data.remote.IftttWebhookClient
 import com.gluview.app.data.remote.dto.CaregiverLinkViewDto
 import com.gluview.app.data.repository.AlertPreferencesRepository
 import com.gluview.app.data.repository.CaregiverRepository
+import com.gluview.app.data.repository.CloudAccessRepository
 import com.gluview.app.domain.model.GlucoseZone
 import com.gluview.app.util.GlucoseUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,7 +81,8 @@ class AlertSettingsViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val iftttClient: IftttWebhookClient,
     private val alertPrefsRepo: AlertPreferencesRepository,
-    private val caregiverRepo: CaregiverRepository
+    private val caregiverRepo: CaregiverRepository,
+    private val cloudAccess: CloudAccessRepository
 ) : ViewModel() {
 
     /** Resultado do teste (some depois de alguns segundos): a tela traduz o texto pelo [TestResult.ok]. */
@@ -182,10 +184,14 @@ class AlertSettingsViewModel @Inject constructor(
 
     init {
         loadFollowers()
+        // Estado da liberação da nuvem velho/desconhecido: reconsulta (decide se Pushover e
+        // "avisar seguidores" podem funcionar). Sem conta não faz nada.
+        viewModelScope.launch { runCatching { cloudAccess.refreshIfStale() } }
     }
 
     private fun loadFollowers() {
         viewModelScope.launch {
+            if (!prefs.hasAccount.first()) return@launch // modo antigo sem conta: não há seguidores
             runCatching {
                 val myEmail = prefs.userEmail.first()
                 val links   = caregiverRepo.links()
@@ -236,8 +242,20 @@ class AlertSettingsViewModel @Inject constructor(
     val isFollowerOnly: StateFlow<Boolean> = prefs.isFollowerOnly
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    val isGluSyncConnected: StateFlow<Boolean> = prefs.isConfigured
+    // Tem conta no GluSync. Antes era `isConfigured`, que também vale para o modo antigo sem conta
+    // (ADR-0030): a tela mostrava Pushover/seguidores e cada ajuste tentava sincronizar com um
+    // servidor que não existe, com erro na tela.
+    val isGluSyncConnected: StateFlow<Boolean> = prefs.hasAccount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Pushover e "avisar seguidores" são disparados pelo GLUSYNC quando ele recebe a leitura — sem
+     * a nuvem liberada (ADR-0030) nenhuma leitura chega lá e esses avisos nunca saem, mesmo com o
+     * teste do Pushover funcionando. Estado ainda não consultado ("") não esconde nada.
+     */
+    val cloudAlertsAllowed: StateFlow<Boolean> = combine(prefs.hasAccount, prefs.cloudSyncState) { account, state ->
+        account && cloudAlertsAllowedFor(state)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     // Unidade de medida do usuário — as faixas/zonas de glicemia precisam exibir e aceitar
     // digitação em mmol/L quando for essa a unidade escolhida (o valor interno continua sempre
@@ -352,7 +370,11 @@ class AlertSettingsViewModel @Inject constructor(
         super.onCleared()
     }
 
-    private companion object {
-        const val SYNC_DEBOUNCE_MS = 800L
+    companion object {
+        private const val SYNC_DEBOUNCE_MS = 800L
+
+        /** Função pura (testável): avisos pela nuvem só com envio liberado; "" = ainda não se sabe. */
+        fun cloudAlertsAllowedFor(cloudSyncState: String): Boolean =
+            cloudSyncState.isEmpty() || cloudSyncState == CloudAccessRepository.STATE_APPROVED
     }
 }

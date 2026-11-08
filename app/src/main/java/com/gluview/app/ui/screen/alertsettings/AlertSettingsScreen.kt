@@ -97,7 +97,9 @@ internal data class AlertContext(
     val unit: GlucoseUnit,
     val timeFormat: TimeFormat,
     val isFollowerOnly: Boolean,
-    val isGluSyncConnected: Boolean
+    val isGluSyncConnected: Boolean,
+    /** Nuvem liberada (ADR-0030): sem ela, Pushover e "avisar seguidores" não disparam. */
+    val cloudAlertsAllowed: Boolean = true
 )
 
 /** Erro de sincronia com o GluSync numa snackbar (antes só aparecia dentro da seção Pushover). */
@@ -119,6 +121,7 @@ fun AlertSettingsScreen(
     val state by viewModel.uiState.collectAsState()
     val isFollowerOnly by viewModel.isFollowerOnly.collectAsState()
     val isGluSyncConnected by viewModel.isGluSyncConnected.collectAsState()
+    val cloudAlertsAllowed by viewModel.cloudAlertsAllowed.collectAsState()
     val unit by viewModel.glucoseUnit.collectAsState()
     val syncError by viewModel.syncError.collectAsState()
     val timeFormat = rememberChartAppearance().timeFormat
@@ -127,7 +130,7 @@ fun AlertSettingsScreen(
 
     AlertsContent(
         state = state,
-        ctx = AlertContext(unit, timeFormat, isFollowerOnly, isGluSyncConnected),
+        ctx = AlertContext(unit, timeFormat, isFollowerOnly, isGluSyncConnected, cloudAlertsAllowed),
         actions = AlertActions(viewModel::onUrgentLowChange, viewModel::onLowChange, viewModel::onHighChange,
             viewModel::onUrgentHighChange, viewModel::onToggle, viewModel::savePredictive, viewModel::saveReAlarm,
             viewModel::saveTts, viewModel::saveQuiet, viewModel::saveCall, viewModel::saveSms,
@@ -304,8 +307,16 @@ internal fun AlertsContent(
             }
         }
 
-        // Avisar seguidores (só com GluSync conectado e conta que não é só seguidor)
-        if (ctx.isGluSyncConnected && !ctx.isFollowerOnly) {
+        // Conta sem a nuvem liberada: Pushover e aviso aos seguidores ficam escondidos e o motivo
+        // aparece aqui — os alarmes do próprio celular continuam valendo.
+        if (ctx.isGluSyncConnected && !ctx.isFollowerOnly && !ctx.cloudAlertsAllowed) {
+            GluSection(stringResource(R.string.alertsettings_cloud_alerts_section)) {
+                GluCallout(stringResource(R.string.alertsettings_cloud_alerts_locked))
+            }
+        }
+
+        // Avisar seguidores (só com GluSync conectado, nuvem liberada e conta que não é só seguidor)
+        if (ctx.isGluSyncConnected && ctx.cloudAlertsAllowed && !ctx.isFollowerOnly) {
             GluSection(stringResource(R.string.alertsettings_followers_section)) {
                 GluCard {
                     SwitchRow(stringResource(R.string.alertsettings_followers_toggle), state.notifyFollowersEnabled, actions.onNotifyFollowers)
@@ -344,7 +355,7 @@ internal fun AlertsContent(
                         NavRow(stringResource(R.string.alertsettings_ifttt_section), onIfttt, icon = Icons.Default.Link,
                             subtitle = stringResource(if (state.iftttEnabled) R.string.common_on else R.string.common_off))
                     }
-                    if (ctx.isGluSyncConnected && !ctx.isFollowerOnly) add {
+                    if (ctx.isGluSyncConnected && ctx.cloudAlertsAllowed && !ctx.isFollowerOnly) add {
                         NavRow(stringResource(R.string.alertsettings_pushover_title), onPushover, icon = Icons.Default.Notifications,
                             subtitle = stringResource(if (state.pushoverEnabled) R.string.common_on else R.string.common_off))
                     }

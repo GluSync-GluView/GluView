@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ADR-0030: avisos que dependem da nuvem liberada (arquivo próprio para não mexer no strings.xml). -->
+<resources>
+    <string name="alertsettings_cloud_alerts_section">Avisos pela nuvem</string>
+    <string name="alertsettings_cloud_alerts_locked">Pushover e o aviso aos seus seguidores são enviados pelo GluSync quando ele recebe sua glicemia. Como o envio à nuvem não está liberado para esta conta, eles não funcionam. Os alarmes deste celular continuam funcionando normalmente. Para pedir a liberação, vá em Ajustes &gt; Conta.</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ADR-0030: alerts that depend on cloud access (own file so strings.xml stays untouched). -->
+<resources>
+    <string name="alertsettings_cloud_alerts_section">Cloud alerts</string>
+    <string name="alertsettings_cloud_alerts_locked">Pushover and alerts to your followers are sent by GluSync when it receives your glucose. Cloud upload is not enabled for this account, so they don\'t work. The alarms on this phone keep working normally. To request access, go to Settings &gt; Account.</string>
+</resources>
