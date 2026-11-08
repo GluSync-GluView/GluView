@@ -193,7 +193,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_back">Back</string>
     <string name="settings_sensor_section_title">Sensor</string>
-    <string name="settings_sensor_section_subtitle">Data source, BLE/NFC, health warning</string>
+    <string name="settings_sensor_section_subtitle">Current sensor, BLE/NFC, health warning</string>
     <string name="settings_sync_section_title">Sync</string>
     <string name="settings_sync_section_subtitle">Upload, refresh and retention</string>
     <string name="settings_alerts_section_subtitle">Ranges, sounds, call and SMS</string>
@@ -203,8 +203,6 @@
     <string name="settings_confirm_logout_title">Confirm logout</string>
     <string name="settings_confirm_logout_subtitle">Authenticate to sign out of your account</string>
     <string name="settings_cancel">Cancel</string>
-    <string name="settings_data_source">Data source</string>
-    <string name="settings_selected">Selected</string>
     <string name="settings_source_coming_soon">(coming soon)</string>
     <string name="settings_source_unavailable_on_device">(not available on this device)</string>
     <string name="settings_beta_pending">Application under review</string>
@@ -956,8 +954,6 @@
     <string name="settings_profile_section">Profile</string>
     <string name="settings_email_label">Email</string>
     <string name="settings_password_min">At least 8 characters</string>
-    <string name="settings_source_label_unavailable">%1$s (not available on this device)</string>
-    <string name="settings_source_label_coming_soon">%1$s (coming soon)</string>
     <string name="settings_current_sensor_section">Current sensor</string>
     <string name="settings_sensor_health_warning_toggle">Sensor warnings</string>
     <string name="settings_display_mode_all">Every reading</string>
@@ -1502,4 +1498,13 @@
     <string name="settings_medlev_unpair_title">Unpair the Smart 2.0?</string>
     <string name="settings_medlev_unpair_body">The sensor is released from this phone so it can be used on another device. GluView stops receiving its readings. Readings already saved stay in the history.</string>
     <string name="settings_medlev_unpair_confirm">Unpair</string>
+    <!-- Plano 15: escolha do sensor só no assistente -->
+    <string name="setup_coming_soon_beta_desc">Not available to everyone yet. Tap a sensor to ask to test it.</string>
+    <string name="settings_no_sensor_title">No sensor set up</string>
+    <string name="settings_no_sensor_body">Readings come from GluSync. Set up the sensor you use so this phone reads it directly.</string>
+    <string name="settings_setup_sensor">Set up sensor</string>
+    <string name="settings_stop_sensor">Stop using this sensor</string>
+    <string name="settings_stop_sensor_title">Stop using this sensor?</string>
+    <string name="settings_stop_sensor_body">This phone stops reading the sensor and readings come only from GluSync. To go back, use Set up sensor.</string>
+    <string name="settings_stop_sensor_confirm">Stop using</string>
 </resources>

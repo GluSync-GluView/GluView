@@ -68,7 +68,14 @@ class SensorFlowCaptureTest {
 
     @Test fun sensor() {
         val options = DataSourceType.entries.filter { it != DataSourceType.GLUSYNC }.map {
-            SensorOption(it, isCurrent = it == DataSourceType.SIBIONICS_CHINES, isSupported = !it.comingSoon)
+            SensorOption(it, isCurrent = it == DataSourceType.SIBIONICS_CHINES, isSupported = !it.comingSoon,
+                // Plano 15: "Em breve" com a beta ligada — selos de candidatura e linha clicável.
+                betaState = when (it) {
+                    DataSourceType.MEDLEVENSOHN_SMART2 -> "pending"
+                    DataSourceType.DEXCOM_G6 -> "rejected"
+                    else -> null
+                },
+                canApplyBeta = it.comingSoon)
         }.sortedByDescending { it.isCurrent }
         val type = DataSourceType.SIBIONICS_CHINES
         fun setup(state: SetupState) = @Composable { _: Variant ->

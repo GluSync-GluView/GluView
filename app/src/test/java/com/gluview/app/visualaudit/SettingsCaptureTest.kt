@@ -107,18 +107,25 @@ class SettingsCaptureTest {
             GeneralContent(general, GeneralActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = {})
         }
         shoot("sensor") {
-            SensorContent(SensorUi("SIBIONICS_CHINES", true, 14, 20, "ALL", mapOf("sensor_beta:LIBRE2_PLUS" to "pending"), true),
-                SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
+            SensorContent(SensorUi("SIBIONICS_CHINES", true, 14, 20, "ALL"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}), onBack = null)
+        }
+        shoot("sensor-nenhum") {
+            SensorContent(SensorUi("GLUSYNC", true, 14, 20, "ALL"), SensorActions({}, {}, {}, {}, {}, {}, {}), onBack = null)
+        }
+        shoot("sensor-libre") {
+            SensorContent(SensorUi("LIBRE2_PLUS", true, 14, 20, "ALL", sensorVariantId = "LIBRE2PLUS_SA"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}), onBack = null)
         }
         shoot("sensor-medlev") {
             SensorContent(SensorUi("MEDLEVENSOHN_SMART2", true, 14, 20, "ALL",
-                mapOf("sensor_beta:MEDLEVENSOHN_SMART2" to "approved"), true, medLevSerial = "22222A2WC8"),
-                SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
+                medLevSerial = "22222A2WC8"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}), onBack = null)
         }
         shoot("sensor-smartguide") {
             SensorContent(SensorUi("ACCU_CHEK_SMARTGUIDE", true, 14, 20, "ALL",
-                mapOf("sensor_beta:ACCU_CHEK_SMARTGUIDE" to "approved"), true, smartGuideSerial = "1R009999990"),
-                SensorActions({}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = null)
+                smartGuideSerial = "1R009999990"),
+                SensorActions({}, {}, {}, {}, {}, {}, {}), onBack = null)
         }
         shoot("sincronizacao") {
             SyncContent(SyncUi(false, "SIBIONICS_CHINES", true, 15, 3, 365, 60, now - 2 * 86_400_000L),

@@ -195,7 +195,7 @@
     <string name="settings_title">Ajustes</string>
     <string name="settings_back">Voltar</string>
     <string name="settings_sensor_section_title">Sensor</string>
-    <string name="settings_sensor_section_subtitle">Fonte de dados, BLE/NFC, aviso de saúde</string>
+    <string name="settings_sensor_section_subtitle">Sensor atual, BLE/NFC, aviso de saúde</string>
     <string name="settings_sync_section_title">Sincronização</string>
     <string name="settings_sync_section_subtitle">Envio, atualização e retenção</string>
     <string name="settings_alerts_section_subtitle">Faixas, sons, ligação e SMS</string>
@@ -205,8 +205,6 @@
     <string name="settings_confirm_logout_title">Confirmar logout</string>
     <string name="settings_confirm_logout_subtitle">Autentique-se para sair da conta</string>
     <string name="settings_cancel">Cancelar</string>
-    <string name="settings_data_source">Fonte de dados</string>
-    <string name="settings_selected">Selecionado</string>
     <string name="settings_source_coming_soon">(em breve)</string>
     <string name="settings_source_unavailable_on_device">(indisponível neste aparelho)</string>
     <!-- ADR-0029 — candidatura de beta por sensor "coming soon". -->
@@ -963,8 +961,6 @@
     <string name="settings_profile_section">Perfil</string>
     <string name="settings_email_label">E-mail</string>
     <string name="settings_password_min">Mínimo de 8 caracteres</string>
-    <string name="settings_source_label_unavailable">%1$s (indisponível neste aparelho)</string>
-    <string name="settings_source_label_coming_soon">%1$s (em breve)</string>
     <string name="settings_current_sensor_section">Sensor atual</string>
     <string name="settings_sensor_health_warning_toggle">Avisar sobre o sensor</string>
     <string name="settings_display_mode_all">Todas as medições</string>
@@ -1509,4 +1505,13 @@
     <string name="settings_medlev_unpair_title">Desparear o Smart 2.0?</string>
     <string name="settings_medlev_unpair_body">O sensor é liberado deste celular para poder ser usado em outro aparelho. O GluView para de receber leituras dele. As leituras já salvas continuam no histórico.</string>
     <string name="settings_medlev_unpair_confirm">Desparear</string>
+    <!-- Plano 15: escolha do sensor só no assistente -->
+    <string name="setup_coming_soon_beta_desc">Ainda não disponíveis para todos. Toque num sensor para pedir para testar.</string>
+    <string name="settings_no_sensor_title">Nenhum sensor configurado</string>
+    <string name="settings_no_sensor_body">As leituras vêm do GluSync. Configure o sensor que você usa para o celular ler direto dele.</string>
+    <string name="settings_setup_sensor">Configurar sensor</string>
+    <string name="settings_stop_sensor">Parar de usar este sensor</string>
+    <string name="settings_stop_sensor_title">Parar de usar este sensor?</string>
+    <string name="settings_stop_sensor_body">Este celular deixa de ler o sensor e as leituras passam a vir só do GluSync. Para voltar, use Configurar sensor.</string>
+    <string name="settings_stop_sensor_confirm">Parar de usar</string>
 </resources>

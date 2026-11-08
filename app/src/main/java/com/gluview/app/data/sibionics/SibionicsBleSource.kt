@@ -121,7 +121,7 @@ class SibionicsBleSource @Inject constructor(
             val customerId = preferences.sibionicsCustomerId.first()
 
             if (mac.isBlank()) {
-                appLogger.error(LOG, "MAC não configurado — acesse Configurações > Fonte de dados")
+                appLogger.error(LOG, "MAC não configurado — configure em Sensor > Trocar de sensor")
                 return@launch
             }
 

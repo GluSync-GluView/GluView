@@ -1,58 +1,47 @@
 package com.gluview.app.ui.screen.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.CloudQueue
+import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gluview.app.R
-import com.gluview.app.data.remote.dto.AccessRequestFeatures
 import com.gluview.app.data.sibionics.GlucoseDisplayMode
 import com.gluview.app.data.source.DataSourceType
-import com.gluview.app.data.source.SensorVariant
 import com.gluview.app.data.source.SensorVariantCatalog
-import com.gluview.app.ui.components.label
-import com.gluview.app.ui.components.kit.GluCallout
 import com.gluview.app.ui.components.kit.GluCard
 import com.gluview.app.ui.components.kit.GluSection
 import com.gluview.app.ui.components.kit.Page
 import com.gluview.app.ui.components.kit.RadioRow
 import com.gluview.app.ui.components.kit.SliderRow
+import com.gluview.app.ui.components.kit.StatusBadge
 import com.gluview.app.ui.components.kit.SwitchRow
 import com.gluview.app.ui.components.kit.Tone
+import com.gluview.app.ui.components.label
+import com.gluview.app.ui.theme.Spacing
 
 /** Estado do Sensor (para o harness desenhar sem ViewModel). */
 internal data class SensorUi(
@@ -61,9 +50,6 @@ internal data class SensorUi(
     val agingDays: Int,
     val noSignalMin: Int,
     val displayMode: String,
-    /** Estado da candidatura por feature (pending/waitlisted/approved/rejected). */
-    val betaStatus: Map<String, String>,
-    val betaEnabled: Boolean,
     /** Variante escolhida/detectada (modelo + região); "" = padrão da fonte. */
     val sensorVariantId: String = "",
     /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum). */
@@ -73,16 +59,16 @@ internal data class SensorUi(
 )
 
 internal data class SensorActions(
-    val onDataSource: (String) -> Unit,
-    val onBeta: (DataSourceType) -> Unit,
     val onWarnEnabled: (Boolean) -> Unit,
     val onAgingDays: (Int) -> Unit,
     val onNoSignalMin: (Int) -> Unit,
     val onDisplayMode: (String) -> Unit,
+    /** Abre o assistente — o único lugar onde se escolhe o sensor (plano 15). */
     val onSensorSetup: () -> Unit,
     val onSensorScanner: () -> Unit,
     val onLibre2Activation: () -> Unit,
-    val onVariant: (SensorVariant) -> Unit = {},
+    /** Volta a ler só do GluSync (pede confirmação antes). */
+    val onStopSensor: () -> Unit = {},
     /** SmartGuide: desfaz o pareamento e abre o assistente para parear de novo com o PIN. */
     val onSmartGuideRepair: () -> Unit = {},
     /** SmartGuide: esquece o sensor configurado (serial, PIN, pareamento). */
@@ -92,9 +78,9 @@ internal data class SensorActions(
 )
 
 /**
- * Aba principal "Sensor" da barra inferior — fonte de dados e configuração do sensor em si
- * (BLE/NFC, aviso de saúde). Separado de Sincronização (envio ao GluSync, intervalo de
- * polling, retenção), que é outra tela em Ajustes.
+ * Aba principal "Sensor" da barra inferior — o sensor em uso e os ajustes dele (BLE/NFC, aviso de
+ * saúde). Separado de Sincronização (envio ao GluSync, intervalo de polling, retenção), que é outra
+ * tela em Ajustes.
  * Só existe pra quem tem sensor próprio (não aparece pra conta seguidor-apenas, checado no
  * chamador via isFollowerOnly).
  */
@@ -112,30 +98,20 @@ fun SensorSettingsScreen(
     val sensorAgingDays    by viewModel.sensorAgingDays.collectAsState()
     val sensorNoSignalMin  by viewModel.sensorNoSignalMin.collectAsState()
     val glucoseDisplayMode by viewModel.glucoseDisplayMode.collectAsState()
-    // ADR-0029 — candidatura de beta por sensor "coming soon".
-    val sensorBetaStatus     by viewModel.sensorBetaStatus.collectAsState()
-    val sensorBetaSubmitting by viewModel.sensorBetaSubmitting.collectAsState()
-    val sensorBetaEnabled    by viewModel.sensorBetaEnabled.collectAsState()
-    var betaDialogSource by remember { mutableStateOf<DataSourceType?>(null) }
-    val sensorBetaMessage by viewModel.sensorBetaMessage.collectAsState()
     val smartGuideSerial by viewModel.smartGuideSerial.collectAsState()
     val medLevSerial by viewModel.medLevSerial.collectAsState()
     var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    var confirmStopSensor by remember { mutableStateOf(false) }
     val context = LocalContext.current
-
-    LaunchedEffect(Unit) { viewModel.refreshSensorBetaStatus() }
-    LaunchedEffect(sensorBetaMessage) {
-        sensorBetaMessage?.let { snackbarHostState.showSnackbar(context.getString(it)); viewModel.clearSensorBetaMessage() }
-    }
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorBetaStatus, sensorBetaEnabled, sensorVariantId, smartGuideSerial, medLevSerial),
-        actions = SensorActions(viewModel::onDataSourceChange, { betaDialogSource = it }, viewModel::onSensorWarnEnabledChange,
+            sensorVariantId, smartGuideSerial, medLevSerial),
+        actions = SensorActions(viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
-            onSensorSetup, onSensorScanner, onLibre2Activation, viewModel::onSensorVariantChange,
+            onSensorSetup, onSensorScanner, onLibre2Activation,
+            onStopSensor = { confirmStopSensor = true },
             onSmartGuideRepair = {
                 viewModel.forgetSmartGuidePairing { ok ->
                     if (ok) onSensorSetup()
@@ -144,9 +120,24 @@ fun SensorSettingsScreen(
             },
             onSmartGuideForget = { confirmForgetSmartGuide = true },
             onMedLevUnpair = { confirmMedLevUnpair = true }),
-        onBack = onBack,
-        snackbarHostState = snackbarHostState
+        onBack = onBack
     )
+
+    if (confirmStopSensor) {
+        AlertDialog(
+            onDismissRequest = { confirmStopSensor = false },
+            title = { Text(stringResource(R.string.settings_stop_sensor_title)) },
+            text = { Text(stringResource(R.string.settings_stop_sensor_body)) },
+            confirmButton = {
+                TextButton(onClick = { confirmStopSensor = false; viewModel.stopUsingSensor() }) {
+                    Text(stringResource(R.string.settings_stop_sensor_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmStopSensor = false }) { Text(stringResource(R.string.setup_cancel)) }
+            }
+        )
+    }
 
     if (confirmMedLevUnpair) {
         AlertDialog(
@@ -179,48 +170,6 @@ fun SensorSettingsScreen(
             }
         )
     }
-
-    // ADR-0029 — candidatura de beta de um sensor comingSoon. betaState é recarregado a partir
-    // do MESMO GET /access-requests/me/status já usado pelos selos da lista.
-    betaDialogSource?.let { source ->
-        val betaState = sensorBetaStatus[AccessRequestFeatures.sensorBeta(source.id)]
-        AlertDialog(
-            onDismissRequest = { betaDialogSource = null },
-            title = { Text(stringResource(R.string.settings_apply_beta_title, stringResource(source.labelRes))) },
-            text = {
-                Text(
-                    when (betaState) {
-                        "pending", "waitlisted" -> stringResource(R.string.settings_beta_already_applied)
-                        "approved" -> stringResource(R.string.settings_beta_approved)
-                        // Achado 2026-09-26 — antes caía no "else" genérico (parecia nunca ter
-                        // candidatado), deixando recandidatar sem avisar que já foi recusado.
-                        "rejected" -> stringResource(R.string.settings_beta_rejected)
-                        else -> stringResource(R.string.settings_apply_beta_body)
-                    },
-                    modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
-                )
-            },
-            confirmButton = {
-                if (betaState !in setOf("pending", "waitlisted", "approved")) {
-                    TextButton(
-                        onClick = {
-                            viewModel.applySensorBeta(source.id)
-                            betaDialogSource = null
-                        },
-                        enabled = !sensorBetaSubmitting
-                    ) {
-                        Text(
-                            if (betaState == "rejected") stringResource(R.string.settings_beta_rejected_reapply)
-                            else stringResource(R.string.insulin_pump_apply_beta)
-                        )
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { betaDialogSource = null }) { Text(stringResource(R.string.settings_cancel)) }
-            }
-        )
-    }
 }
 
 /** Rótulo traduzido do modo de leitura (o enum guarda só o id e um rótulo em pt). */
@@ -232,147 +181,21 @@ private fun displayModeLabel(mode: GlucoseDisplayMode): String = stringResource(
 })
 
 /**
- * Sensor (redesign visual, Fase 6): seções próprias — Fonte de dados, Sensor atual (ação
- * principal em Button para todos os sensores, antes Outlined no Libre e preenchido no Sibionics),
- * Aviso de saúde (SwitchRow + sliders sem trilho pontilhado) e Modo de leitura (opções em linhas,
- * rótulos traduzidos — antes chips com texto fixo em pt). Na lista de fontes, "em breve" com a
- * candidatura desligada aparece desabilitado (antes o toque fechava o menu e nada acontecia) e
- * cada estado da candidatura tem selo.
+ * Sensor. Plano 15 (07/11/2026): o dropdown "Fonte de dados" saiu — ele trocava a fonte na hora,
+ * sem parear nada, e repetia a lista do assistente. Agora a aba só MOSTRA o sensor atual (um card
+ * com nome + região e as ações próprias de cada sensor) e "Trocar de sensor" / "Configurar sensor"
+ * abre o assistente, único lugar de escolha (inclusive candidatura de beta dos "Em breve").
+ * Seguem Aviso de saúde (Sibionics) e Modo de leitura (Sibionics China).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> Unit)?, snackbarHostState: SnackbarHostState? = null) {
     val currentSource = DataSourceType.fromId(ui.dataSource)
-    val currentVariant = SensorVariantCatalog.resolve(ui.sensorVariantId, ui.dataSource)
 
     // Aba principal da barra inferior: sem seta (o voltar do sistema continua).
     Page(title = stringResource(R.string.settings_sensor_section_title), onBack = onBack, snackbarHostState = snackbarHostState) {
-        GluSection(stringResource(R.string.settings_data_source)) {
-            // Boa-fé: o GluView complementa, não substitui, o app oficial do fabricante.
-            GluCallout(stringResource(R.string.sensor_official_app_notice), tone = Tone.Info)
-            // T12 — seleção por dropdown (antes eram chips/botões).
-            var expanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-                val label = currentVariant.label()
-                OutlinedTextField(
-                    value = if (currentSource.isUsableOnThisDevice) label
-                            else stringResource(R.string.settings_source_label_unavailable, label),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text(stringResource(R.string.settings_data_source)) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
-                )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    // Uma linha por variante (modelo + região), agrupadas por modelo; variantes com o
-                    // mesmo protocolo usam a mesma implementação (SensorVariant.source).
-                    // GluSync (servidor) não é oferecido aqui (decisão do Felipe, 07/11/2026): continua sendo a
-                    // fonte inicial de quem instala e aparece no campo enquanto nenhum sensor é escolhido,
-                    // mas a lista só traz sensores.
-                    SensorVariantCatalog.all.filter { it.source != DataSourceType.GLUSYNC }.forEach { variant ->
-                        val source = variant.source
-                        val betaState = ui.betaStatus[AccessRequestFeatures.sensorBeta(source.id)]
-                        val name = variant.label()
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(when {
-                                        !source.isUsableOnThisDevice -> stringResource(R.string.settings_source_label_unavailable, name)
-                                        source.comingSoon || !variant.implemented -> stringResource(R.string.settings_source_label_coming_soon, name)
-                                        else -> name
-                                    })
-                                    variant.region?.let {
-                                        Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            },
-                            // "Em breve" sem a candidatura ligada: desabilitado (o toque não fazia nada).
-                            // Sensor de biblioteca nativa num aparelho 32 bits: idem (nem a beta faz sentido).
-                            // Variante sem protocolo implementado (Libre europeu): sempre desabilitada.
-                            enabled = variant.implemented && source.isUsableOnThisDevice && (!source.comingSoon || ui.betaEnabled),
-                            onClick = {
-                                expanded = false
-                                val approved = betaState == "approved"
-                                if (source.comingSoon && !approved) actions.onBeta(source) else actions.onVariant(variant)
-                            },
-                            trailingIcon = {
-                                when {
-                                    variant.id == currentVariant.id && source.id == ui.dataSource ->
-                                        Icon(Icons.Default.Check, stringResource(R.string.settings_selected))
-                                    !source.comingSoon -> Unit
-                                    betaState in setOf("pending", "waitlisted") ->
-                                        Icon(Icons.Default.HourglassEmpty, stringResource(R.string.settings_beta_pending))
-                                    betaState == "approved" ->
-                                        Icon(Icons.Default.Verified, stringResource(R.string.access_requests_status_approved),
-                                            tint = MaterialTheme.colorScheme.primary)
-                                    betaState == "rejected" ->
-                                        Icon(Icons.Default.Block, stringResource(R.string.access_requests_status_rejected),
-                                            tint = MaterialTheme.colorScheme.error)
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        if (currentSource == DataSourceType.MEDLEVENSOHN_SMART2) {
-            GluSection(stringResource(R.string.settings_current_sensor_section)) {
-                if (ui.medLevSerial.isNotBlank()) {
-                    Text(stringResource(R.string.settings_smartguide_serial, ui.medLevSerial),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(if (ui.medLevSerial.isBlank()) R.string.settings_medlev_setup else R.string.settings_change_sensor))
-                }
-                if (ui.medLevSerial.isNotBlank()) {
-                    OutlinedButton(onClick = actions.onMedLevUnpair, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_medlev_unpair))
-                    }
-                }
-            }
-        }
-
-        if (currentSource == DataSourceType.ACCU_CHEK_SMARTGUIDE) {
-            GluSection(stringResource(R.string.settings_current_sensor_section)) {
-                if (ui.smartGuideSerial.isNotBlank()) {
-                    Text(stringResource(R.string.settings_smartguide_serial, ui.smartGuideSerial),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                // Assistente: ler a embalagem (ou digitar o serial), PIN da tampa, parear.
-                Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(if (ui.smartGuideSerial.isBlank()) R.string.settings_smartguide_setup else R.string.settings_change_sensor))
-                }
-                if (ui.smartGuideSerial.isNotBlank()) {
-                    // Sensor levado a outro celular (ou pareamento corrompido): desfaz e pareia de novo.
-                    OutlinedButton(onClick = actions.onSmartGuideRepair, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_smartguide_repair))
-                    }
-                    TextButton(onClick = actions.onSmartGuideForget, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_smartguide_forget))
-                    }
-                }
-            }
-        }
-
-        if (currentSource.isUsableOnThisDevice && (currentSource == DataSourceType.LIBRE2_PLUS || currentSource.isSibionics)) {
-            GluSection(stringResource(R.string.settings_current_sensor_section)) {
-                if (currentSource == DataSourceType.LIBRE2_PLUS) {
-                    Button(onClick = actions.onLibre2Activation, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_activate_sensor_nfc))
-                    }
-                } else {
-                    // Caminho principal: escanear a caixa e deixar o app achar o sensor.
-                    Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_change_sensor))
-                    }
-                    // Saída de emergência: lista de dispositivos, código/serial manuais, calibração.
-                    TextButton(onClick = actions.onSensorScanner, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_sensor_advanced))
-                    }
-                }
-            }
+        GluSection(stringResource(R.string.settings_current_sensor_section)) {
+            CurrentSensorCard(ui, currentSource)
+            CurrentSensorActions(ui, currentSource, actions)
         }
 
         if (currentSource.isSibionics) {
@@ -415,6 +238,115 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                     }
                 }
             }
+        }
+    }
+}
+
+/** Nome + região do sensor em uso (ou "nenhum sensor", lendo só do GluSync) e o serial, se houver. */
+@Composable
+private fun CurrentSensorCard(ui: SensorUi, source: DataSourceType) {
+    val noSensor = source == DataSourceType.GLUSYNC
+    val variant = SensorVariantCatalog.resolve(ui.sensorVariantId, ui.dataSource)
+    val serial = when (source) {
+        DataSourceType.ACCU_CHEK_SMARTGUIDE -> ui.smartGuideSerial
+        DataSourceType.MEDLEVENSOHN_SMART2  -> ui.medLevSerial
+        else -> ""
+    }
+    GluCard {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Icon(if (noSensor) Icons.Outlined.CloudQueue else Icons.Outlined.Sensors, null,
+                tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                if (noSensor) {
+                    Text(stringResource(R.string.settings_no_sensor_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_no_sensor_body), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(variant.label(), style = MaterialTheme.typography.titleMedium)
+                    variant.region?.let {
+                        Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (serial.isNotBlank()) {
+                        Text(stringResource(R.string.settings_smartguide_serial, serial), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!source.isUsableOnThisDevice) {
+                        StatusBadge(stringResource(R.string.setup_unavailable_on_device), tone = Tone.Warning)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Ações do sensor em uso. Todo sensor (e "nenhum") tem o caminho para o assistente — antes GluSync
+ * e Libre só trocavam pelo dropdown. As ações próprias de cada um continuam como eram.
+ */
+@Composable
+private fun CurrentSensorActions(ui: SensorUi, source: DataSourceType, actions: SensorActions) {
+    val usable = source.isUsableOnThisDevice
+    when {
+        source == DataSourceType.GLUSYNC -> {
+            Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_setup_sensor))
+            }
+        }
+        source == DataSourceType.LIBRE2_PLUS && usable -> {
+            // Todo Libre novo (14 dias) passa pela ativação NFC — fica como ação principal.
+            Button(onClick = actions.onLibre2Activation, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_activate_sensor_nfc))
+            }
+            OutlinedButton(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_change_sensor))
+            }
+        }
+        source.isSibionics && usable -> {
+            // Caminho principal: escanear a caixa e deixar o app achar o sensor.
+            Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_change_sensor))
+            }
+            // Saída de emergência: lista de dispositivos, código/serial manuais, calibração.
+            TextButton(onClick = actions.onSensorScanner, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_sensor_advanced))
+            }
+        }
+        source == DataSourceType.ACCU_CHEK_SMARTGUIDE -> {
+            // Assistente: ler a embalagem (ou digitar o serial), PIN da tampa, parear.
+            Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (ui.smartGuideSerial.isBlank()) R.string.settings_smartguide_setup else R.string.settings_change_sensor))
+            }
+            if (ui.smartGuideSerial.isNotBlank()) {
+                // Sensor levado a outro celular (ou pareamento corrompido): desfaz e pareia de novo.
+                OutlinedButton(onClick = actions.onSmartGuideRepair, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_smartguide_repair))
+                }
+                TextButton(onClick = actions.onSmartGuideForget, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_smartguide_forget))
+                }
+            }
+        }
+        source == DataSourceType.MEDLEVENSOHN_SMART2 -> {
+            Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (ui.medLevSerial.isBlank()) R.string.settings_medlev_setup else R.string.settings_change_sensor))
+            }
+            if (ui.medLevSerial.isNotBlank()) {
+                OutlinedButton(onClick = actions.onMedLevUnpair, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_medlev_unpair))
+                }
+            }
+        }
+        // Dexcom (só com a liberação de desenvolvimento) e sensor de .so num aparelho 32 bits.
+        else -> {
+            Button(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_change_sensor))
+            }
+        }
+    }
+    if (source.isLocalSensor) {
+        TextButton(onClick = actions.onStopSensor, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.settings_stop_sensor), color = MaterialTheme.colorScheme.error)
         }
     }
 }

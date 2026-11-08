@@ -32,7 +32,7 @@ import com.gluview.app.R
  *                         criptográfica à parte — ver DexcomProtocol.kt).
  *
  * [label] é o nome técnico fixo (logs/appLogger, sempre em português); [labelRes] é a string
- * localizada usada na UI (dropdown de Ajustes > Sensor) — necessário porque nomes como
+ * localizada usada na UI (assistente de sensor e card "Sensor atual") — necessário porque nomes como
  * "Sibionics China/Brasil" traduzem diferente ("China"/"Brazil") conforme o idioma do aparelho.
  *
  * Frente A (xDrip bridge) será adicionada como XDRIP_BRIDGE futuramente.

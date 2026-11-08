@@ -6,6 +6,12 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.SnackbarHostState
+import com.gluview.app.ui.components.SensorBetaDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -176,9 +182,29 @@ fun SensorSetupScreen(
 
     LaunchedEffect(Unit) { viewModel.start() }
 
+    // ADR-0029 — candidatura de beta pelo "Em breve" (antes só pelo dropdown da aba Sensor).
+    val betaSubmitting by viewModel.betaSubmitting.collectAsState()
+    val betaMessage by viewModel.betaMessage.collectAsState()
+    var betaOption by remember { mutableStateOf<SensorOption?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(betaMessage) {
+        betaMessage?.let { snackbarHostState.showSnackbar(context.getString(it)); viewModel.clearBetaMessage() }
+    }
+    betaOption?.let { option ->
+        SensorBetaDialog(
+            source = option.type,
+            betaState = option.betaState,
+            submitting = betaSubmitting,
+            onApply = { viewModel.applyBeta(option.type); betaOption = null },
+            onDismiss = { betaOption = null }
+        )
+    }
+
     SensorSetupContent(
         state = state,
         options = options,
+        onComingSoon = { betaOption = it },
+        snackbarHostState = snackbarHostState,
         onBack = { viewModel.cancel(); onDone() },
         // L19: Libre 2 Plus se ativa por NFC — antes o assistente pedia a caixa e a lia como
         // Sibionics ("Este código não é de um sensor compatível").
@@ -229,12 +255,14 @@ internal fun SensorSetupContent(
     onEnterSerial: () -> Unit = {},
     onSerialEntered: (String) -> Unit = {},
     onPinEntered: (String) -> Unit = {},
-    onSearchNearby: () -> Unit = {}
+    onSearchNearby: () -> Unit = {},
+    onComingSoon: (SensorOption) -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null
 ) {
-    Page(title = stringResource(R.string.setup_title), onBack = onBack) {
+    Page(title = stringResource(R.string.setup_title), onBack = onBack, snackbarHostState = snackbarHostState) {
         stepOf(state)?.let { StepIndicator(it) }
         when (state) {
-            is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose)
+            is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose, onComingSoon)
             is SetupState.Instructions ->
                 if (state.type == DataSourceType.MEDLEVENSOHN_SMART2) NearbyStep(onSearchNearby, onEnterSerial)
                 else InstructionsStep(state.type, state.notice, onContinue, onEnterSerial)
@@ -291,7 +319,11 @@ private fun ColumnScope.StepHeader(title: String, body: String) {
 }
 
 @Composable
-private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: (SensorOption) -> Unit) {
+private fun ColumnScope.ChooseSensorStep(
+    options: List<SensorOption>,
+    onChoose: (SensorOption) -> Unit,
+    onComingSoon: (SensorOption) -> Unit = {}
+) {
     StepHeader(stringResource(R.string.setup_choose_title), stringResource(R.string.setup_choose_body))
     // Boa-fé: o GluView complementa, não substitui, o app oficial do fabricante.
     GluCallout(stringResource(R.string.sensor_official_app_notice), tone = Tone.Info)
@@ -322,20 +354,44 @@ private fun ColumnScope.ChooseSensorStep(options: List<SensorOption>, onChoose: 
         }
     }
     if (later.isNotEmpty()) {
-        // Lista simples, sem cara de clicável: o estado vai na descrição da seção.
-        GluSection(stringResource(R.string.setup_coming_soon), description = stringResource(R.string.setup_coming_soon_desc)) {
+        // Lista compacta. Com a beta ligada, a linha abre a candidatura (seta + selo do estado);
+        // sem ela, fica só o nome, sem cara de clicável. Plano 15: o dropdown da aba Sensor saiu e
+        // a candidatura mora aqui.
+        val anyApply = later.any { it.canApplyBeta }
+        GluSection(stringResource(R.string.setup_coming_soon),
+            description = stringResource(if (anyApply) R.string.setup_coming_soon_beta_desc else R.string.setup_coming_soon_desc)) {
             GluCard {
-                later.forEach { option ->
-                    Text(
-                        if (option.unavailableOnDevice)
-                            stringResource(R.string.setup_label_with_note, option.variant.label(),
-                                stringResource(R.string.setup_unavailable_on_device))
-                        else option.variant.label(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                later.forEach { option -> ComingSoonRow(option, onComingSoon) }
             }
+        }
+    }
+}
+
+@Composable
+private fun ComingSoonRow(option: SensorOption, onComingSoon: (SensorOption) -> Unit) {
+    val name = if (option.unavailableOnDevice)
+        stringResource(R.string.setup_label_with_note, option.variant.label(), stringResource(R.string.setup_unavailable_on_device))
+    else option.variant.label()
+    val rowModifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
+        .let { if (option.canApplyBeta) it.clickable { onComingSoon(option) } else it }
+    Row(rowModifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+            Text(name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            option.variant.region?.let {
+                Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            when (option.betaState) {
+                "pending", "waitlisted" -> StatusBadge(stringResource(R.string.settings_beta_pending), tone = Tone.Warning,
+                    icon = Icons.Default.HourglassEmpty)
+                "approved" -> StatusBadge(stringResource(R.string.access_requests_status_approved), tone = Tone.Success,
+                    icon = Icons.Default.Verified)
+                "rejected" -> StatusBadge(stringResource(R.string.access_requests_status_rejected), tone = Tone.Danger,
+                    icon = Icons.Default.Block)
+            }
+        }
+        if (option.canApplyBeta) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

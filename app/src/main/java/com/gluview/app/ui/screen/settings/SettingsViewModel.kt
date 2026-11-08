@@ -16,7 +16,7 @@ import com.gluview.app.data.remote.dto.AccessRequestFeatures
 import com.gluview.app.data.repository.AccessRequestRepository
 import com.gluview.app.data.repository.AppConfigRepository
 import com.gluview.app.data.repository.CloudAccessRepository
-import com.gluview.app.data.source.SensorVariant
+import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.data.repository.AuthRepository
 import com.gluview.app.data.repository.CaregiverRepository
 import com.gluview.app.data.repository.DebugRepository
@@ -99,48 +99,14 @@ class SettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _state.asStateFlow()
 
-    // ADR-0029 — estado consolidado (1 chamada, não 1 por sensor comingSoon) da candidatura de
-    // beta de cada sensor: chave "sensor_beta:<DataSourceType.id>" -> pending|waitlisted|
-    // approved|rejected|revoked (ausente = nunca candidatou).
-    private val _sensorBetaStatus = MutableStateFlow<Map<String, String>>(emptyMap())
-    val sensorBetaStatus: StateFlow<Map<String, String>> = _sensorBetaStatus.asStateFlow()
+    // A candidatura de beta de sensor (ADR-0029) mora no Passo 1 do assistente
+    // (SensorSetupViewModel) desde o plano 15 — a aba Sensor não escolhe mais o sensor.
 
-    private val _sensorBetaSubmitting = MutableStateFlow(false)
-    val sensorBetaSubmitting: StateFlow<Boolean> = _sensorBetaSubmitting.asStateFlow()
-
-    // ADR-0029 — rollout gradual: o diálogo de candidatura só abre com a flag ligada
-    // (Features:SensorBetaEnabled, desligada por padrão).
-    private val _sensorBetaEnabled = MutableStateFlow(false)
-    val sensorBetaEnabled: StateFlow<Boolean> = _sensorBetaEnabled.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            appConfigRepository.getFeatureFlags().onSuccess { _sensorBetaEnabled.value = it.sensorBetaEnabled }
-        }
-    }
-
-    fun refreshSensorBetaStatus() {
-        viewModelScope.launch {
-            accessRequestRepository.getStatus().onSuccess { _sensorBetaStatus.value = it }
-        }
-    }
-
-    /** L22: resultado da candidatura (antes nada era dito; a falha passava em silêncio). */
-    private val _sensorBetaMessage = MutableStateFlow<Int?>(null)
-    val sensorBetaMessage: StateFlow<Int?> = _sensorBetaMessage.asStateFlow()
-    fun clearSensorBetaMessage() { _sensorBetaMessage.value = null }
-
-    /** Candidatura de beta para um sensor "coming soon" (dataSourceTypeId = DataSourceType.id). */
-    fun applySensorBeta(dataSourceTypeId: String) {
-        viewModelScope.launch {
-            _sensorBetaSubmitting.value = true
-            val result = accessRequestRepository.createFeatureAccessRequest(AccessRequestFeatures.sensorBeta(dataSourceTypeId))
-            _sensorBetaMessage.value = if (result.isSuccess) com.gluview.app.R.string.settings_beta_applied_msg
-                                       else com.gluview.app.R.string.settings_beta_apply_failed
-            refreshSensorBetaStatus()
-            _sensorBetaSubmitting.value = false
-        }
-    }
+    /**
+     * "Parar de usar este sensor": volta a ler só do GluSync (o sensor deixa de ser lido por este
+     * celular). GluSync não está na lista do assistente — é a fonte de quem não tem sensor aqui.
+     */
+    fun stopUsingSensor() = onDataSourceChange(DataSourceType.GLUSYNC.id)
 
     init {
         viewModelScope.launch {
@@ -224,17 +190,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.saveLogsEnabled(enabled) }
     }
 
-    // Variante do sensor (modelo + região, SensorVariantCatalog) — várias variantes podem usar a
-    // mesma implementação; a fonte só muda (e o serviço só reinicia) se a implementação mudar.
+    // Variante do sensor (modelo + região, SensorVariantCatalog) — só exibida aqui; quem a escolhe é
+    // o assistente de sensor (plano 15).
     val sensorVariantId: StateFlow<String> = preferences.sensorVariantId
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
-
-    fun onSensorVariantChange(variant: SensorVariant) {
-        viewModelScope.launch {
-            preferences.saveSensorVariantId(variant.id)
-            if (variant.source.id != preferences.dataSource.first()) onDataSourceChange(variant.source.id)
-        }
-    }
 
     fun onDataSourceChange(id: String) {
         viewModelScope.launch {
