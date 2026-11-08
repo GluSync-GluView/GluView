@@ -86,7 +86,7 @@
     <string name="sensor_region_sa">South America</string>
     <string name="sensor_region_cn">China</string>
     <string name="sensor_variant_label">%1$s %2$s</string>
-    <string name="sensor_official_app_notice">Use one app at a time with your sensor: two apps competing for the same sensor cause failures and missed readings. Prefer GluView as your main app. Follow the manufacturer\'s instructions and confirm with a fingerstick meter before making a treatment decision. Independent project, not affiliated with the manufacturers.</string>
+    <string name="sensor_official_app_notice">Use one app at a time with your sensor: two apps competing for the same sensor cause failures and missed readings. Follow the manufacturer\'s instructions and confirm with a fingerstick meter before making a treatment decision. Independent project, not affiliated with the manufacturers.</string>
     <string name="libre2_gen1_not_supported">This is a European FreeStyle Libre 2 (generation 1). GluView cannot read this version yet — only the North and South American ones for now.</string>
     <string name="settings_cloud_state_follower">To follow someone you do not need to request anything: the person you follow just needs cloud access approved.</string>
     <string name="login_verify_title">Confirm your email</string>
