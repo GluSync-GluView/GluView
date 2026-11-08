@@ -174,9 +174,9 @@ class WatchFaceRepository @Inject constructor(
         response.body() ?: emptyList()
     }
 
-    /** Wearables do catálogo que este app sabe de fato instalar via Bluetooth hoje — mesmo registro
-     *  usado pelo diálogo "enviar para qual wearable" do gerenciador (ApplyWearableDialog). */
-    fun isInstallableWearable(wearableId: String): Boolean = WearableDefinitionCatalog.hasRealCompiler(wearableId)
+    /** Wearables que a LOJA sabe instalar hoje: só Mi Band (BLE). Relógio Wear OS recebe visor desenhado
+     *  no app (WFF pelo Data Layer), não o artefato .bin da loja. */
+    fun isInstallableWearable(wearableId: String): Boolean = WearableDefinitionCatalog.isStoreInstallable(wearableId)
 
     /** Baixa o artefato oficial da loja pro wearable escolhido e envia por Bluetooth pro Mi Band pareado. */
     suspend fun installFromStore(listing: WatchfaceStoreListingDto, wearableId: String, onLog: (String) -> Unit): ApplyResult {

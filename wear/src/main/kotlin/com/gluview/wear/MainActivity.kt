@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Chip
@@ -130,7 +131,7 @@ private fun GlucoseScreen() {
                         }
                     } else askActivate.launch("com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE")
                 },
-                label = { Text(stringResource(R.string.face_use)) },
+                label = { ChipLabel(stringResource(R.string.face_use)) },
                 colors = ChipDefaults.primaryChipColors(),
                 modifier = Modifier.padding(top = 6.dp),
             )
@@ -151,11 +152,20 @@ private fun GlucoseScreen() {
                     syncing = false
                 }
             },
-            label = { Text(stringResource(if (syncing) R.string.syncing else R.string.sync_now)) },
+            label = { ChipLabel(stringResource(if (syncing) R.string.syncing else R.string.sync_now)) },
             colors = ChipDefaults.secondaryChipColors(),
             modifier = Modifier.padding(top = 6.dp),
         )
         syncMessage?.let { Text(it, fontSize = 11.sp, textAlign = TextAlign.Center, color = Color(Display.COLOR_TEXT_DIM)) }
         Text(stringResource(R.string.not_medical), fontSize = 10.sp, color = Color(Display.COLOR_TEXT_DIM))
     }
+}
+
+/**
+ * Rótulo de botão centralizado e com no máximo 2 linhas: com fonte grande (acessibilidade) e textos
+ * em português o rótulo quebrava alinhado à esquerda, fora do padrão da tela redonda (Fase 10).
+ */
+@Composable
+private fun ChipLabel(text: String) {
+    Text(text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
 }

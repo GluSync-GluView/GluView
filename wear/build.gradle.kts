@@ -10,6 +10,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// versionName do celular (fonte única): o relógio sai sempre com a mesma versão.
+val appVersionName: String = Regex("""\?: "(\d+\.\d+\.\d+)"""")
+    .find(rootProject.file("app/build.gradle.kts").readText())?.groupValues?.get(1) ?: "0.0.0"
+
 // Mesma regra do :app: versionCode = minutos desde 2026-01-01 UTC só quando gera APK.
 val wearVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.toInt() ?: run {
     val buildsApk = gradle.startParameter.taskNames.any {
@@ -32,7 +36,8 @@ android {
         minSdk        = 30   // Wear OS 3 (Galaxy Watch 4 em diante)
         targetSdk     = 35
         versionCode   = wearVersionCode
-        versionName   = (findProperty("gluview.versionName") as String?) ?: "1.0.12"
+        // Mesma versão do celular: lida do app/build.gradle.kts (fonte única, a que o publish-release lê).
+        versionName   = (findProperty("gluview.versionName") as String?) ?: appVersionName
         // Ferramentas de teste (receiver de depuração p/ apontar o plano B a um GluSync local).
         buildConfigField("boolean", "DEBUG_TOOLS", "false")
     }
@@ -42,7 +47,11 @@ android {
             buildConfigField("boolean", "DEBUG_TOOLS", "true")
         }
         release {
-            isMinifyEnabled = false
+            // R8 ligado (Fase 10): sem ele o APK do relógio passava de 26 MB, e relógio tem pouco espaço.
+            // Componentes do manifesto, Workers e Tink já trazem as regras de keep das próprias libs.
+            isMinifyEnabled   = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         // Par do build "demo" do :app (com.gluview.app.demo): mesmo sufixo, senão o Data Layer não
         // liga os dois. Usado para testar no emulador com a glicemia sintética do modo demonstração.

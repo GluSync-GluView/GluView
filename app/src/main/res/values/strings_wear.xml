@@ -19,4 +19,8 @@
     <string name="wear_face_sent_waiting">Visor enviado. O relógio instala assim que receber.</string>
     <string name="wear_face_no_slot">O relógio não tem espaço para outro visor de app. Remova um visor instalado por outro app e tente de novo.</string>
     <string name="wear_component_unavailable">Não disponível no Wear OS</string>
+    <string name="wear_send_to_watch">Enviar para o relógio</string>
+    <string name="wear_apply_prompt_body">O visor vai para o relógio pelo app GluView instalado nele.</string>
+    <string name="wear_send_to_one">O visor vai para %1$s pelo app GluView do relógio.</string>
+    <string name="wf_manager_intro_any">Desenhe visores de glicemia para a sua pulseira ou relógio, a partir de um modelo pronto ou do zero, e envie direto do celular.</string>
 </resources>

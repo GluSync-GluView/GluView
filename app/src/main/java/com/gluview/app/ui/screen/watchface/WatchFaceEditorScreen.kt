@@ -233,10 +233,12 @@ fun WatchFaceEditorScreen(
         )
     }
     state.applyPromptFaceId?.let {
+        // Fase 10 (plano 14): relógio Wear OS não recebe "por Bluetooth para a pulseira".
+        val toWatch = com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(state.design.wearable.id)
         ConfirmDialog(
             title = stringResource(R.string.watchface_apply_prompt_title),
-            message = stringResource(R.string.watchface_apply_prompt_body),
-            confirmLabel = stringResource(R.string.wf_send_to_band),
+            message = stringResource(if (toWatch) R.string.wear_apply_prompt_body else R.string.watchface_apply_prompt_body),
+            confirmLabel = stringResource(if (toWatch) R.string.wear_send_to_watch else R.string.wf_send_to_band),
             onConfirm = vm::applyDesign,
             onDismiss = vm::dismissApplyPrompt,
             destructive = false

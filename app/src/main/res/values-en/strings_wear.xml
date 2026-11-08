@@ -18,4 +18,8 @@
     <string name="wear_face_sent_waiting">Watch face sent. The watch installs it as soon as it arrives.</string>
     <string name="wear_face_no_slot">The watch has no room for another app watch face. Remove one installed by another app and try again.</string>
     <string name="wear_component_unavailable">Not available on Wear OS</string>
+    <string name="wear_send_to_watch">Send to the watch</string>
+    <string name="wear_apply_prompt_body">The watch face goes to the watch through the GluView app installed on it.</string>
+    <string name="wear_send_to_one">The watch face goes to %1$s through the GluView app on the watch.</string>
+    <string name="wf_manager_intro_any">Design glucose watch faces for your band or watch, from a ready-made template or from scratch, and send them straight from the phone.</string>
 </resources>

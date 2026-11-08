@@ -22,6 +22,12 @@
     6. Gera GluView-<versao>.apk, .sha256 e manifest.json (contrato da secao 5.2 do plano).
     7. Cria a Release v<versionName> no GitHub apontando para o commit publicado.
 
+  Relogio Wear OS (plano 14, Fase 10): no release, o APK do relogio (modulo :wear) sai junto, na
+  MESMA Release, como GluView-Wear-<versao>.apk + .sha256. Ele e assinado com a MESMA chave do
+  celular (o Data Layer so conecta apps com o mesmo pacote e a mesma assinatura) e o script confere
+  isso. O GluSync ignora GluView-Wear-*.apk ao escolher a atualizacao do celular (commit cb72748 do
+  GluSync - precisa estar em producao antes). -NoWear publica so o celular.
+
   Autenticacao do GitHub (nunca cole token no chat nem em arquivo), uma das duas:
   - Uma vez so: `gh auth login` com token fine-grained (Contents: Read and write, so neste
     repositorio). O gh guarda o token cifrado no Gerenciador de Credenciais do Windows e o script
@@ -49,6 +55,8 @@ param(
     [string]$NotesEn = "",
     [ValidateSet("stable", "beta")][string]$Channel = "stable",
     [ValidateSet("release", "debug")][string]$Variant = "release",
+    # Nao gera nem anexa o APK do relogio Wear OS.
+    [switch]$NoWear,
     # Chave que assina. A = debug.keystore deste PC (senha publica "android"; a protecao e o arquivo).
     # B = chave de release com o lineage A->B (signing/lineage.bin), senha via tools\chave-b.ps1.
     # Trocar para B so na publicacao que FAZ a rotacao (plano OTA secao 6): antes dela, toda versao
@@ -79,6 +87,8 @@ $Package = "com.gluview.app"
 # .so que o packaging NAO pode alterar (keepDebugSymbols em app/build.gradle.kts): a da Abbott tem
 # assinatura anexada apos o ELF. Precisam sair identicas as do repositorio.
 $StrictLibs = @("libDataProcessing.so", "libSecureKeyBoxJava.so", "libMathRuntimeChecks.so")
+# Relogio: so no release (o debug do :wear e depuravel e nunca vai para Release).
+$WithWear = (-not $NoWear) -and ($Variant -eq "release")
 
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Fail($msg) { Write-Host "ERRO: $msg" -ForegroundColor Red; exit 1 }
@@ -179,7 +189,9 @@ if ($SkipBuild) {
 } else {
     # cleanHiltJavaCompile*: o versionCode muda a cada minuto e a compilação incremental do Hilt
     # às vezes falha com "Attempt to recreate a file for type ..._GeneratedInjector" (visto em 24/10).
-    & (Join-Path $Root "gradlew.bat") -p $Root ":app:cleanHiltJavaCompile$V" ":app:assemble$V" --console=plain -q
+    $tasks = @(":app:cleanHiltJavaCompile$V", ":app:assemble$V")
+    if ($WithWear) { $tasks += ":wear:assembleRelease" }
+    & (Join-Path $Root "gradlew.bat") -p $Root @tasks --console=plain -q
     if ($LASTEXITCODE -ne 0) { Fail "build falhou" }
 }
 $codeAfter = MinutesSince2026
@@ -215,6 +227,28 @@ if ($Variant -eq "release") {
 if (-not (Test-Path $apk)) { Fail "APK nao encontrado em $apk" }
 Ok "build ok ($Variant)"
 
+$wearApk = $null
+if ($WithWear) {
+    # Relogio: mesma chave do celular, mesmo alinhamento. Sem .so nativa.
+    $wearUnsigned = Join-Path $Root "wear\build\outputs\apk\release\wear-release-unsigned.apk"
+    if (-not (Test-Path $wearUnsigned)) { Fail "APK do relogio nao encontrado em $wearUnsigned (use -NoWear para publicar so o celular)" }
+    $wearAligned = Join-Path $Root "wear\build\outputs\apk\release\wear-release-aligned.apk"
+    & $ZipAlign -f -P 16 4 $wearUnsigned $wearAligned | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail "zipalign do relogio falhou" }
+    $wearApk = Join-Path $Root "wear\build\outputs\apk\release\wear-release-signed.apk"
+    if ($Signer -eq "B") {
+        . (Join-Path $PSScriptRoot "chave-b.ps1")
+        Enable-GluviewKeyBPassword
+        try { $signExit = Invoke-GluviewSignB $ApkSigner $wearAligned $wearApk } finally { Disable-GluviewKeyBPassword }
+        if ($signExit -ne 0) { Fail "apksigner sign do relogio (chave B) falhou" }
+    } else {
+        & $ApkSigner sign --ks $SigningKeystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
+            --v1-signing-enabled false --v2-signing-enabled true --out $wearApk $wearAligned 2>&1 | ForEach-Object { "$_" } | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "apksigner sign do relogio falhou" }
+    }
+    Ok "relogio assinado com a chave $Signer"
+}
+
 # ---------------------------------------------------------------------------------------------- 4
 Step "4. versionCode"
 $badging = & $Aapt2 dump badging $apk 2>&1
@@ -232,6 +266,21 @@ if (-not $sdkLine) { Fail "aapt2 nao mostrou o minSdk" }
 $minSdk = [int]$sdkLine.Matches[0].Groups[1].Value
 Ok "versionCode $versionCode, minSdk $minSdk"
 
+if ($WithWear) {
+    $wb = & $Aapt2 dump badging $wearApk 2>&1
+    if ($wb[0] -notmatch "package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'") { Fail "aapt2 nao leu o APK do relogio" }
+    $wearPackage = $Matches[1]; $wearVersionCode = [int]$Matches[2]; $wearVersionName = $Matches[3]
+    if ($wearPackage -ne $Package) { Fail "relogio com pacote $wearPackage, esperado $Package (o Data Layer exige o mesmo)" }
+    if ($wearVersionName -ne $versionName) { Fail "versionName do relogio ($wearVersionName) difere do celular ($versionName)" }
+    if (-not $SkipBuild -and ($wearVersionCode -lt ($codeBefore - 2) -or $wearVersionCode -gt ($codeAfter + 2))) {
+        Fail "versionCode do relogio $wearVersionCode fora da formula"
+    }
+    if ($wb | Select-String "^application-debuggable") { Fail "APK do relogio depuravel: nunca publicar" }
+    if (-not ($wb | Select-String "uses-feature: name='android.hardware.type.watch'")) { Fail "APK do relogio sem uses-feature watch" }
+    $wearMinSdk = [int](($wb | Select-String "^minSdkVersion:'(\d+)'" | Select-Object -First 1).Matches[0].Groups[1].Value)
+    Ok "relogio: versionCode $wearVersionCode, minSdk $wearMinSdk"
+}
+
 # ---------------------------------------------------------------------------------------------- 5
 Step "5. Assinatura, alinhamento e conteudo nativo"
 $certs = & $ApkSigner verify --print-certs -v $apk 2>&1
@@ -240,6 +289,18 @@ $certShas = @($certs | Select-String "certificate SHA-256 digest: ([0-9a-f]{64})
 if ($certShas.Count -eq 0) { Fail "apksigner nao mostrou o certificado" }
 foreach ($c in $certShas) { if ($AllowedCertSha256 -notcontains $c) { Fail "certificado $c fora da lista permitida" } }
 Ok "certificado $($certShas -join ', ')"
+
+if ($WithWear) {
+    $wearCerts = & $ApkSigner verify --print-certs -v $wearApk 2>&1
+    if ($LASTEXITCODE -ne 0) { Fail "apksigner verify do relogio falhou:`n$wearCerts" }
+    $wearCertShas = @($wearCerts | Select-String "certificate SHA-256 digest: ([0-9a-f]{64})" | ForEach-Object { $_.Matches[0].Groups[1].Value })
+    if (Compare-Object ($certShas | Sort-Object) ($wearCertShas | Sort-Object)) {
+        Fail "relogio assinado com certificado diferente do celular ($($wearCertShas -join ', ')): o Data Layer nao conectaria"
+    }
+    & $ZipAlign -c -P 16 4 $wearApk | Out-Null
+    if ($LASTEXITCODE -ne 0) { Fail "zipalign -c do relogio falhou" }
+    Ok "relogio com o mesmo certificado do celular"
+}
 
 & $ZipAlign -c -P 16 4 $apk | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail "zipalign -c -P 16 4 falhou" }
@@ -314,6 +375,15 @@ $sha = Sha256File $apkOut
 $size = (Get-Item $apkOut).Length
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText((Join-Path $out "$apkName.sha256"), "$sha  $apkName`n", $utf8)
+$wearInfo = $null
+if ($WithWear) {
+    $wearName = "GluView-Wear-$versionName.apk"
+    $wearOut = Join-Path $out $wearName
+    Copy-Item $wearApk $wearOut -ErrorAction Stop
+    $wearSha = Sha256File $wearOut
+    [System.IO.File]::WriteAllText((Join-Path $out "$wearName.sha256"), "$wearSha  $wearName`n", $utf8)
+    $wearInfo = [ordered]@{ file = $wearName; versionCode = $wearVersionCode; sizeBytes = (Get-Item $wearOut).Length; sha256 = $wearSha; minSdk = $wearMinSdk }
+}
 $manifest = [ordered]@{
     schema      = 1
     package     = $Package
@@ -329,10 +399,16 @@ $manifest = [ordered]@{
     publishedAt = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
     notes       = [ordered]@{ pt = $NotesPt; en = $NotesEn }
 }
+# Campo novo e opcional: o GluSync e o app ignoram chaves que nao conhecem.
+if ($wearInfo) { $manifest.wear = $wearInfo }
 $manifestJson = $manifest | ConvertTo-Json -Depth 4
 [System.IO.File]::WriteAllText((Join-Path $out "manifest.json"), $manifestJson, $utf8)
 Ok "$apkName ($([Math]::Round($size / 1MB, 1)) MB), sha256 $sha"
 $extraAssets = @()
+if ($wearInfo) {
+    $extraAssets += (Join-Path $out $wearInfo.file), (Join-Path $out "$($wearInfo.file).sha256")
+    Ok "$($wearInfo.file) ($([Math]::Round($wearInfo.sizeBytes / 1MB, 1)) MB), sha256 $($wearInfo.sha256)"
+}
 if ($Variant -eq "release") {
     # mapping.txt (~77 MB) compactado: sem ele, stack trace do release é ilegível. Fica como anexo
     # da própria Release (o backend ignora anexos que não sejam o .apk e o manifest.json).

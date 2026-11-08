@@ -9,7 +9,7 @@
     <string name="measured_at">às %1$s</string>
     <string name="via_phone">via celular</string>
     <string name="via_cloud">via nuvem</string>
-    <string name="sync_now">Sincronizar agora</string>
+    <string name="sync_now">Sincronizar</string>
     <string name="syncing">Buscando…</string>
     <string name="sync_ok">Atualizado</string>
     <string name="sync_no_token">Sem acesso à nuvem: abra o GluView no celular</string>

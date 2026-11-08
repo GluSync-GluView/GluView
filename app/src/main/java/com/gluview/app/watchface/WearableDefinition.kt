@@ -45,6 +45,14 @@ object WearableDefinitionCatalog {
         maxPaletteColors = 256
     )
 
+    // Relógios Wear OS (plano 14, Fase 10 / plano 16): visor em Watch Face Format compilado no celular
+    // (WffCompiler) e entregue pelo Data Layer ao app GluView do relógio (WearOsWatchFaceApplier).
+    // Instalar exige Wear OS 6; em versões anteriores o relógio responde "sem suporte" e o envio avisa.
+    private val wearOsCapabilities = WearableCapabilities(
+        transport = TransportKind.DATA_LAYER,
+        compilerAvailable = true
+    )
+
     // Todo o resto do catálogo: resolução/forma conhecidas (WearableCatalog), mas sem nenhum
     // WatchfaceCompiler/Applier implementado — não é possível gerar nem instalar um visor hoje,
     // mesmo que o editor permita desenhar layout pra eles.
@@ -57,7 +65,8 @@ object WearableDefinitionCatalog {
         val capabilities = when (spec.id) {
             "mi_band_6" -> miBand6Capabilities
             "mi_band_5" -> miBand5Capabilities
-            else -> unknownCapabilities
+            else -> if (com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(spec.id)) wearOsCapabilities
+                    else unknownCapabilities
         }
         WearableDefinition(spec = spec, capabilities = capabilities)
     }
@@ -67,4 +76,8 @@ object WearableDefinitionCatalog {
 
     fun hasRealCompiler(wearableId: String): Boolean =
         definitionFor(wearableId)?.capabilities?.compilerAvailable == true
+
+    /** Instalável a partir da LOJA: hoje a loja só baixa o artefato .bin e envia pela Mi Band (BLE Huami). */
+    fun isStoreInstallable(wearableId: String): Boolean =
+        definitionFor(wearableId)?.capabilities?.let { it.compilerAvailable && it.transport == TransportKind.BLE_HUAMI } == true
 }

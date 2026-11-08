@@ -159,7 +159,7 @@ internal fun WatchFaceManagerContent(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    Text(stringResource(R.string.wf_manager_intro), style = MaterialTheme.typography.bodyMedium,
+                    Text(stringResource(R.string.wf_manager_intro_any), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = actions.onCreate, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Icon(Icons.Default.Add, null, modifier = Modifier.padding(end = Spacing.xs))
@@ -237,11 +237,12 @@ internal fun WatchFaceManagerContent(
     }
     applyTarget?.let { face ->
         val design = remember(face) { face.toDesign() }
+        val toWatch = com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(design.wearable.id)
         WearablePickerDialog(
-            title = stringResource(R.string.watchface_apply_to_wearable),
+            title = stringResource(if (toWatch) R.string.wear_send_to_watch else R.string.watchface_apply_to_wearable),
             targets = remember(design) { design.applicableWearableTargets() },
             initial = design.wearable.id,
-            confirmLabel = stringResource(R.string.wf_send_to_band),
+            confirmLabel = stringResource(if (toWatch) R.string.wear_send_to_watch else R.string.wf_send_to_band),
             onDismiss = { applyTarget = null },
             onConfirm = { target -> actions.onApply(face, target); applyTarget = null }
         )
@@ -304,7 +305,7 @@ private fun WatchFaceItem(
                 Text(stringResource(R.string.wf_sending), modifier = Modifier.padding(start = Spacing.xs))
             } else {
                 Icon(Icons.Default.Watch, null, modifier = Modifier.padding(end = Spacing.xs).size(18.dp))
-                Text(stringResource(R.string.wf_send_to_band))
+                Text(stringResource(if (com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(design.wearable.id)) R.string.wear_send_to_watch else R.string.wf_send_to_band))
             }
         }
         if (!canSend) {
@@ -371,7 +372,9 @@ internal fun WearablePickerDialog(
                         }
                     }
                 } else {
-                    Text(stringResource(R.string.wf_send_to_one, wearableLabel(targets.first())), style = MaterialTheme.typography.bodyMedium)
+                    val only = targets.first()
+                    Text(stringResource(if (com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(only.id)) R.string.wear_send_to_one else R.string.wf_send_to_one, wearableLabel(only)),
+                        style = MaterialTheme.typography.bodyMedium)
                 }
             }
         },

@@ -23,9 +23,22 @@ class WearableDefinitionCatalogTest {
     }
 
     @Test
-    fun `so a Mi Band 5 e a 6 tem compilador real hoje`() {
+    fun `compilador real hoje - Mi Band 5 e 6 (BLE) e os relogios Wear OS (Data Layer)`() {
         val comCompilador = WearableDefinitionCatalog.all.filter { it.capabilities.compilerAvailable }
-        assertEquals(setOf("mi_band_5", "mi_band_6"), comCompilador.map { it.spec.id }.toSet())
+        val huami = comCompilador.filter { it.capabilities.transport == TransportKind.BLE_HUAMI }.map { it.spec.id }.toSet()
+        assertEquals(setOf("mi_band_5", "mi_band_6"), huami)
+        val wear = comCompilador.filter { it.capabilities.transport == TransportKind.DATA_LAYER }.map { it.spec.id }
+        assertTrue(wear.isNotEmpty())
+        assertTrue(wear.all { com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(it) })
+        assertEquals(comCompilador.size, huami.size + wear.size)
+    }
+
+    @Test
+    fun `loja so instala na Mi Band (Wear OS recebe visor desenhado, nao o bin da loja)`() {
+        assertTrue(WearableDefinitionCatalog.isStoreInstallable("mi_band_6"))
+        val galaxy = WearableCatalog.items.first { com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(it.id) }.id
+        assertTrue(WearableDefinitionCatalog.hasRealCompiler(galaxy))
+        assertFalse(WearableDefinitionCatalog.isStoreInstallable(galaxy))
     }
 
     @Test
