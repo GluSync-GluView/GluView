@@ -471,6 +471,11 @@ private fun GlucoseWatchChart(component: WatchFaceComponent, runtime: WatchFaceR
             val native = canvas.nativeCanvas
             native.save()
             native.scale(size.width / w, size.height / h)
+            // O fundo do gráfico (DrawOp.Fill) é um drawColor, que pinta TODA a área de recorte — e
+            // este Canvas não recorta no tamanho do componente. Sem o clip, o preto cobria os
+            // componentes desenhados antes do gráfico (hora, dia, data sumiam nos modelos Completo,
+            // Glicemia em destaque e Visor completo, em qualquer aparelho).
+            native.clipRect(0f, 0f, w.toFloat(), h.toFloat())
             GlucoseGraphRenderer.draw(native, layout)
             native.restore()
         }

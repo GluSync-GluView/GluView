@@ -310,10 +310,14 @@ internal fun AlertsContent(
                 GluCard {
                     SwitchRow(stringResource(R.string.alertsettings_followers_toggle), state.notifyFollowersEnabled, actions.onNotifyFollowers)
                     val n = state.notifyFollowersSpecificIds.size
-                    GluCallout(
-                        if (n == 0) stringResource(R.string.alertsettings_followers_all)
-                        else pluralStringResource(R.plurals.alertsettings_followers_selected, n, n)
-                    )
+                    // Sem seguidores, "todos são avisados" contradizia a linha logo abaixo
+                    // ("você ainda não tem seguidores"); com o aviso desligado ninguém é avisado.
+                    if (state.notifyFollowersEnabled && state.followers.isNotEmpty()) {
+                        GluCallout(
+                            if (n == 0) stringResource(R.string.alertsettings_followers_all)
+                            else pluralStringResource(R.plurals.alertsettings_followers_selected, n, n)
+                        )
+                    }
                     if (state.followers.isEmpty()) {
                         Text(stringResource(R.string.alertsettings_followers_empty), style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -1,5 +1,6 @@
 package com.gluview.app.util
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -98,6 +99,9 @@ class ExportHelper @Inject constructor(
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = mimeType
             putExtra(Intent.EXTRA_STREAM, uri)
+            // A tela de compartilhar (Android 10+, roda como sistema) só lê o arquivo para a prévia
+            // se a permissão vier pelo ClipData; só com EXTRA_STREAM dava Permission Denial no log.
+            clipData = ClipData.newRawUri(null, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(Intent.createChooser(intent, chooserTitle).apply {

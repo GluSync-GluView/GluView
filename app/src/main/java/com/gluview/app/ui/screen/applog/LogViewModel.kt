@@ -4,6 +4,7 @@ import com.gluview.app.R
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.util.withAppLanguage
 import kotlinx.coroutines.flow.first
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -115,6 +116,9 @@ class LogViewModel @Inject constructor(
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_STREAM, uri)
+                    // A tela de compartilhar (Android 10+, roda como sistema) só lê o arquivo para a prévia
+                    // se a permissão vier pelo ClipData; só com EXTRA_STREAM dava Permission Denial no log.
+                    clipData = ClipData.newRawUri(null, uri)
                     putExtra(Intent.EXTRA_SUBJECT, text.getString(R.string.applog_export_subject))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                 }

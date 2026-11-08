@@ -1,5 +1,6 @@
 package com.gluview.app.ui.screen.settings
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -341,6 +342,9 @@ class SettingsViewModel @Inject constructor(
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "application/json"
                     putExtra(Intent.EXTRA_STREAM, uri)
+                    // A tela de compartilhar (Android 10+, roda como sistema) só lê o arquivo para a prévia
+                    // se a permissão vier pelo ClipData; só com EXTRA_STREAM dava Permission Denial no log.
+                    clipData = ClipData.newRawUri(null, uri)
                     putExtra(Intent.EXTRA_SUBJECT, text(R.string.settings_backup_subject))
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
