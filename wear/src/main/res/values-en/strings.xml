@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="complication_label">Glucose (GluView)</string>
+    <string name="tile_label">Glucose</string>
+    <string name="no_data">Open GluView on your phone</string>
+    <string name="no_data_detail">Glucose shows up here once the phone sends the first reading.</string>
+    <string name="stale">No recent reading</string>
+    <string name="measured_at">at %1$s</string>
+    <string name="via_phone">via phone</string>
+    <string name="via_cloud">via cloud</string>
+    <string name="sync_now">Sync now</string>
+    <string name="syncing">Fetching…</string>
+    <string name="sync_ok">Updated</string>
+    <string name="sync_no_token">No cloud access: open GluView on your phone</string>
+    <string name="sync_failed">Couldn\'t fetch right now</string>
+    <string name="not_medical">Not a medical device</string>
+</resources>

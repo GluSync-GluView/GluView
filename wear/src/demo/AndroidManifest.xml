@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Só em builds de teste: receiver de depuração do plano B (ver DebugReceiver). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name="com.gluview.wear.debug.DebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.gluview.wear.DEBUG_SET_TOKEN" />
+                <action android:name="com.gluview.wear.DEBUG_FETCH" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

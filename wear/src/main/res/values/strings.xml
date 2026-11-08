@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">GluView</string>
+    <string name="complication_label">Glicemia (GluView)</string>
+    <string name="tile_label">Glicemia</string>
+    <string name="no_data">Abra o GluView no celular</string>
+    <string name="no_data_detail">A glicemia aparece aqui quando o celular mandar a primeira leitura.</string>
+    <string name="stale">Sem leitura recente</string>
+    <string name="measured_at">às %1$s</string>
+    <string name="via_phone">via celular</string>
+    <string name="via_cloud">via nuvem</string>
+    <string name="sync_now">Sincronizar agora</string>
+    <string name="syncing">Buscando…</string>
+    <string name="sync_ok">Atualizado</string>
+    <string name="sync_no_token">Sem acesso à nuvem: abra o GluView no celular</string>
+    <string name="sync_failed">Não consegui buscar agora</string>
+    <string name="not_medical">Não é dispositivo médico</string>
+</resources>

@@ -74,6 +74,7 @@ import com.gluview.app.watchface.WatchFaceDesign
 import com.gluview.app.watchface.WearableSpec
 import com.gluview.app.watchface.applicableWearableTargets
 import com.gluview.app.watchface.toDesign
+import com.gluview.app.wear.WearStatus
 
 /** Ações do gerenciador, separadas para a captura sem ViewModel. */
 internal class ManagerActions(
@@ -81,6 +82,7 @@ internal class ManagerActions(
     val onCreate: () -> Unit = {},
     val onEdit: (Long) -> Unit = {},
     val onMiBand: () -> Unit = {},
+    val onWear: () -> Unit = {},
     val onStore: () -> Unit = {},
     val onDuplicate: (WatchFaceEntity) -> Unit = {},
     val onDelete: (WatchFaceEntity) -> Unit = {},
@@ -101,6 +103,7 @@ fun WatchFaceManagerScreen(
     val runtime by vm.runtime.collectAsStateWithLifecycle()
     val applyMessage by vm.applyMessage.collectAsStateWithLifecycle()
     val applyingId by vm.applyingFaceId.collectAsStateWithLifecycle()
+    val wearStatus by vm.wearStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val configureLabel = stringResource(R.string.watchface_configure)
@@ -119,8 +122,9 @@ fun WatchFaceManagerScreen(
         onBack = onBack, onCreate = onCreate, onEdit = onEdit, onMiBand = onMiBand, onStore = onStore,
         onDuplicate = vm::duplicate, onDelete = vm::delete,
         onApply = { face, target -> vm.requestApply(face, target) },
-        onPublish = vm::publish
-    ))
+        onPublish = vm::publish,
+        onWear = vm::sendToWatch
+    ), wearStatus)
 }
 
 /**
@@ -137,7 +141,8 @@ internal fun WatchFaceManagerContent(
     runtime: WatchFaceRuntimeData,
     applyingId: Long?,
     snackbarHostState: SnackbarHostState?,
-    actions: ManagerActions
+    actions: ManagerActions,
+    wearStatus: WearStatus? = null
 ) {
     var deleteTarget by remember { mutableStateOf<WatchFaceEntity?>(null) }
     var applyTarget by remember { mutableStateOf<WatchFaceEntity?>(null) }
@@ -167,6 +172,9 @@ internal fun WatchFaceManagerContent(
                     GluCard {
                         NavRow(stringResource(R.string.miband_title), actions.onMiBand, icon = Icons.Outlined.Watch,
                             subtitle = stringResource(R.string.watchface_device_card_desc))
+                        // Fase 8 (plano 14): relógio Wear OS — toque reenvia a leitura atual.
+                        NavRow(stringResource(R.string.wear_row_title), actions.onWear, icon = Icons.Outlined.Watch,
+                            subtitle = wearStatusText(wearStatus))
                         NavRow(stringResource(R.string.watchface_store_title), actions.onStore, icon = Icons.Outlined.Storefront,
                             subtitle = stringResource(R.string.wf_store_row_desc))
                     }
@@ -370,4 +378,13 @@ internal fun WearablePickerDialog(
         confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text(confirmLabel, textAlign = TextAlign.End) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } }
     )
+}
+
+@Composable
+private fun wearStatusText(status: WearStatus?): String = when (status) {
+    null -> stringResource(R.string.wear_status_checking)
+    WearStatus.Unavailable -> stringResource(R.string.wear_status_unavailable)
+    WearStatus.NoWatch -> stringResource(R.string.wear_status_no_watch)
+    is WearStatus.AppMissing -> stringResource(R.string.wear_status_app_missing, status.watchName)
+    is WearStatus.Ready -> stringResource(R.string.wear_status_ready, status.watchName)
 }

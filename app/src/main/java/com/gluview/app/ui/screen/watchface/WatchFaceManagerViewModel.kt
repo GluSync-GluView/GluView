@@ -28,8 +28,30 @@ class WatchFaceManagerViewModel @Inject constructor(
     glucoseRepository: GlucoseRepository,
     statusHolder: SibionicsStatusHolder,
     preferences: com.gluview.app.data.datastore.AppPreferences,
-    private val applierRegistry: WatchFaceApplierRegistry
+    private val applierRegistry: WatchFaceApplierRegistry,
+    private val wearBridge: com.gluview.app.wear.WearBridge
 ) : ViewModel() {
+
+    /** Fase 8 (plano 14): situação do relógio Wear OS no card da tela; null = ainda verificando. */
+    private val _wearStatus = MutableStateFlow<com.gluview.app.wear.WearStatus?>(null)
+    val wearStatus: StateFlow<com.gluview.app.wear.WearStatus?> = _wearStatus.asStateFlow()
+
+    fun refreshWearStatus() {
+        viewModelScope.launch { _wearStatus.value = wearBridge.status() }
+    }
+
+    /** Toque no card: reenvia a leitura atual ao relógio e atualiza a situação. */
+    fun sendToWatch() {
+        viewModelScope.launch {
+            val status = wearBridge.status()
+            _wearStatus.value = status
+            if (status !is com.gluview.app.wear.WearStatus.Ready) return@launch
+            val sent = wearBridge.resendCurrent()
+            _applyMessage.value = WatchFaceMessage(UiText.Res(
+                if (sent) R.string.wear_msg_sent else R.string.wear_msg_not_sent
+            ))
+        }
+    }
 
     private val _applyMessage = MutableStateFlow<WatchFaceMessage?>(null)
     val applyMessage: StateFlow<WatchFaceMessage?> = _applyMessage.asStateFlow()
@@ -50,6 +72,7 @@ class WatchFaceManagerViewModel @Inject constructor(
         // Best-effort — pura leitura, nunca bloqueia a tela se o GluSync estiver fora do ar
         // (mesmo padrão de CaregiverRepository/ApiKeyRepository).
         viewModelScope.launch { watchFaceRepository.pullFromServer() }
+        refreshWearStatus()
     }
 
     fun delete(face: WatchFaceEntity) {

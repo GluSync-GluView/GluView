@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wear_row_title">Wear OS watch</string>
+    <string name="wear_status_checking">Looking for a watch…</string>
+    <string name="wear_status_unavailable">Needs Google Play Services on this phone</string>
+    <string name="wear_status_no_watch">No Wear OS watch connected</string>
+    <string name="wear_status_app_missing">%1$s connected · install GluView on the watch</string>
+    <string name="wear_status_ready">%1$s connected · receiving glucose</string>
+    <string name="wear_msg_sent">Reading sent to the watch</string>
+    <string name="wear_msg_not_sent">Couldn\'t send right now — check the watch and try again</string>
+    <string name="wear_msg_no_reading">No reading to send yet</string>
+    <string name="wear_apply_unavailable">This phone doesn\'t have Google Play Services, which Wear OS requires</string>
+    <string name="wear_apply_no_watch">No Wear OS watch connected to this phone</string>
+    <string name="wear_apply_needs_app">Install GluView on the watch so it can receive glucose</string>
+    <string name="wear_apply_coming">Custom watch faces on Wear OS are coming soon. Glucose already shows up through the GluView complication on any watch face.</string>
+</resources>

@@ -4,7 +4,25 @@ import java.util.Locale
 import kotlin.math.abs
 
 /** Faixa da glicemia, calculada no celular com os limites do usuário (espelha o GlucoseZone do :app). */
-enum class SnapshotZone { URGENT_LOW, LOW, NORMAL, HIGH, URGENT_HIGH, QUICK_DROP }
+enum class SnapshotZone {
+    URGENT_LOW, LOW, NORMAL, HIGH, URGENT_HIGH, QUICK_DROP;
+
+    companion object {
+        /**
+         * Mesma regra do GlucoseThresholds.classify do :app (limites inclusivos, ordem do GluSync):
+         * usada pelo relógio quando ele mesmo busca a leitura na nuvem (plano B), para nunca
+         * divergir da cor que o celular daria ao mesmo valor.
+         */
+        fun classify(sgvMgdl: Int, urgentLow: Int, low: Int, high: Int, urgentHigh: Int, direction: String = ""): SnapshotZone = when {
+            direction == "DoubleDown" -> QUICK_DROP
+            sgvMgdl <= urgentLow -> URGENT_LOW
+            sgvMgdl <= low -> LOW
+            sgvMgdl >= urgentHigh -> URGENT_HIGH
+            sgvMgdl >= high -> HIGH
+            else -> NORMAL
+        }
+    }
+}
 
 enum class SnapshotUnit { MG_DL, MMOL_L }
 

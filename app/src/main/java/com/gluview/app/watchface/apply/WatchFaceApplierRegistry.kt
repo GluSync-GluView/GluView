@@ -12,9 +12,10 @@ import javax.inject.Singleton
 @Singleton
 class WatchFaceApplierRegistry @Inject constructor(
     miBand6: MiBand6WatchFaceApplier,
-    miBand5: MiBand5WatchFaceApplier
+    miBand5: MiBand5WatchFaceApplier,
+    wearOs: WearOsWatchFaceApplier
 ) {
-    private val appliers: List<WatchFaceApplier> = listOf(miBand6, miBand5)
+    private val appliers: List<WatchFaceApplier> = listOf(miBand6, miBand5, wearOs)
 
     fun applierFor(design: WatchFaceDesign): WatchFaceApplier? =
         appliers.firstOrNull { it.supports(design) }

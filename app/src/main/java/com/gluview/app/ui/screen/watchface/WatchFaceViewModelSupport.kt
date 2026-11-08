@@ -90,8 +90,10 @@ data class WatchFaceMessage(val text: UiText, val action: WatchFaceMessageAction
  */
 fun ApplyResult.toMessage(): WatchFaceMessage = when (this) {
     is ApplyResult.Success     -> WatchFaceMessage(UiText.Res(R.string.wf_msg_sent))
-    is ApplyResult.NeedsSetup  -> WatchFaceMessage(UiText.Res(R.string.wf_msg_needs_setup), WatchFaceMessageAction.SETUP_MIBAND)
-    is ApplyResult.Unsupported -> WatchFaceMessage(UiText.Res(R.string.wf_msg_unsupported))
+    // Com frase própria (applier Wear OS), sem o atalho "configurar a Mi Band".
+    is ApplyResult.NeedsSetup  -> messageRes?.let { WatchFaceMessage(UiText.Res(it)) }
+        ?: WatchFaceMessage(UiText.Res(R.string.wf_msg_needs_setup), WatchFaceMessageAction.SETUP_MIBAND)
+    is ApplyResult.Unsupported -> WatchFaceMessage(UiText.Res(messageRes ?: R.string.wf_msg_unsupported))
     is ApplyResult.InProgress  -> WatchFaceMessage(UiText.Res(R.string.wf_msg_in_progress))
     is ApplyResult.Failure     -> WatchFaceMessage(UiText.Res(R.string.wf_msg_failed, message))
 }

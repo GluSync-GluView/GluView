@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gota estilizada (ícone simples do relógio). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FF1E88E5" android:pathData="M24,4 C24,4 10,20 10,30 A14,14 0 0 0 38,30 C38,20 24,4 24,4 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M17,31 L21,31 L23,26 L26,35 L28,30 L31,30 L31,32 L29.4,32 L26,39 L23,30 L22.4,33 L17,33 Z" />
+</vector>

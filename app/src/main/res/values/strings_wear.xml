@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Relógio Wear OS (plano 14, Fases 5-8). Arquivo separado do strings.xml de propósito. -->
+<resources>
+    <string name="wear_row_title">Relógio Wear OS</string>
+    <string name="wear_status_checking">Procurando relógio…</string>
+    <string name="wear_status_unavailable">Precisa do Google Play Services neste celular</string>
+    <string name="wear_status_no_watch">Nenhum relógio Wear OS conectado</string>
+    <string name="wear_status_app_missing">%1$s conectado · instale o GluView no relógio</string>
+    <string name="wear_status_ready">%1$s conectado · recebendo a glicemia</string>
+    <string name="wear_msg_sent">Leitura enviada ao relógio</string>
+    <string name="wear_msg_not_sent">Não deu para enviar agora — confira o relógio e tente de novo</string>
+    <string name="wear_msg_no_reading">Ainda não há leitura para enviar</string>
+    <string name="wear_apply_unavailable">Este celular não tem o Google Play Services, que o Wear OS exige</string>
+    <string name="wear_apply_no_watch">Nenhum relógio Wear OS conectado a este celular</string>
+    <string name="wear_apply_needs_app">Instale o GluView no relógio para ele receber a glicemia</string>
+    <string name="wear_apply_coming">Visor personalizado no Wear OS chega em breve. A glicemia já aparece pela complication do GluView em qualquer mostrador.</string>
+</resources>

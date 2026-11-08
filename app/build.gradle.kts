@@ -212,6 +212,9 @@ ksp {
 dependencies {
     // Fase 4 do plano 14 (Wear OS): contrato celular↔relógio (WatchFaceSnapshot + caminhos do Data Layer).
     implementation(project(":wear-contract"))
+    // Fase 5: envio ao relógio pelo Data Layer (falha em silêncio em aparelho sem Play Services).
+    implementation(libs.play.services.wearable)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

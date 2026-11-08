@@ -115,6 +115,16 @@ class WatchFaceSnapshotTest {
         assertEquals("", WatchFaceSnapshot.arrowFor("NOT COMPUTABLE"))
     }
 
+    @Test fun classify_limitesInclusivos_eQuedaRapida() {
+        fun z(v: Int, dir: String = "Flat") = SnapshotZone.classify(v, 55, 70, 180, 250, dir)
+        assertEquals(SnapshotZone.URGENT_LOW, z(55))
+        assertEquals(SnapshotZone.LOW, z(70))
+        assertEquals(SnapshotZone.NORMAL, z(71))
+        assertEquals(SnapshotZone.HIGH, z(180))
+        assertEquals(SnapshotZone.URGENT_HIGH, z(250))
+        assertEquals(SnapshotZone.QUICK_DROP, z(150, "DoubleDown"))
+    }
+
     @Test fun caminhos_naoMudam() {
         // Renomear quebra relógios já instalados — este teste existe para isso falhar alto.
         assertEquals("/gluview/reading", WearPaths.READING)

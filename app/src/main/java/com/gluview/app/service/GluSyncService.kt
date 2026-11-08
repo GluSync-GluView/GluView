@@ -99,12 +99,14 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var cloudAccess: CloudAccessRepository
     @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
+    @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var tokenRefresher: TokenRefresher
     @Inject lateinit var caregiverRepository: CaregiverRepository
 
     private var pollingJob: Job? = null
     private var miBandAutoSendJob: Job? = null
+    private var wearSendJob: Job? = null
     private var mobileUploadCatchupJob: Job? = null
     private var wifiUploadCatchupJob: Job? = null
     private var caregiverWatchJob: Job? = null
@@ -256,6 +258,12 @@ class GluSyncService : LifecycleService() {
         miBandAutoSendJob?.cancel()
         miBandAutoSendJob = lifecycleScope.launch {
             repository.currentReading.filterNotNull().collect { miBandPusher.maybeAutoSend() }
+        }
+        // Fase 5 do plano 14 (Wear OS): cada leitura nova vai para o relógio Wear OS pareado (se houver
+        // um com o GluView). Melhor esforço — sem Play Services ou sem relógio, não faz nada.
+        wearSendJob?.cancel()
+        wearSendJob = lifecycleScope.launch {
+            repository.currentReading.filterNotNull().collect { wearBridge.onNewReading(it) }
         }
         // F6 — Acompanhamento: convite recebido/aceito vira notificação + badge do sino.
         startCaregiverInviteWatch()

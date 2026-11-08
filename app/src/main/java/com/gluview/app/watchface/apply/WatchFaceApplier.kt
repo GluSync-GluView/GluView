@@ -6,9 +6,10 @@ import com.gluview.app.watchface.WatchFaceDesign
 sealed interface ApplyResult {
     data object Success : ApplyResult
     /** Falta configuração do usuário (ex.: auth key/MAC da Mi Band). */
-    data class NeedsSetup(val message: String) : ApplyResult
+    /** [messageRes]: frase própria do applier (ex.: Wear OS); null = frase genérica da Mi Band. */
+    data class NeedsSetup(val message: String, @androidx.annotation.StringRes val messageRes: Int? = null) : ApplyResult
     /** Não há estratégia de envio para este wearable ainda. */
-    data class Unsupported(val message: String) : ApplyResult
+    data class Unsupported(val message: String, @androidx.annotation.StringRes val messageRes: Int? = null) : ApplyResult
     /** Estrutura pronta, mas o envio completo ainda está em desenvolvimento. */
     data class InProgress(val message: String) : ApplyResult
     data class Failure(val message: String) : ApplyResult
