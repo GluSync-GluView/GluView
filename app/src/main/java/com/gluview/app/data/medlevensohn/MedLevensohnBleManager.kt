@@ -131,6 +131,26 @@ class MedLevensohnBleManager @Inject constructor(
             ContextCompat.registerReceiver(context, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
                 ContextCompat.RECEIVER_NOT_EXPORTED)
         }
+        // Pareamento concluído com a sessão aberta pelo caminho sem pareamento: volta pelo pareado (f003),
+        // que é o que o Juggluco faz ao ver "pareado" no 0x121 — mas sem cortar um pareamento em andamento.
+        val bondReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                val device = if (Build.VERSION.SDK_INT >= 33)
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                if (device == null || !device.address.equals(targetMac, ignoreCase = true)) return
+                val bond = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)
+                appLogger.usage(LOG, "Pareamento do Android mudou", mapOf("estado" to bond))
+                if (bond == BluetoothDevice.BOND_BONDED && sessionOpen && state.unbonded) {
+                    appLogger.usage(LOG, "Pareamento concluído — reconectando pelo caminho pareado")
+                    handler.post { closeGatt(true) }
+                }
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(context, bondReceiver, IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
+                ContextCompat.RECEIVER_EXPORTED)
+        }
     }
 
     // ── Busca ────────────────────────────────────────────────────────────────────────────────────
@@ -290,6 +310,20 @@ class MedLevensohnBleManager @Inject constructor(
         writeNow(g, c, MedLevensohnCrypto.deriveAskKeyPayload(serial), BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
     }
 
+    /**
+     * EXPERIMENTO só do build de teste (arquivo files/dev-medlev-createbond): o app pede o pareamento
+     * em vez de esperar o sensor pedir. Pareamento Just Works iniciado pelo celular é aceito pelo
+     * Android sem janela; pedido pelo sensor exige 2–3 toques em 30 s (plano 14_, V2).
+     */
+    @SuppressLint("MissingPermission")
+    private fun devBondExperiment(g: BluetoothGatt) {
+        if (!com.gluview.app.BuildConfig.DEV_SENSOR_UNLOCK) return
+        if (!java.io.File(context.getExternalFilesDir(null), "dev-medlev-createbond").exists()) return
+        if (g.device.bondState != BluetoothDevice.BOND_NONE) return
+        val ok = runCatching { g.device.createBond() }.getOrDefault(false)
+        appLogger.usage(LOG, "Experimento: app pede o pareamento (createBond)", mapOf("ok" to ok))
+    }
+
     @SuppressLint("MissingPermission")
     private fun readMain(g: BluetoothGatt) {
         val c = charMain ?: return
@@ -330,14 +364,19 @@ class MedLevensohnBleManager @Inject constructor(
                     masterKey = value
                     listener?.onMasterKey(value.toHex(separator = ""))
                     appLogger.usage(LOG, "Chave-mestra recebida (f001)")
+                    devBondExperiment(g)
                 }
                 if (unbondedWrite) readMain(g) else unbondedChange = true
             }
             MedLevensohnGatt.CHAR_MAIN -> {
                 val plain = decrypt(value) ?: return
                 appLogger.usage(LOG, "f002", mapOf("hex" to plain.toHex()))
+                // Só pareamento CONCLUÍDO conta (o Juggluco usa != BOND_NONE): desconectar durante o
+                // BOND_BONDING corta o pareamento — e quando o Android pede consentimento ao usuário isso
+                // virava um laço de reconexões a cada 6 s (achado no sensor virtual, plano 14_, V2).
+                // O pareamento que terminar com a sessão aberta é tratado pelo bondReceiver.
                 @SuppressLint("MissingPermission")
-                val bondedNow = g.device.bondState != BluetoothDevice.BOND_NONE
+                val bondedNow = g.device.bondState == BluetoothDevice.BOND_BONDED
                 apply(g, MedLevensohnSession.onMain(plain, state, bondedNow, System.currentTimeMillis(), ZoneId.systemDefault()))
             }
             MedLevensohnGatt.CHAR_PRIVATE_BONDED -> {

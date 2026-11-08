@@ -4,3 +4,5 @@ control.txt
 __pycache__/
 *-pareamentos.json
 *-inicio.txt
+medlev-*-estado.json
+control-medlev.txt
