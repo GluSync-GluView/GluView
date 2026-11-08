@@ -142,7 +142,9 @@ class HomeViewModel @Inject constructor(
         flow { while (true) { emit(System.currentTimeMillis()); delay(30_000L) } }
     ) { status, pairedMs, dataSourceId, nowMs ->
         val hasWarmup = DataSourceType.fromId(dataSourceId).hasWarmupWindow
-        if (!hasWarmup || !status.isWarmingUp(pairedMs, nowMs)) SensorWarmup()
+        // Sensor que já anunciou o fim da sessão não está "aquecendo", mesmo dentro da 1ª hora:
+        // a Home mostra "Sensor expirado" (achado no SmartGuide virtual, plano 14_, cenário 12).
+        if (!hasWarmup || status.isExpired() || !status.isWarmingUp(pairedMs, nowMs)) SensorWarmup()
         else SensorWarmup(
             active      = true,
             elapsedMin  = status.minutesSinceStart(pairedMs, nowMs) ?: 0,

@@ -30,7 +30,8 @@ Cenários: escreva um comando por linha em `control.txt` (com o simulador rodand
 
 | Comando | Efeito |
 |---|---|
-| `lo` / `hi` | próxima leitura "abaixo"/"acima da faixa" (com bit de defeito, como o real) |
+| `val 100 95` | as próximas leituras ao vivo valem 100 e depois 95 mg/dL |
+| `lo` / `hi` | próxima leitura "abaixo"/"acima da faixa" (com bit de defeito, como o real). O app só grava 39/401 se a leitura anterior veio de 5 a 29 min antes: use `--live-every 300` (ritmo real) com `val 100` antes do `lo` ou `val 300` antes do `hi` |
 | `error N` | N leituras seguidas com defeito (NaN) |
 | `temp` / `battery` / `calib` | próxima leitura com aviso de temperatura / bateria fraca / calibração |
 | `crcbad` | próxima leitura com CRC errado |

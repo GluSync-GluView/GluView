@@ -404,8 +404,17 @@ class AccuChekBleManager @Inject constructor(
     private val queue = ArrayDeque<GattOp>()
     private var current: GattOp? = null
     private val retryNext = Runnable { next() }
-    private val opTimeout = Runnable {
+    @SuppressLint("MissingPermission")
+    private val opTimeout: Runnable = Runnable {
         val op = synchronized(lock) { current }
+        // Pareamento em andamento (o sensor pediu PIN e o usuário está digitando na janela do Android):
+        // a operação só responde depois dele. Espera mais — o próprio Bluetooth encerra o pareamento em
+        // 30 s (SMP), e aí a próxima volta cai no "sem resposta". Achado no sensor virtual, plano 14_.
+        if (runCatching { gatt?.device?.bondState }.getOrNull() == BluetoothDevice.BOND_BONDING) {
+            appLogger.usage(LOG, "Operação esperando o pareamento terminar", mapOf("op" to (op?.label ?: "?")))
+            handler.postDelayed(opTimeout, OP_TIMEOUT_MS)
+            return@Runnable
+        }
         appLogger.error(LOG, "Operação GATT sem resposta — reconectando", mapOf("op" to (op?.label ?: "?")))
         closeGatt(notify = true)
     }

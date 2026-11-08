@@ -131,9 +131,11 @@ class AccuChekSource @Inject constructor(
                 "serialConfigurado" to serial.isNotBlank(), "enderecoSalvo" to address.isNotBlank(),
                 "ultimoMinuto" to lastMinute, "inicioConhecido" to (startMs > 0)
             ))
-            if (serial.isBlank()) {
-                appLogger.usage(LOG, "Sem serial configurado — aceita o primeiro sensor AC- encontrado")
+            if (!hasSensorToConnect()) {
+                appLogger.usage(LOG, "Sem sensor configurado — esperando o assistente (não procura sensor desconhecido)")
+                return@launch
             }
+            if (serial.isBlank()) appLogger.usage(LOG, "Sem serial configurado — usa o SmartGuide já pareado neste celular")
             ble.connectToSensor(serial, address)
         }
         registerTimeChange()
@@ -195,7 +197,7 @@ class AccuChekSource @Inject constructor(
     override fun onRssi(rssi: Int) { statusHolder.onRssi(rssi) }
 
     override fun onBluetoothTurnedOn() {
-        if (stopped) return
+        if (stopped || !hasSensorToConnect()) return
         appLogger.usage(LOG, "Bluetooth religado — reconectando já")
         reconnectJob?.cancel(); reconnectJob = null
         ble.connectToSensor(serial, address)
@@ -419,6 +421,14 @@ class AccuChekSource @Inject constructor(
         }
     }
 
+    /**
+     * Há um sensor para procurar: serial do assistente, ou um `AC-…` já pareado neste celular.
+     * Sem nenhum dos dois (depois de "Esquecer este sensor") não busca: aceitar o primeiro `AC-`
+     * por perto pareava — ou abria a janela de PIN — com o sensor de outra pessoa.
+     */
+    private fun hasSensorToConnect(): Boolean =
+        serial.isNotBlank() || ble.findBondedSensor(null) != null
+
     // ── Relógio do celular ───────────────────────────────────────────────────────────────────────
 
     private fun anchorClock() {
@@ -483,7 +493,7 @@ class AccuChekSource @Inject constructor(
             RECONNECT_SCHEDULE_MS.forEachIndexed { idx, delayMs ->
                 delay(delayMs)
                 if (!isActive) return@launch
-                if (ble.isReady) return@launch
+                if (ble.isReady || !hasSensorToConnect()) return@launch
                 appLogger.usage(LOG, "Tentativa de reconexão", mapOf("tentativa" to "${idx + 1}/${RECONNECT_SCHEDULE_MS.size}"))
                 ble.connectToSensor(serial, address)
                 delay(GATT_HANDSHAKE_MS)

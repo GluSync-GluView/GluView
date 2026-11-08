@@ -12,7 +12,7 @@ Uso (no PowerShell, a partir desta pasta, com o emulador ligado):
         [--start-minute 4762] [--live-every 60]
 
 Cenários durante a execução: escreva uma linha em `control.txt` (na mesma pasta), ex.:
-    lo, hi, error, temp, battery, calib, end, crcbad, multi, away 40, drop, forget, refuse, accept, restart, normal
+    val 90 85, lo, hi, error, temp, battery, calib, end, crcbad, multi, away 40, drop, forget, refuse, accept, restart, normal
 """
 from __future__ import annotations
 
@@ -89,6 +89,8 @@ class SmartGuide:
         self.mode_left = 0
         self.session_ended = False
         self.racp_multi = False
+        self.overrides: dict[int, float] = {}  # minuto → valor fixado pelo comando "val"
+        self.next_values: list[float] = []
         self.records: dict[int, bytes] = {}  # minuto → registro (o que o RACP devolve)
         self.away_until: dt.datetime | None = None
         self.measurement_char: Characteristic | None = None
@@ -110,8 +112,8 @@ class SmartGuide:
 
     # Registros ----------------------------------------------------------------------------
     def record(self, minute: int, mode: str = "normal") -> bytes:
-        g = glucose_curve(minute)
-        trend = (glucose_curve(minute) - glucose_curve(minute - 5)) / 5.0
+        g = self.overrides.get(minute, glucose_curve(minute))
+        trend = (g - self.overrides.get(minute - 5, glucose_curve(minute - 5))) / 5.0
         status, cal_temp, warning = 0x00, 0x02, 0x00
         glucose = sfloat(g)
         if mode == "lo":
@@ -276,6 +278,9 @@ class SmartGuide:
             if m == last:
                 continue
             last = m
+            if self.next_values:
+                self.overrides[m] = self.next_values.pop(0)
+                log.info("Valor fixado no minuto %d: %.0f mg/dL", m, self.overrides[m])
             mode = self.mode if self.mode_left > 0 else "normal"
             rec = self.record(m, mode)
             if self.mode == "crcbad" and self.mode_left > 0:
@@ -311,7 +316,10 @@ class SmartGuide:
         parts = line.split()
         cmd = parts[0].lower()
         log.info("Controle: %s", line)
-        if cmd == "multi":
+        if cmd == "val":
+            # "val 90 85" = as próximas leituras ao vivo valem 90 e depois 85 mg/dL.
+            self.next_values.extend(float(v) for v in parts[1:])
+        elif cmd == "multi":
             # Vale para o próximo histórico (RACP) até "normal": 2 registros por notificação.
             self.racp_multi = True
         elif cmd in ("lo", "hi", "temp", "battery", "calib", "crcbad"):
