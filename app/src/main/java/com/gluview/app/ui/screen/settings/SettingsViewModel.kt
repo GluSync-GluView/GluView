@@ -529,21 +529,6 @@ class SettingsViewModel @Inject constructor(
 
     fun clearAccountMessage() { _accountMessage.value = null }
 
-    // ── Conta — URL do backend (avançado; preferences.saveBaseUrl já existe, usado no login) ──
-    private val _editableBaseUrl = MutableStateFlow<String?>(null)
-    val editableBaseUrl: StateFlow<String?> = _editableBaseUrl.asStateFlow()
-
-    fun onBaseUrlChange(v: String) { _editableBaseUrl.value = v }
-
-    fun saveBaseUrl() {
-        val url = _editableBaseUrl.value?.trim().takeUnless { it.isNullOrBlank() } ?: return
-        viewModelScope.launch {
-            preferences.saveBaseUrl(url)
-            _editableBaseUrl.value = null
-            _accountMessage.value = context.getString(com.gluview.app.R.string.settings_base_url_saved)
-        }
-    }
-
     // ── Idioma ────────────────────────────────────────────────────────────────
     val appLanguage: StateFlow<String> = preferences.appLanguage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "pt")

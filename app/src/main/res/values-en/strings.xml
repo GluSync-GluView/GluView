@@ -308,7 +308,6 @@
     <string name="settings_upload_mobile_data_desc_off">Only uploads over Wi-Fi. Readings keep saving normally on the device.</string>
     <string name="settings_mobile_data_interval">Mobile data interval</string>
     <string name="settings_wifi_reconnect_flush">When Wi-Fi reconnects, all pending glucose readings are sent at once.</string>
-    <string name="settings_server">Server</string>
     <string name="settings_server_url">URL: %1$s</string>
     <string name="settings_server_account">Account: %1$s</string>
     <string name="settings_display_name_label">Display name</string>
@@ -326,10 +325,6 @@
     <string name="settings_confirm_password_change">Confirm new password</string>
     <string name="settings_password_changed">Password changed successfully.</string>
     <string name="settings_password_change_error">Couldn\'t change the password. Please try again.</string>
-    <string name="settings_base_url_section">Change the server (advanced)</string>
-    <string name="settings_base_url_warning">Do not change this unless you know exactly what you are doing. Changing the address disconnects the app from your server and may prevent sign-in.</string>
-    <string name="settings_base_url_save">Save URL</string>
-    <string name="settings_base_url_saved">Server URL updated.</string>
     <string name="settings_update_interval">Update interval</string>
     <plurals name="settings_minutes_full">
         <item quantity="one">%1$d minute</item>
@@ -961,7 +956,6 @@
     <string name="settings_profile_section">Profile</string>
     <string name="settings_email_label">Email</string>
     <string name="settings_password_min">At least 8 characters</string>
-    <string name="settings_server_url_label">Server address</string>
     <string name="settings_source_label_unavailable">%1$s (not available on this device)</string>
     <string name="settings_source_label_coming_soon">%1$s (coming soon)</string>
     <string name="settings_current_sensor_section">Current sensor</string>

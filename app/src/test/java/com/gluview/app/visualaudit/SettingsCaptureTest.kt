@@ -124,10 +124,10 @@ class SettingsCaptureTest {
             SyncContent(SyncUi(false, "SIBIONICS_CHINES", true, 15, 3, 365, 60, now - 2 * 86_400_000L),
                 SyncActions({}, {}, {}, {}, {}), onBack = {})
         }
-        val account = AccountUi("maria.eduarda.albuquerque.cavalcanti@exemplo.com.br", "https://glusync.exemplo.com.br",
-            "Maria Eduarda", false, false, true, "123", "", false, null, true)
+        val account = AccountUi("maria.eduarda.albuquerque.cavalcanti@exemplo.com.br",
+            "Maria Eduarda", false, false, true, "123", "", false, true)
         shoot("conta") {
-            AccountContent(account, AccountActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = {})
+            AccountContent(account, AccountActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}), onBack = {})
         }
         shoot("suporte") {
             SupportContent(true, {}, {}, {}, {}, {}, {}, {}, onBack = {})

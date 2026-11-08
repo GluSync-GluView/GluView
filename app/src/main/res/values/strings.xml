@@ -314,7 +314,6 @@
     <string name="settings_upload_mobile_data_desc_off">Só envia por Wi-Fi. As leituras continuam salvas normalmente no aparelho.</string>
     <string name="settings_mobile_data_interval">Intervalo em dados móveis</string>
     <string name="settings_wifi_reconnect_flush">Ao reconectar no Wi-Fi, todas as glicemias pendentes são enviadas de uma vez.</string>
-    <string name="settings_server">Servidor</string>
     <string name="settings_server_url">URL: %1$s</string>
     <string name="settings_server_account">Conta: %1$s</string>
     <string name="settings_display_name_label">Nome de exibição</string>
@@ -332,10 +331,6 @@
     <string name="settings_confirm_password_change">Confirmar nova senha</string>
     <string name="settings_password_changed">Senha alterada com sucesso.</string>
     <string name="settings_password_change_error">Não foi possível trocar a senha. Tente de novo.</string>
-    <string name="settings_base_url_section">Alterar o servidor (avançado)</string>
-    <string name="settings_base_url_warning">Não altere isto a menos que saiba exatamente o que está fazendo. Trocar o endereço desconecta o app do seu servidor e pode impedir o login.</string>
-    <string name="settings_base_url_save">Salvar URL</string>
-    <string name="settings_base_url_saved">URL do servidor atualizada.</string>
     <string name="settings_update_interval">Intervalo de atualização</string>
     <plurals name="settings_minutes_full">
         <item quantity="one">%1$d minuto</item>
@@ -968,7 +963,6 @@
     <string name="settings_profile_section">Perfil</string>
     <string name="settings_email_label">E-mail</string>
     <string name="settings_password_min">Mínimo de 8 caracteres</string>
-    <string name="settings_server_url_label">Endereço do servidor</string>
     <string name="settings_source_label_unavailable">%1$s (indisponível neste aparelho)</string>
     <string name="settings_source_label_coming_soon">%1$s (em breve)</string>
     <string name="settings_current_sensor_section">Sensor atual</string>

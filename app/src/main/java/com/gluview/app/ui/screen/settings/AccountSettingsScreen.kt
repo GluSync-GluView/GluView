@@ -8,7 +8,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -20,10 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -49,7 +45,6 @@ import com.gluview.app.util.breakableEmail
 /** Estado da Conta (para o harness desenhar sem ViewModel). */
 internal data class AccountUi(
     val email: String,
-    val baseUrl: String,
     val displayName: String,
     val displayNameSaving: Boolean,
     val displayNameSaved: Boolean,
@@ -57,7 +52,6 @@ internal data class AccountUi(
     val passwordCode: String,
     val newPassword: String,
     val passwordLoading: Boolean,
-    val editableBaseUrl: String?,
     val passkeysEnabled: Boolean,
     val displayNameLoadFailed: Boolean = false,
     /** ADR-0030 — liberação da nuvem/acompanhamento: approved|pending|waitlisted|rejected|revoked|none|"" */
@@ -75,15 +69,13 @@ internal data class AccountActions(
     val onNewPassword: (String) -> Unit,
     val onConfirmPassword: () -> Unit,
     val onCancelPassword: () -> Unit,
-    val onBaseUrl: (String) -> Unit,
-    val onSaveBaseUrl: () -> Unit,
     val onPasskeysEnabled: (Boolean) -> Unit,
     val onPasskeys: () -> Unit,
     val onMyAccessRequests: () -> Unit,
     val onRequestCloudSync: () -> Unit = {}
 )
 
-/** Conta: perfil, senha, chaves de acesso, candidaturas e o servidor. */
+/** Conta: perfil, senha, chaves de acesso e candidaturas (o servidor não é mostrado nem editável). */
 @Composable
 fun AccountSettingsScreen(
     onBack: () -> Unit,
@@ -101,7 +93,6 @@ fun AccountSettingsScreen(
     val passwordCode          by viewModel.passwordCode.collectAsState()
     val newAccountPassword    by viewModel.newAccountPassword.collectAsState()
     val passwordChangeLoading by viewModel.passwordChangeLoading.collectAsState()
-    val editableBaseUrl by viewModel.editableBaseUrl.collectAsState()
     val accountMessage  by viewModel.accountMessage.collectAsState()
     val passkeysEnabled by viewModel.passkeysEnabled.collectAsState()
     val cloudSyncState      by viewModel.cloudSyncState.collectAsState()
@@ -124,13 +115,13 @@ fun AccountSettingsScreen(
     }
 
     AccountContent(
-        ui = AccountUi(state.email, state.baseUrl, displayName, displayNameSaving, displayNameSaved, passwordCodeSent,
-            passwordCode, newAccountPassword, passwordChangeLoading, editableBaseUrl, passkeysEnabled, displayNameLoadFailed,
+        ui = AccountUi(state.email, displayName, displayNameSaving, displayNameSaved, passwordCodeSent,
+            passwordCode, newAccountPassword, passwordChangeLoading, passkeysEnabled, displayNameLoadFailed,
             cloudSyncState, cloudSyncRequesting, isFollowerOnly),
         actions = AccountActions(viewModel::onDisplayNameChange, viewModel::saveDisplayName,
             viewModel::requestPasswordChangeCode, viewModel::onPasswordCodeChange, viewModel::onNewAccountPasswordChange,
-            viewModel::confirmPasswordChange, viewModel::cancelPasswordChange, viewModel::onBaseUrlChange,
-            viewModel::saveBaseUrl, viewModel::onPasskeysEnabledChange, onPasskeys, onMyAccessRequests,
+            viewModel::confirmPasswordChange, viewModel::cancelPasswordChange,
+            viewModel::onPasskeysEnabledChange, onPasskeys, onMyAccessRequests,
             viewModel::requestCloudSync),
         onBack = onBack,
         snackbarHostState = snackbarHostState,
@@ -152,8 +143,6 @@ internal fun AccountContent(
     snackbarHostState: SnackbarHostState? = null,
     onRetryDisplayName: () -> Unit = {}
 ) {
-    var editUrl by rememberSaveable { mutableStateOf(ui.editableBaseUrl != null) }
-
     Page(title = stringResource(R.string.settings_account_title), onBack = onBack, snackbarHostState = snackbarHostState) {
         GluSection(stringResource(R.string.settings_profile_section)) {
             GluCard {
@@ -236,33 +225,6 @@ internal fun AccountContent(
                             subtitle = stringResource(R.string.access_requests_nav_subtitle))
                     }
                 })
-            }
-        }
-
-        GluSection(stringResource(R.string.settings_server)) {
-            GluCard {
-                FactList(listOf(Fact(stringResource(R.string.settings_server_url_label), ui.baseUrl, wide = true)))
-                if (!editUrl) {
-                    TextButton(onClick = { editUrl = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.settings_base_url_section))
-                    }
-                } else {
-                    GluCallout(stringResource(R.string.settings_base_url_warning), tone = Tone.Warning)
-                    OutlinedTextField(
-                        value           = ui.editableBaseUrl ?: ui.baseUrl,
-                        onValueChange   = actions.onBaseUrl,
-                        label           = { Text(stringResource(R.string.settings_server_url_label)) },
-                        singleLine      = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-                        modifier        = Modifier.fillMaxWidth()
-                    )
-                    OutlinedButton(
-                        onClick  = actions.onSaveBaseUrl,
-                        enabled  = ui.editableBaseUrl != null,
-                        colors   = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(stringResource(R.string.settings_base_url_save)) }
-                }
             }
         }
     }
