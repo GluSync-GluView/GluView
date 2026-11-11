@@ -40,9 +40,15 @@ ser da **mesma versão e da mesma fonte** do app do celular — senão os dois n
 - **App**: a mesma informação, com o botão **Sincronizar** (busca na nuvem na hora).
 
 **Como os dados chegam:** o celular manda cada leitura nova para o relógio pelo Bluetooth. Se o
-celular sumir, o relógio busca sozinho no GluSync (precisa de conta na nuvem) — mas só enquanto o
-acesso que o celular entregou estiver válido (cerca de 1 hora). No modo só-local, o relógio
-depende do celular.
+celular sumir, o relógio busca sozinho no GluSync (precisa de conta na nuvem) com uma credencial
+própria, **só de leitura**, que vale 30 dias e o celular renova sozinho. Ela aparece na sua lista de
+chaves como "Relógio Wear OS" e pode ser revogada lá; pedir uma nova (trocar de relógio, por exemplo)
+cancela a anterior. No modo só-local, o relógio depende do celular.
+
+**Alertas:** os alertas de glicemia do GluView chegam ao relógio como notificação do celular,
+espelhada pelo próprio sistema (app Pixel Watch ou Galaxy Wearable) — vibram no pulso. No Galaxy
+Wearable, confira em **Notificações** que o GluView está ligado. O som de alarme continua tocando no
+celular; o relógio vibra conforme as configurações dele. Ainda não testado num relógio de verdade.
 
 **Dado velho nunca aparece como atual:** sem leitura nova pelo tempo de "sem sinal" configurado no
 app do celular (padrão 20 min), o relógio mostra **--** na complication, no tile e no app.

@@ -5,10 +5,10 @@ package com.gluview.wear.contract
  * entre os dois — nunca por DataItem, que é sincronizado e guardado), para o relógio buscar a
  * glicemia no GluSync sozinho quando o celular some (Fase 7, plano B).
  *
- * É o token de acesso do próprio app do celular: curto (1 h no GluSync). O celular reenvia a cada
- * leitura, então enquanto os dois conversam o relógio sempre tem um válido; com o celular desligado
- * o plano B dura no máximo até [expiresAtMs]. Em modo só-local (ou sem login) o celular manda
- * [CLEARED] e o relógio apaga o que tinha.
+ * Normalmente é a credencial própria do relógio: uma API Key do GluSync só de leitura (prefixo
+ * `glsk_`, 30 dias, renovada pelo celular). Com GluSync antigo, é o token de acesso do app do celular
+ * (curto, 1 h). O celular reenvia a cada leitura; com o celular desligado o plano B dura até
+ * [expiresAtMs]. Em modo só-local (ou sem login) o celular manda [CLEARED] e o relógio apaga o que tinha.
  */
 data class WearToken(
     val accessToken: String,

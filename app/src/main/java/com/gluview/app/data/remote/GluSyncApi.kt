@@ -122,6 +122,10 @@ interface GluSyncApi {
         @Query("patientId") patientId: String? = null
     ): SummaryReportDto
 
+    // Plano 14 (relógio Wear OS, buscar na nuvem): credencial só de leitura do relógio, 30 dias.
+    @POST("api/glusync/v1/wear/credential")
+    suspend fun createWearCredential(): com.gluview.app.wear.WearCredentialDto
+
     // F5 — API Keys (exige JWT; o AuthInterceptor injeta o Bearer)
     @POST("apikeys")
     suspend fun createApiKey(@Body request: CreateApiKeyRequestDto): CreatedApiKeyDto

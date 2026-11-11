@@ -65,6 +65,7 @@ class WearBridge @Inject constructor(
     @ApplicationContext private val context: Context,
     private val prefs: AppPreferences,
     private val repository: GlucoseRepository,
+    private val wearCredential: WearCredentialProvider,
 ) {
     private val tag = "WearBridge"
     private val mutex = Mutex()
@@ -183,12 +184,15 @@ class WearBridge @Inject constructor(
     }
 
     private suspend fun currentToken(): WearToken {
-        if (prefs.localOnlyMode.first()) return WearToken.CLEARED
+        if (prefs.localOnlyMode.first()) { wearCredential.clear(); return WearToken.CLEARED }
         val token = prefs.accessToken.first()
         val expires = prefs.accessTokenExpiresAtMs.first()
-        if (token.isBlank() || expires <= 0L) return WearToken.CLEARED
-        val baseUrl = prefs.baseUrl.first().ifBlank { GluSyncConstants.BASE_URL }
-        return WearToken(token, baseUrl.trimEnd('/'), expires)
+        if (token.isBlank() || expires <= 0L) { wearCredential.clear(); return WearToken.CLEARED }
+        val baseUrl = prefs.baseUrl.first().ifBlank { GluSyncConstants.BASE_URL }.trimEnd('/')
+        // Credencial própria do relógio (só leitura, 30 dias): o relógio segue buscando na nuvem com o
+        // celular longe. Sem ela (servidor antigo, sem rede), o token curto do celular, como antes.
+        wearCredential.current()?.let { (key, keyExpires) -> return WearToken(key, baseUrl, keyExpires) }
+        return WearToken(token, baseUrl, expires)
     }
 
     /** Minigráfico das últimas 3 h, 400×160, fundo preto (variante WATCH). Falha → sem gráfico. */

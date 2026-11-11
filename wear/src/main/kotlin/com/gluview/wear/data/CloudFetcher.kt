@@ -9,6 +9,7 @@ import com.gluview.wear.contract.WatchFaceSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.roundToInt
@@ -18,9 +19,16 @@ import kotlin.math.roundToInt
  * mandando. Usa a rota Nightscout `/api/v1/entries/sgv.json` (traz a hora exata da medição em ms e
  * a direção — o `/glucose/wear` só traz "HH:mm", que não serve para a regra de dado velho) com o
  * token de acesso que o celular entregou.
+ *
+ * Desde a credencial própria do relógio (plano 14, "buscar na nuvem"), o celular manda uma API Key só
+ * de leitura (prefixo `glsk_`, vale 30 dias): aí a busca vai pela API pública do GluSync com
+ * `X-Api-Key` — `/api/glusync/v1/glucose/range`, que também traz a hora exata em ms e a direção.
+ * Token antigo (Bearer de 1 h) continua aceito, para celular com GluSync sem a rota nova.
  */
 object CloudFetcher {
     private const val TAG = "GluViewWear"
+    /** Credencial própria do relógio: API Key do GluSync (só leitura). */
+    internal const val API_KEY_PREFIX = "glsk_"
 
     sealed interface Result {
         data object Updated : Result
@@ -33,10 +41,14 @@ object CloudFetcher {
         val token = TokenStore.load(context)
         if (token == null || !token.isUsable(nowMs)) return@withContext Result.NoToken
 
-        val conn = (URL("${token.baseUrl}/api/v1/entries/sgv.json?count=2").openConnection() as HttpURLConnection).apply {
+        val apiKey = token.accessToken.startsWith(API_KEY_PREFIX)
+        val url = if (apiKey) "${token.baseUrl}/api/glusync/v1/glucose/range?order=desc&pageSize=2"
+                  else "${token.baseUrl}/api/v1/entries/sgv.json?count=2"
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 15_000
-            setRequestProperty("Authorization", "Bearer ${token.accessToken}")
+            if (apiKey) setRequestProperty("X-Api-Key", token.accessToken)
+            else setRequestProperty("Authorization", "Bearer ${token.accessToken}")
             setRequestProperty("Accept", "application/json")
         }
         try {
@@ -45,7 +57,9 @@ object CloudFetcher {
                 401, 403 -> { TokenStore.clear(context); return@withContext Result.NoToken }
                 else -> return@withContext Result.Failed("HTTP $code")
             }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val raw = conn.inputStream.bufferedReader().use { it.readText() }
+            // A API pública devolve {"data":[{date, sgv, direction...}]}: mesmos campos do Nightscout.
+            val body = if (apiKey) JSONObject(raw).optJSONArray("data")?.toString() ?: "[]" else raw
             val previous = SnapshotStore.load(context)
             val snapshot = parse(body, previous) ?: return@withContext Result.Failed("resposta vazia")
             if (previous != null && previous.measuredAtMs >= snapshot.measuredAtMs) return@withContext Result.NotNewer
