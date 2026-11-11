@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plano 17 — diário (Fase 1) e lembretes (Fase 2). Tudo no aparelho; nuvem só com liberação. -->
+<resources>
+    <!-- Diário -->
+    <string name="diary_title">Diário</string>
+    <string name="diary_add">Registrar</string>
+    <string name="diary_more">Mais opções</string>
+    <string name="diary_edit">Editar</string>
+    <string name="diary_prev_day">Dia anterior</string>
+    <string name="diary_next_day">Próximo dia</string>
+    <string name="diary_go_today">Voltar para hoje</string>
+    <string name="diary_summary_title">Resumo do dia</string>
+    <string name="diary_badge_local">Só neste celular</string>
+    <string name="diary_badge_cloud">Também no GluSync</string>
+    <string name="diary_sum_carbs">Carboidratos</string>
+    <string name="diary_sum_kcal">Calorias</string>
+    <string name="diary_sum_entries">Registros</string>
+    <string name="diary_empty_title">Nada registrado neste dia</string>
+    <string name="diary_empty_body">Use os botões acima para registrar refeição, insulina, ponta de dedo, cetona, remédio, exercício ou nota. Cada registro guarda a glicemia do sensor no momento.</string>
+    <string name="diary_delete_title">Excluir este registro?</string>
+    <string name="diary_delete_body">O registro sai do diário. Não dá para desfazer.</string>
+    <string name="diary_new_entry">Registrar: %1$s</string>
+    <string name="diary_edit_entry">Editar: %1$s</string>
+    <string name="diary_export_days">Exportar PDF (%1$d dias)</string>
+    <string name="diary_export_empty">Não há registros nesse período para exportar.</string>
+    <string name="diary_export_fail">Não foi possível gerar o PDF do diário.</string>
+    <string name="diary_not_informed">Não informar</string>
+
+    <string name="diary_type_meal">Refeição</string>
+    <string name="diary_type_insulin">Insulina</string>
+    <string name="diary_type_fingerstick">Ponta de dedo</string>
+    <string name="diary_type_ketone">Cetona</string>
+    <string name="diary_type_medication">Remédio</string>
+    <string name="diary_type_exercise">Exercício</string>
+    <string name="diary_type_note">Nota</string>
+
+    <string name="diary_insulin_rapid">Rápida</string>
+    <string name="diary_insulin_basal">Basal</string>
+    <string name="diary_insulin_mixed">Mista</string>
+    <string name="diary_insulin_title">Insulina %1$s</string>
+    <string name="diary_exercise_light">Leve</string>
+    <string name="diary_exercise_moderate">Moderado</string>
+    <string name="diary_exercise_intense">Forte</string>
+
+    <string name="diary_value_carbs">%1$s g de carboidrato</string>
+    <string name="diary_value_grams">%1$s g</string>
+    <string name="diary_value_kcal">%1$s kcal</string>
+    <string name="diary_value_units">%1$s U</string>
+    <string name="diary_value_minutes">%1$s min</string>
+    <string name="diary_value_mmol">%1$s mmol/L</string>
+
+    <string name="diary_field_units">Unidades (U)</string>
+    <string name="diary_field_glucose">Glicemia (%1$s)</string>
+    <string name="diary_field_mmol">Cetona no sangue (mmol/L)</string>
+    <string name="diary_field_minutes">Duração (min)</string>
+    <string name="diary_field_exercise_kind">Tipo de exercício (opcional)</string>
+    <string name="diary_field_exercise_kind_hint">Caminhada, musculação…</string>
+    <string name="diary_field_note">Nota</string>
+    <string name="diary_field_med_name">Nome do remédio</string>
+    <string name="diary_field_dose">Dose</string>
+    <string name="diary_field_default_dose">Dose de costume (opcional)</string>
+    <string name="diary_field_dose_unit">Unidade da dose (mg, comprimido…)</string>
+    <string name="diary_field_insulin_name">Nome da insulina</string>
+    <string name="diary_field_insulin_name_hint">Ex.: Humalog, Tresiba, NPH</string>
+    <string name="diary_fingerstick_hint">Com uma leitura do sensor no mesmo horário, a medida também entra na comparação sensor × ponta de dedo (Diagnóstico).</string>
+
+    <string name="diary_my_insulins">Minhas insulinas</string>
+    <string name="diary_my_insulins_desc">Cadastre uma vez; depois é só escolher e digitar as unidades.</string>
+    <string name="diary_no_insulins">Nenhuma insulina cadastrada. Cadastre as suas para registrar mais rápido e separar rápida e basal.</string>
+    <string name="diary_register_insulin">Cadastrar insulina</string>
+    <string name="diary_my_medications">Meus remédios</string>
+    <string name="diary_my_medications_desc">Nome, dose de costume e unidade.</string>
+    <string name="diary_register_medication">Cadastrar remédio</string>
+    <string name="diary_manage_medications">Gerenciar meus remédios</string>
+    <string name="diary_my_foods">Meus alimentos</string>
+    <string name="diary_my_foods_desc">Alimentos e receitas que você cadastrou, além da base que vem com o app.</string>
+    <string name="diary_catalog_title">Cadastros do diário</string>
+    <string name="diary_catalog_empty">Nada cadastrado ainda.</string>
+    <string name="diary_catalog_remove_title">Remover %1$s?</string>
+    <string name="diary_catalog_remove_body">Some da lista de cadastro. Os registros antigos do diário continuam como estão.</string>
+
+    <string name="diary_ketone_blood">Sangue</string>
+    <string name="diary_ketone_urine">Urina (fita)</string>
+    <string name="diary_ketone_blood_title">Cetona no sangue</string>
+    <string name="diary_ketone_urine_title">Cetona na urina</string>
+    <string name="diary_ketone_normal">Faixa normal</string>
+    <string name="diary_ketone_attention">Atenção</string>
+    <string name="diary_ketone_risk">Risco</string>
+    <string name="diary_ketone_urgent">Procure atendimento</string>
+    <string name="diary_ketone_advice_normal">Abaixo de 0,6 mmol/L (ou fita negativa) é a faixa normal.</string>
+    <string name="diary_ketone_advice_attention">Cetona elevada. Siga a orientação da sua equipe de saúde: hidratação, nova medida e conferência da glicemia.</string>
+    <string name="diary_ketone_advice_risk">Cetona alta: risco de cetoacidose. Siga seu plano de ação e fale com a sua equipe de saúde.</string>
+    <string name="diary_ketone_advice_urgent">Cetona muito alta: procure atendimento médico agora.</string>
+
+    <!-- Refeição e alimentos -->
+    <string name="diary_meal_new">Nova refeição</string>
+    <string name="diary_meal_edit">Editar refeição</string>
+    <string name="diary_meal_total">Total: %1$s g de carboidrato · %2$s kcal</string>
+    <string name="diary_meal_favorites">Favoritas</string>
+    <string name="diary_meal_favorite_delete">Remover a favorita %1$s</string>
+    <string name="diary_meal_favorite_delete_body">A favorita some da lista. As refeições já registradas não mudam.</string>
+    <string name="diary_meal_items">Itens da refeição</string>
+    <string name="diary_meal_no_items">Busque os alimentos abaixo ou informe só o carboidrato.</string>
+    <string name="diary_meal_remove_item">Remover %1$s</string>
+    <string name="diary_meal_extra">Carboidrato avulso (g)</string>
+    <string name="diary_meal_extra_item">Carboidrato avulso</string>
+    <string name="diary_meal_add_food">Adicionar alimento</string>
+    <string name="diary_meal_search">Buscar alimento</string>
+    <string name="diary_meal_search_hint">Os que você mais usa aparecem primeiro.</string>
+    <string name="diary_meal_not_found">Nada encontrado para “%1$s”. Cadastre o alimento abaixo.</string>
+    <string name="diary_meal_save_favorite">Salvar também como favorita</string>
+    <string name="diary_meal_favorite_name">Nome da favorita (ex.: café da manhã)</string>
+    <string name="diary_food_per100">%1$s g carb · %2$s kcal por 100 g</string>
+    <string name="diary_food_mine">meu</string>
+    <string name="diary_food_grams">Gramas</string>
+    <string name="diary_food_quantity">Quantidade</string>
+    <string name="diary_food_preview">%1$s g → %2$s g de carboidrato · %3$s kcal</string>
+    <string name="diary_food_add">Adicionar</string>
+    <string name="diary_food_new">Cadastrar alimento</string>
+    <string name="diary_food_edit">Editar alimento</string>
+    <string name="diary_food_name">Nome</string>
+    <string name="diary_food_values_hint">Valores por 100 g (veja no rótulo).</string>
+    <string name="diary_food_carbs100">Carboidrato em 100 g</string>
+    <string name="diary_food_kcal100">Calorias em 100 g (opcional)</string>
+    <string name="diary_food_protein100">Proteína em 100 g (opcional)</string>
+    <string name="diary_food_fat100">Gordura em 100 g (opcional)</string>
+    <string name="diary_food_portion_label">Porção caseira (opcional)</string>
+    <string name="diary_food_portion_hint">Ex.: fatia, colher, unidade</string>
+    <string name="diary_food_portion_grams">Gramas da porção</string>
+    <string name="diary_food_source">Base de alimentos: USDA FoodData Central (domínio público). Valores aproximados — confira o rótulo.</string>
+
+    <!-- PDF -->
+    <string name="diary_pdf_title">GluView — Diário</string>
+    <string name="diary_pdf_section">Diário do período</string>
+    <string name="diary_pdf_period">Período: %1$s a %2$s</string>
+    <string name="diary_pdf_totals">Total do período: %1$s g de carboidrato · insulina rápida %2$s U · basal %3$s U</string>
+    <string name="diary_pdf_day">%1$s g carb · rápida %2$s U · basal %3$s U</string>
+    <string name="diary_pdf_disclaimer">Registro pessoal feito no GluView. Não substitui a orientação da equipe de saúde.</string>
+    <string name="diary_pdf_file">gluview_diario</string>
+
+    <!-- Home e Ajustes -->
+    <string name="home_diary_today">Diário de hoje</string>
+    <string name="home_diary_summary">%1$s g carb · rápida %2$s U · basal %3$s U</string>
+    <string name="home_diary_add_meal">Registrar refeição</string>
+    <string name="home_diary_add_insulin">Registrar insulina</string>
+    <string name="settings_diary_subtitle">Refeições, insulina, cetona, remédios e exercícios</string>
+    <string name="settings_reminders_subtitle">Medir, aplicar insulina, tomar remédio</string>
+
+    <!-- Lembretes -->
+    <string name="reminders_title">Lembretes</string>
+    <string name="reminders_intro">Os lembretes tocam pelo próprio celular, mesmo sem internet. Nada disso passa pelo GluSync.</string>
+    <string name="reminders_mine">Meus lembretes</string>
+    <string name="reminders_empty">Nenhum lembrete ainda. Comece por um modelo abaixo.</string>
+    <string name="reminders_add">Novo lembrete</string>
+    <string name="reminders_new">Novo lembrete</string>
+    <string name="reminders_edit">Editar lembrete</string>
+    <string name="reminders_templates">Modelos prontos</string>
+    <string name="reminders_today">Hoje</string>
+    <string name="reminders_today_empty">Nenhum lembrete tocou hoje.</string>
+    <string name="reminders_every_day">todo dia</string>
+    <string name="reminders_field_title">Nome do lembrete</string>
+    <string name="reminders_linked">Qual?</string>
+    <string name="reminders_field_dose">Dose (opcional)</string>
+    <string name="reminders_dose_hint">Com dose informada, tocar em “Feito” na notificação já registra no diário.</string>
+    <string name="reminders_no_medications">Nenhum remédio cadastrado. Cadastre para ligar ao lembrete.</string>
+    <string name="reminders_times">Horários</string>
+    <string name="reminders_add_time">Adicionar horário</string>
+    <string name="reminders_remove_time">Remover %1$s</string>
+    <string name="reminders_days">Dias</string>
+    <string name="reminders_delete">Excluir lembrete</string>
+    <string name="reminders_delete_title">Excluir este lembrete?</string>
+    <string name="reminders_delete_body">Ele para de tocar. Os registros feitos pelo lembrete continuam no diário.</string>
+    <string name="reminders_notifications_off">As notificações do GluView estão desligadas: os lembretes não vão aparecer.</string>
+    <string name="reminders_open_settings">Abrir ajustes de notificação</string>
+    <string name="reminders_exact_off">O Android não deixou o GluView usar alarme exato: os lembretes podem atrasar até cerca de 1 hora. Permita o alarme exato para tocarem na hora.</string>
+    <string name="reminders_allow_exact">Permitir alarme exato</string>
+    <string name="reminders_smart">Avisos inteligentes</string>
+    <string name="reminders_smart_desc">Ficam no celular e só lembram de registrar. Nunca sugerem dose.</string>
+    <string name="reminders_smart_meal">Glicemia subindo sem refeição registrada</string>
+    <string name="reminders_smart_meal_desc">Avisa quando o sensor mostra subida rápida (cerca de 45 mg/dL em 30 min) e não há refeição registrada na última 1h30. No máximo um aviso a cada 3 horas.</string>
+    <string name="reminders_log_line">%1$s · %2$s · %3$s</string>
+    <string name="reminders_log_fired">tocou</string>
+    <string name="reminders_log_done">feito</string>
+    <string name="reminders_log_snoozed">adiado</string>
+    <string name="reminders_log_skipped">pulado</string>
+    <string name="reminders_log_suppressed">não tocou (basal já registrada)</string>
+
+    <string name="reminder_kind_measure">Medir glicemia</string>
+    <string name="reminder_kind_insulin">Aplicar insulina</string>
+    <string name="reminder_kind_medication">Tomar remédio</string>
+    <string name="reminder_kind_basal_check">Conferir basal</string>
+    <string name="reminder_kind_custom">Livre</string>
+    <string name="reminder_kind_basal_check_desc">Só toca se nenhuma insulina basal tiver sido registrada no diário hoje até esse horário.</string>
+    <string name="reminder_template_basal">Basal às 22h</string>
+    <string name="reminder_template_basal_check">Basal ainda não registrada (23h)</string>
+    <string name="reminder_template_measure_morning">Medir ao acordar (7h)</string>
+    <string name="reminder_template_medication">Remédio de manhã (8h)</string>
+
+    <string name="reminder_notif_measure">Hora de medir a glicemia.</string>
+    <string name="reminder_notif_insulin">Hora da insulina.</string>
+    <string name="reminder_notif_insulin_dose">Hora da insulina: %1$s, %2$s U.</string>
+    <string name="reminder_notif_medication">Hora do remédio.</string>
+    <string name="reminder_notif_medication_named">Hora do remédio: %1$s.</string>
+    <string name="reminder_notif_basal_check">A insulina basal de hoje ainda não foi registrada no diário.</string>
+    <string name="reminder_notif_custom">Lembrete do GluView.</string>
+    <string name="reminder_action_done">Feito</string>
+    <string name="reminder_action_done_register">Feito (registrar)</string>
+    <string name="reminder_action_snooze10">Adiar 10 min</string>
+    <string name="reminder_action_snooze30">Adiar 30 min</string>
+    <string name="notif_channel_reminder_name">Lembretes</string>
+    <string name="notif_channel_reminder_desc">Lembretes de medir, aplicar insulina e tomar remédio (separados dos alertas de glicemia).</string>
+    <string name="notif_channel_diary_prompt_name">Avisos do diário</string>
+    <string name="notif_channel_diary_prompt_desc">Lembrete de registrar a refeição quando a glicemia sobe rápido.</string>
+
+    <string name="smart_meal_prompt_title">Glicemia subindo rápido</string>
+    <string name="smart_meal_prompt_body">Não há refeição registrada na última 1h30. Quer registrar agora?</string>
+    <string name="smart_meal_prompt_action">Registrar refeição</string>
+    <!-- Registro rápido (lápis da Home, widgets e notificação) -->
+    <string name="quick_add_title">Registrar no diário</string>
+    <string name="quick_add_favorites">Favoritas (um toque registra)</string>
+    <string name="quick_add_kcal">Calorias (opcional)</string>
+    <string name="quick_add_meal_full">Montar com alimentos (abre o app)</string>
+    <string name="notif_quick_add_action">Registrar no diário</string>
+    <string name="settings_notif_quick_add">Botão “Registrar no diário” na notificação</string>
+    <string name="settings_notif_quick_add_desc">Mostra o botão na notificação fixa do GluView. Ele abre uma janela rápida de registro, sem abrir o app. Vale a partir da próxima leitura.</string>
+    <string name="widget_diary_label">GluView + diário</string>
+    <string name="widget_diary_desc">Glicemia atual com o lápis para registrar no diário sem abrir o app.</string>
+    <string name="widget_quickadd_label">Registrar no diário</string>
+    <string name="widget_quickadd_desc">Botão que abre o registro rápido do diário sem abrir o app.</string>
+    <string name="widget_quickadd_button">Registrar no diário</string>
+    <string name="widget_quickadd_short">Diário</string>
+</resources>

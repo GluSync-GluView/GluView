@@ -57,6 +57,7 @@ class NotificationHelper @Inject constructor(
         const val NOTIF_ID_DONATION             = 13 // doação via Pix confirmada
 
         private const val REQUEST_CODE_ERROR = 100
+        private const val REQUEST_CODE_QUICK_ADD = 101
 
         /** Teto da fonte na recolhida (2 linhas em ~48dp) e no valor da expandida. */
         private const val COLLAPSED_MAX_FONT_SCALE = 1.3f
@@ -231,7 +232,9 @@ class NotificationHelper @Inject constructor(
         sgvArrowText: String?,
         detailText: String?,
         graphBitmap: Bitmap?,   // expandida
-        dotsBitmap: Bitmap?     // recolhida
+        dotsBitmap: Bitmap?,    // recolhida
+        /** Plano 17: rótulo do botão "Registrar no diário"; null = sem botão (desligado em Ajustes). */
+        quickAddLabel: String? = null
     ): Notification {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -254,6 +257,15 @@ class NotificationHelper @Inject constructor(
             .setShowWhen(false)
             // Não emite som/vibração nas atualizações de valor (só na criação inicial)
             .setOnlyAlertOnce(true)
+
+        if (quickAddLabel != null) {
+            val quick = PendingIntent.getActivity(
+                context, REQUEST_CODE_QUICK_ADD,
+                Intent(context, com.gluview.app.QuickAddActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(R.drawable.ic_diary_edit, quickAddLabel, quick)
+        }
 
         // Collapsed + Expanded com RemoteViews quando há dados
         if (sgvArrowText != null) {

@@ -73,7 +73,8 @@ fun GeneralSettingsScreen(
             viewModel::onThemeModeChange, viewModel::onWidgetGraphHoursChange, viewModel::onNotifGraphHoursChange,
             viewModel::onGraphThemeModeChange, viewModel::onAutoShowGraphChange, viewModel::onAutoGraphHoursChange,
             viewModel::onAutoGraphThemeChange),
-        onBack = onBack
+        onBack = onBack,
+        extra = { QuickAddNotificationSetting() }
     )
 }
 
@@ -84,7 +85,8 @@ fun GeneralSettingsScreen(
  * Escuro). As chaves e as candidaturas saíram daqui (decisão 5.5 #4).
  */
 @Composable
-internal fun GeneralContent(ui: GeneralUi, actions: GeneralActions, onBack: () -> Unit) {
+internal fun GeneralContent(ui: GeneralUi, actions: GeneralActions, onBack: () -> Unit,
+                            extra: @Composable () -> Unit = {}) {
     val hours: @Composable (Int) -> String = { "${it}h" }
     val graphThemes = listOf(GraphTheme.FOLLOW_APP, GraphTheme.LIGHT, GraphTheme.DARK)
     val graphThemeLabel: @Composable (String) -> String = {
@@ -132,6 +134,9 @@ internal fun GeneralContent(ui: GeneralUi, actions: GeneralActions, onBack: () -
             }
         }
 
+        // Plano 17 — botão "Registrar no diário" na notificação fixa (pode ser escondido).
+        extra()
+
         // Android Auto — gráfico de glicemia no painel do carro
         GluSection(stringResource(R.string.auto_settings_title)) {
             GluCard {
@@ -151,3 +156,4 @@ internal fun GeneralContent(ui: GeneralUi, actions: GeneralActions, onBack: () -
         }
     }
 }
+

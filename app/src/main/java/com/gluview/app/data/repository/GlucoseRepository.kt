@@ -30,7 +30,9 @@ import javax.inject.Singleton
 class GlucoseRepository @Inject constructor(
     private val api: GluSyncApi,
     private val dao: GlucoseDao,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    // Plano 17: o diário segue a mesma regra de conta dona (claimUnownedReadings reclama os dois).
+    private val eventLogDao: com.gluview.app.data.local.dao.EventLogDao
 ) {
     // StateFlow compartilhado entre Service e ViewModels
     private val _currentReading = MutableStateFlow<GlucoseReading?>(null)
@@ -74,7 +76,10 @@ class GlucoseRepository @Inject constructor(
     /** Reclama o histórico local gravado antes do isolamento por conta existir (migration
      *  12→13) para a conta que acabou de logar. Idempotente — chamar em todo login é seguro. */
     suspend fun claimUnownedReadings(owner: String) {
-        if (owner.isNotBlank()) dao.claimUnownedRows(owner)
+        if (owner.isNotBlank()) {
+            dao.claimUnownedRows(owner)
+            eventLogDao.claimUnownedRows(owner)
+        }
     }
 
     // ── Modo Seguidor ─────────────────────────────────────────────────────────

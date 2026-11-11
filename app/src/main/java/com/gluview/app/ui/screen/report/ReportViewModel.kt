@@ -37,7 +37,9 @@ enum class ExportKind { PDF, CSV }
 class ReportViewModel @Inject constructor(
     private val repository: StatsRepository,
     private val exportHelper: ExportHelper,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    // Plano 17 — o diário do mês entra no fim do PDF (só do próprio paciente, nunca no modo seguidor).
+    private val diary: com.gluview.app.data.diary.DiaryRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportUiState())
@@ -55,7 +57,16 @@ class ReportViewModel @Inject constructor(
         load()
     }
 
-    fun exportPdf() = export(ExportKind.PDF, R.string.report_export_pdf_ok, R.string.report_export_pdf_fail) { exportHelper.exportPdf(it) }
+    fun exportPdf() = export(ExportKind.PDF, R.string.report_export_pdf_ok, R.string.report_export_pdf_fail) { report ->
+        val s = _uiState.value
+        val first = java.time.LocalDate.of(s.ano, s.mes, 1)
+        val last = first.plusMonths(1).minusDays(1)
+        val zone = java.time.ZoneId.systemDefault()
+        val entries = if (activePatientId() != null) emptyList() else diary.getBetween(
+            com.gluview.app.data.diary.DiaryRepository.dayBounds(first, zone).first,
+            com.gluview.app.data.diary.DiaryRepository.dayBounds(last, zone).second)
+        exportHelper.exportPdf(report, entries, first to last)
+    }
 
     fun exportCsv() = export(ExportKind.CSV, R.string.report_export_csv_ok, R.string.report_export_csv_fail) { exportHelper.exportCsv(it) }
 

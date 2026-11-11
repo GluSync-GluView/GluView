@@ -26,7 +26,15 @@ sealed class Screen(val route: String) {
     data object Chart : Screen("chart?tab={tab}") {
         fun createRoute(tab: String = "chart") = "chart?tab=$tab"
     }
-    data object EventLog      : Screen("event_log")
+    // Plano 17 — diário completo (substitui o "log de eventos"); type = registro rápido de um tipo.
+    data object Diary         : Screen("diary?type={type}") {
+        fun createRoute(type: String? = null) = if (type.isNullOrBlank()) "diary" else "diary?type=$type"
+    }
+    data object MealEditor    : Screen("diary_meal?uuid={uuid}") {
+        fun createRoute(uuid: String? = null) = if (uuid.isNullOrBlank()) "diary_meal" else "diary_meal?uuid=$uuid"
+    }
+    data object DiaryCatalog  : Screen("diary_catalog")
+    data object Reminders     : Screen("reminders")
     data object Diagnostic    : Screen("diagnostic")
     data object Report        : Screen("report")
     // Sprint 6

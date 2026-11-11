@@ -78,8 +78,24 @@ class HomeViewModel @Inject constructor(
     private val sensorHistoryDao: SensorHistoryDao,
     alertDao: AlertLogDao,
     @ApplicationContext private val context: Context,
-    serviceMonitor: com.gluview.app.util.ServiceMonitor
+    serviceMonitor: com.gluview.app.util.ServiceMonitor,
+    // Plano 17 — diário de hoje na Home e marcadores no gráfico.
+    diary: com.gluview.app.data.diary.DiaryRepository
 ) : ViewModel() {
+
+    /** Resumo do diário de hoje (vira a meia-noite sozinho). */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val diaryToday: StateFlow<com.gluview.app.data.diary.DaySummary> =
+        kotlinx.coroutines.flow.flow {
+            while (true) { emit(java.time.LocalDate.now()); kotlinx.coroutines.delay(60_000L) }
+        }.distinctUntilChanged().flatMapLatest { diary.observeDaySummary(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.gluview.app.data.diary.DaySummary())
+
+    /** Registros das últimas 24 h como marcadores do gráfico. */
+    val diaryMarkers: StateFlow<List<com.gluview.app.ui.components.chart.ChartMarker>> =
+        diary.observeFrom(System.currentTimeMillis() - 24 * 3_600_000L)
+            .map { list -> list.map { com.gluview.app.ui.screen.diary.toChartMarker(it) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** O banco já respondeu (com ou sem leitura) — L5: sem leitura nenhuma, sai do spinner. */
     private val dbChecked = MutableStateFlow(false)

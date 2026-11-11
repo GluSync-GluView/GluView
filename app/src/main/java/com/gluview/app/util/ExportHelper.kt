@@ -49,8 +49,31 @@ class ExportHelper @Inject constructor(
     }
 
     // S24 — PDF simples (texto). I/O no dispatcher IO para não bloquear a Main.
-    suspend fun exportPdf(report: SummaryReportDto) = withContext(Dispatchers.IO) {
-        val (text, _) = texts()
+    // Plano 17: [diary] = registros do diário do mesmo período, que entram no fim do relatório.
+    suspend fun exportPdf(report: SummaryReportDto, diary: List<com.gluview.app.data.local.entity.EventLogEntity> = emptyList(),
+                          diaryRange: Pair<java.time.LocalDate, java.time.LocalDate>? = null) = withContext(Dispatchers.IO) {
+        val (text, localized) = texts()
+        val lines = text.pdfLines(report) + if (diary.isNotEmpty() && diaryRange != null)
+            diaryText(localized).lines(diary, diaryRange.first, diaryRange.second, includeTitle = false) else emptyList()
+        val file = File(exportDir, "${text.fileName}.pdf")
+        writePdf(lines, file)
+        share(file, "application/pdf", text.chooserTitle)
+    }
+
+    /** PDF só do diário (plano 17, F1.7) — funciona sem conta e sem internet. */
+    suspend fun exportDiaryPdf(entries: List<com.gluview.app.data.local.entity.EventLogEntity>,
+                               first: java.time.LocalDate, last: java.time.LocalDate) = withContext(Dispatchers.IO) {
+        val (_, localized) = texts()
+        val file = File(exportDir, localized.getString(com.gluview.app.R.string.diary_pdf_file) + ".pdf")
+        writePdf(diaryText(localized).lines(entries, first, last), file)
+        share(file, "application/pdf", localized.getString(com.gluview.app.R.string.export_chooser))
+    }
+
+    private suspend fun diaryText(localized: Context) = DiaryReportText(
+        localized, GlucoseUnit.fromString(preferences.glucoseUnit.first()), TimeFormat.fromString(preferences.timeFormat.first())
+    )
+
+    private fun writePdf(lines: List<Pair<String, Boolean>>, file: File) {
         val document = PdfDocument()
         val paint      = Paint().apply { textSize = 14f; color = Color.BLACK }
         val titlePaint = Paint().apply { textSize = 18f; color = Color.BLACK; isFakeBoldText = true }
@@ -64,21 +87,39 @@ class ExportHelper @Inject constructor(
             y = 50f
         }
         newPage()
-        text.pdfLines(report).forEachIndexed { i, (line, isTitle) ->
+        lines.forEachIndexed { i, (line, isTitle) ->
             val p = if (isTitle) titlePaint else paint
             if (isTitle && i > 0) y += 14f
             // Nova página antes de passar da margem de baixo (o resumo de vários meses cabia mal).
-            if (y + p.textSize > 842 - 40) newPage()
-            page!!.canvas.drawText(line, 40f, y, p)
-            y += p.textSize + 6f
+            // Plano 17: linha longa (registro do diário com observação) quebra em vez de sair da página.
+            wrap(line, p, 595f - 80f).forEach { part ->
+                if (y + p.textSize > 842 - 40) newPage()
+                page!!.canvas.drawText(part, 40f, y, p)
+                y += p.textSize + 6f
+            }
         }
         page?.let(document::finishPage)
-
-        val file = File(exportDir, "${text.fileName}.pdf")
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
+    }
 
-        share(file, "application/pdf", text.chooserTitle)
+    /** Quebra [line] em pedaços que cabem em [maxWidth] (por palavra; recuo inicial mantido). */
+    private fun wrap(line: String, paint: Paint, maxWidth: Float): List<String> {
+        if (paint.measureText(line) <= maxWidth) return listOf(line)
+        val indent = line.takeWhile { it == ' ' }
+        val out = mutableListOf<String>()
+        var current = StringBuilder()
+        line.trim().split(' ').forEach { word ->
+            val candidate = if (current.isEmpty()) indent + word else "$current $word"
+            if (paint.measureText(candidate) <= maxWidth || current.isEmpty()) {
+                current = StringBuilder(candidate)
+            } else {
+                out += current.toString()
+                current = StringBuilder("$indent    $word")
+            }
+        }
+        if (current.isNotEmpty()) out += current.toString()
+        return out
     }
 
     // S24 — CSV com o resumo e o pivô. I/O no dispatcher IO para não bloquear a Main.

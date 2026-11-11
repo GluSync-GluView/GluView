@@ -172,6 +172,11 @@ class MainActivity : AppCompatActivity() {
             "updates"      -> Screen.SettingsUpdates.route
             // Doação via Pix: toque na notificação de agradecimento. Só navega.
             "donation"     -> Screen.Donation.route
+            // Plano 17 — notificação de lembrete / aviso de refeição: só navega (abre o registro do tipo).
+            "diary"        -> Screen.Diary.createRoute(
+                data.getQueryParameter("type")?.takeIf { t -> com.gluview.app.data.diary.DiaryType.entries.any { it.key == t } }
+            )
+            "reminders"    -> Screen.Reminders.route
             else           -> return
         }
     }

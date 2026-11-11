@@ -100,6 +100,9 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
     @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
+    // Plano 17 (F2.4) — aviso "subindo rápido sem refeição registrada" (desligado por padrão).
+    @Inject lateinit var smartMealPrompt: com.gluview.app.data.reminder.SmartMealPrompt
+    private var smartMealJob: kotlinx.coroutines.Job? = null
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var tokenRefresher: TokenRefresher
     @Inject lateinit var caregiverRepository: CaregiverRepository
@@ -264,6 +267,10 @@ class GluSyncService : LifecycleService() {
         wearSendJob?.cancel()
         wearSendJob = lifecycleScope.launch {
             repository.currentReading.filterNotNull().collect { wearBridge.onNewReading(it) }
+        }
+        smartMealJob?.cancel()
+        smartMealJob = lifecycleScope.launch {
+            repository.currentReading.filterNotNull().collect { runCatching { smartMealPrompt.onNewReading() } }
         }
         // F6 — Acompanhamento: convite recebido/aceito vira notificação + badge do sino.
         startCaregiverInviteWatch()
@@ -462,7 +469,9 @@ class GluSyncService : LifecycleService() {
             urgentLow = limits.urgentLow, urgentHigh = limits.urgentHigh
         )
         val notif = notificationHelper.buildPersistentNotification(
-            content.text, content.sgvArrowText, content.detailText, content.graph, content.dots
+            content.text, content.sgvArrowText, content.detailText, content.graph, content.dots,
+            quickAddLabel = if (preferences.notifQuickAdd.first())
+                withAppLanguage(preferences.appLanguage.first()).getString(com.gluview.app.R.string.notif_quick_add_action) else null
         )
         val mgr = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         mgr.notify(NOTIF_ID_PERSISTENT, notif)
@@ -491,6 +500,20 @@ class GluSyncService : LifecycleService() {
                 prefs[GluViewWidget.KEY_LANG]        = lang
             }
             GluViewWidget().update(this@GluSyncService, id)
+        }
+        // Plano 17 — widget de glicemia com o lápis do diário: mesmas chaves do simples.
+        manager.getGlanceIds(com.gluview.app.widget.GluViewDiaryWidget::class.java).forEach { id ->
+            updateAppWidgetState(this@GluSyncService, id) { prefs ->
+                prefs[GluViewWidget.KEY_SGV]         = reading.sgvMgDl.toFloat()
+                prefs[GluViewWidget.KEY_ARROW]       = reading.arrow
+                prefs[GluViewWidget.KEY_ZONE]        = reading.zone.name
+                prefs[GluViewWidget.KEY_STALE]       = reading.isStale
+                prefs[GluViewWidget.KEY_UNIT]        = unit.name
+                prefs[GluViewWidget.KEY_LAST_MS]     = readingMs.toString()
+                prefs[GluViewWidget.KEY_TIME_FORMAT] = timeFormatStr
+                prefs[GluViewWidget.KEY_LANG]        = lang
+            }
+            com.gluview.app.widget.GluViewDiaryWidget().update(this@GluSyncService, id)
         }
 
         // Chart widget + xDrip widget compartilham os mesmos dados de leitura recente
@@ -593,7 +616,7 @@ class GluSyncService : LifecycleService() {
             repository.pruneOldReadings(retentionDays) // piso de 1 mês garantido lá dentro
             val cutoff = now - TimeUnit.DAYS.toMillis(retentionDays.coerceAtLeast(30).toLong())
             alertLogDao.deleteOlderThan(cutoff)
-            eventLogDao.deleteOlderThan(cutoff)
+            // Plano 17 (D2): o diário NÃO segue a retenção da glicemia — ocupa pouco e é o histórico da pessoa.
         }
         // F1/T05 — retenção dos logs do app (texto + Room), corte fixo de 7 dias. Independente
         // da retenção de glicemia (não é dado de glicemia) — sempre roda.

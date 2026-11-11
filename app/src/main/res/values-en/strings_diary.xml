@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Diary -->
+    <string name="diary_title">Diary</string>
+    <string name="diary_add">Log</string>
+    <string name="diary_more">More options</string>
+    <string name="diary_edit">Edit</string>
+    <string name="diary_prev_day">Previous day</string>
+    <string name="diary_next_day">Next day</string>
+    <string name="diary_go_today">Back to today</string>
+    <string name="diary_summary_title">Day summary</string>
+    <string name="diary_badge_local">Only on this phone</string>
+    <string name="diary_badge_cloud">Also on GluSync</string>
+    <string name="diary_sum_carbs">Carbs</string>
+    <string name="diary_sum_kcal">Calories</string>
+    <string name="diary_sum_entries">Entries</string>
+    <string name="diary_empty_title">Nothing logged on this day</string>
+    <string name="diary_empty_body">Use the buttons above to log a meal, insulin, finger stick, ketones, medication, exercise or a note. Each entry keeps the sensor glucose at that moment.</string>
+    <string name="diary_delete_title">Delete this entry?</string>
+    <string name="diary_delete_body">The entry is removed from the diary. This can\'t be undone.</string>
+    <string name="diary_new_entry">Log: %1$s</string>
+    <string name="diary_edit_entry">Edit: %1$s</string>
+    <string name="diary_export_days">Export PDF (%1$d days)</string>
+    <string name="diary_export_empty">There are no entries in that period to export.</string>
+    <string name="diary_export_fail">Couldn\'t create the diary PDF.</string>
+    <string name="diary_not_informed">Not set</string>
+
+    <string name="diary_type_meal">Meal</string>
+    <string name="diary_type_insulin">Insulin</string>
+    <string name="diary_type_fingerstick">Finger stick</string>
+    <string name="diary_type_ketone">Ketones</string>
+    <string name="diary_type_medication">Medication</string>
+    <string name="diary_type_exercise">Exercise</string>
+    <string name="diary_type_note">Note</string>
+
+    <string name="diary_insulin_rapid">Rapid</string>
+    <string name="diary_insulin_basal">Basal</string>
+    <string name="diary_insulin_mixed">Mixed</string>
+    <string name="diary_insulin_title">%1$s insulin</string>
+    <string name="diary_exercise_light">Light</string>
+    <string name="diary_exercise_moderate">Moderate</string>
+    <string name="diary_exercise_intense">Intense</string>
+
+    <string name="diary_value_carbs">%1$s g carbs</string>
+    <string name="diary_value_grams">%1$s g</string>
+    <string name="diary_value_kcal">%1$s kcal</string>
+    <string name="diary_value_units">%1$s U</string>
+    <string name="diary_value_minutes">%1$s min</string>
+    <string name="diary_value_mmol">%1$s mmol/L</string>
+
+    <string name="diary_field_units">Units (U)</string>
+    <string name="diary_field_glucose">Glucose (%1$s)</string>
+    <string name="diary_field_mmol">Blood ketones (mmol/L)</string>
+    <string name="diary_field_minutes">Duration (min)</string>
+    <string name="diary_field_exercise_kind">Kind of exercise (optional)</string>
+    <string name="diary_field_exercise_kind_hint">Walking, weights…</string>
+    <string name="diary_field_note">Note</string>
+    <string name="diary_field_med_name">Medication name</string>
+    <string name="diary_field_dose">Dose</string>
+    <string name="diary_field_default_dose">Usual dose (optional)</string>
+    <string name="diary_field_dose_unit">Dose unit (mg, tablet…)</string>
+    <string name="diary_field_insulin_name">Insulin name</string>
+    <string name="diary_field_insulin_name_hint">E.g. Humalog, Tresiba, NPH</string>
+    <string name="diary_fingerstick_hint">With a sensor reading at the same time, the value also goes into the sensor × finger stick comparison (Diagnostics).</string>
+
+    <string name="diary_my_insulins">My insulins</string>
+    <string name="diary_my_insulins_desc">Add them once; then just pick one and type the units.</string>
+    <string name="diary_no_insulins">No insulin added yet. Add yours to log faster and keep rapid and basal apart.</string>
+    <string name="diary_register_insulin">Add insulin</string>
+    <string name="diary_my_medications">My medications</string>
+    <string name="diary_my_medications_desc">Name, usual dose and unit.</string>
+    <string name="diary_register_medication">Add medication</string>
+    <string name="diary_manage_medications">Manage my medications</string>
+    <string name="diary_my_foods">My foods</string>
+    <string name="diary_my_foods_desc">Foods and recipes you added, on top of the database that comes with the app.</string>
+    <string name="diary_catalog_title">Diary lists</string>
+    <string name="diary_catalog_empty">Nothing added yet.</string>
+    <string name="diary_catalog_remove_title">Remove %1$s?</string>
+    <string name="diary_catalog_remove_body">It leaves the list. Past diary entries stay as they are.</string>
+
+    <string name="diary_ketone_blood">Blood</string>
+    <string name="diary_ketone_urine">Urine (strip)</string>
+    <string name="diary_ketone_blood_title">Blood ketones</string>
+    <string name="diary_ketone_urine_title">Urine ketones</string>
+    <string name="diary_ketone_normal">Normal range</string>
+    <string name="diary_ketone_attention">Caution</string>
+    <string name="diary_ketone_risk">Risk</string>
+    <string name="diary_ketone_urgent">Seek care</string>
+    <string name="diary_ketone_advice_normal">Below 0.6 mmol/L (or a negative strip) is the normal range.</string>
+    <string name="diary_ketone_advice_attention">Raised ketones. Follow your care team\'s advice: fluids, measure again and check your glucose.</string>
+    <string name="diary_ketone_advice_risk">High ketones: risk of ketoacidosis. Follow your action plan and contact your care team.</string>
+    <string name="diary_ketone_advice_urgent">Very high ketones: seek medical care now.</string>
+
+    <!-- Meal and foods -->
+    <string name="diary_meal_new">New meal</string>
+    <string name="diary_meal_edit">Edit meal</string>
+    <string name="diary_meal_total">Total: %1$s g carbs · %2$s kcal</string>
+    <string name="diary_meal_favorites">Favorites</string>
+    <string name="diary_meal_favorite_delete">Remove the favorite %1$s</string>
+    <string name="diary_meal_favorite_delete_body">The favorite leaves the list. Meals already logged don\'t change.</string>
+    <string name="diary_meal_items">Meal items</string>
+    <string name="diary_meal_no_items">Search foods below or just enter the carbs.</string>
+    <string name="diary_meal_remove_item">Remove %1$s</string>
+    <string name="diary_meal_extra">Extra carbs (g)</string>
+    <string name="diary_meal_extra_item">Extra carbs</string>
+    <string name="diary_meal_add_food">Add food</string>
+    <string name="diary_meal_search">Search food</string>
+    <string name="diary_meal_search_hint">The ones you use most come first.</string>
+    <string name="diary_meal_not_found">Nothing found for “%1$s”. Add the food below.</string>
+    <string name="diary_meal_save_favorite">Also save as a favorite</string>
+    <string name="diary_meal_favorite_name">Favorite name (e.g. breakfast)</string>
+    <string name="diary_food_per100">%1$s g carbs · %2$s kcal per 100 g</string>
+    <string name="diary_food_mine">mine</string>
+    <string name="diary_food_grams">Grams</string>
+    <string name="diary_food_quantity">Amount</string>
+    <string name="diary_food_preview">%1$s g → %2$s g carbs · %3$s kcal</string>
+    <string name="diary_food_add">Add</string>
+    <string name="diary_food_new">Add food</string>
+    <string name="diary_food_edit">Edit food</string>
+    <string name="diary_food_name">Name</string>
+    <string name="diary_food_values_hint">Values per 100 g (see the label).</string>
+    <string name="diary_food_carbs100">Carbs in 100 g</string>
+    <string name="diary_food_kcal100">Calories in 100 g (optional)</string>
+    <string name="diary_food_protein100">Protein in 100 g (optional)</string>
+    <string name="diary_food_fat100">Fat in 100 g (optional)</string>
+    <string name="diary_food_portion_label">Household serving (optional)</string>
+    <string name="diary_food_portion_hint">E.g. slice, spoon, piece</string>
+    <string name="diary_food_portion_grams">Grams in the serving</string>
+    <string name="diary_food_source">Food database: USDA FoodData Central (public domain). Approximate values — check the label.</string>
+
+    <!-- PDF -->
+    <string name="diary_pdf_title">GluView — Diary</string>
+    <string name="diary_pdf_section">Diary for the period</string>
+    <string name="diary_pdf_period">Period: %1$s to %2$s</string>
+    <string name="diary_pdf_totals">Period total: %1$s g carbs · rapid insulin %2$s U · basal %3$s U</string>
+    <string name="diary_pdf_day">%1$s g carbs · rapid %2$s U · basal %3$s U</string>
+    <string name="diary_pdf_disclaimer">Personal log made in GluView. Not a substitute for your care team\'s advice.</string>
+    <string name="diary_pdf_file">gluview_diary</string>
+
+    <!-- Home and Settings -->
+    <string name="home_diary_today">Today\'s diary</string>
+    <string name="home_diary_summary">%1$s g carbs · rapid %2$s U · basal %3$s U</string>
+    <string name="home_diary_add_meal">Log meal</string>
+    <string name="home_diary_add_insulin">Log insulin</string>
+    <string name="settings_diary_subtitle">Meals, insulin, ketones, medications and exercise</string>
+    <string name="settings_reminders_subtitle">Measure, take insulin, take medication</string>
+
+    <!-- Reminders -->
+    <string name="reminders_title">Reminders</string>
+    <string name="reminders_intro">Reminders ring from the phone itself, even offline. None of this goes through GluSync.</string>
+    <string name="reminders_mine">My reminders</string>
+    <string name="reminders_empty">No reminders yet. Start from a template below.</string>
+    <string name="reminders_add">New reminder</string>
+    <string name="reminders_new">New reminder</string>
+    <string name="reminders_edit">Edit reminder</string>
+    <string name="reminders_templates">Templates</string>
+    <string name="reminders_today">Today</string>
+    <string name="reminders_today_empty">No reminder went off today.</string>
+    <string name="reminders_every_day">every day</string>
+    <string name="reminders_field_title">Reminder name</string>
+    <string name="reminders_linked">Which one?</string>
+    <string name="reminders_field_dose">Dose (optional)</string>
+    <string name="reminders_dose_hint">With a dose set, tapping “Done” on the notification logs it in the diary.</string>
+    <string name="reminders_no_medications">No medication added. Add one to link it to the reminder.</string>
+    <string name="reminders_times">Times</string>
+    <string name="reminders_add_time">Add time</string>
+    <string name="reminders_remove_time">Remove %1$s</string>
+    <string name="reminders_days">Days</string>
+    <string name="reminders_delete">Delete reminder</string>
+    <string name="reminders_delete_title">Delete this reminder?</string>
+    <string name="reminders_delete_body">It stops ringing. Entries it already logged stay in the diary.</string>
+    <string name="reminders_notifications_off">GluView notifications are off: reminders won\'t show.</string>
+    <string name="reminders_open_settings">Open notification settings</string>
+    <string name="reminders_exact_off">Android didn\'t let GluView use exact alarms: reminders may be up to about 1 hour late. Allow exact alarms so they ring on time.</string>
+    <string name="reminders_allow_exact">Allow exact alarms</string>
+    <string name="reminders_smart">Smart prompts</string>
+    <string name="reminders_smart_desc">They stay on the phone and only remind you to log. They never suggest a dose.</string>
+    <string name="reminders_smart_meal">Glucose rising with no meal logged</string>
+    <string name="reminders_smart_meal_desc">Notifies when the sensor shows a fast rise (about 45 mg/dL in 30 min) and no meal was logged in the last 1.5 h. At most one prompt every 3 hours.</string>
+    <string name="reminders_log_line">%1$s · %2$s · %3$s</string>
+    <string name="reminders_log_fired">rang</string>
+    <string name="reminders_log_done">done</string>
+    <string name="reminders_log_snoozed">snoozed</string>
+    <string name="reminders_log_skipped">skipped</string>
+    <string name="reminders_log_suppressed">didn\'t ring (basal already logged)</string>
+
+    <string name="reminder_kind_measure">Check glucose</string>
+    <string name="reminder_kind_insulin">Take insulin</string>
+    <string name="reminder_kind_medication">Take medication</string>
+    <string name="reminder_kind_basal_check">Basal check</string>
+    <string name="reminder_kind_custom">Custom</string>
+    <string name="reminder_kind_basal_check_desc">Only rings if no basal insulin has been logged in the diary today by that time.</string>
+    <string name="reminder_template_basal">Basal at 10 pm</string>
+    <string name="reminder_template_basal_check">Basal not logged yet (11 pm)</string>
+    <string name="reminder_template_measure_morning">Check on waking (7 am)</string>
+    <string name="reminder_template_medication">Morning medication (8 am)</string>
+
+    <string name="reminder_notif_measure">Time to check your glucose.</string>
+    <string name="reminder_notif_insulin">Time for your insulin.</string>
+    <string name="reminder_notif_insulin_dose">Time for your insulin: %1$s, %2$s U.</string>
+    <string name="reminder_notif_medication">Time for your medication.</string>
+    <string name="reminder_notif_medication_named">Time for your medication: %1$s.</string>
+    <string name="reminder_notif_basal_check">Today\'s basal insulin hasn\'t been logged in the diary yet.</string>
+    <string name="reminder_notif_custom">GluView reminder.</string>
+    <string name="reminder_action_done">Done</string>
+    <string name="reminder_action_done_register">Done (log it)</string>
+    <string name="reminder_action_snooze10">Snooze 10 min</string>
+    <string name="reminder_action_snooze30">Snooze 30 min</string>
+    <string name="notif_channel_reminder_name">Reminders</string>
+    <string name="notif_channel_reminder_desc">Reminders to check glucose, take insulin and take medication (separate from glucose alerts).</string>
+    <string name="notif_channel_diary_prompt_name">Diary prompts</string>
+    <string name="notif_channel_diary_prompt_desc">Reminder to log your meal when glucose rises fast.</string>
+
+    <string name="smart_meal_prompt_title">Glucose rising fast</string>
+    <string name="smart_meal_prompt_body">No meal logged in the last 1.5 h. Log one now?</string>
+    <string name="smart_meal_prompt_action">Log meal</string>
+    <!-- Quick add (Home pencil, widgets and notification) -->
+    <string name="quick_add_title">Log to diary</string>
+    <string name="quick_add_favorites">Favorites (one tap logs it)</string>
+    <string name="quick_add_kcal">Calories (optional)</string>
+    <string name="quick_add_meal_full">Build from foods (opens the app)</string>
+    <string name="notif_quick_add_action">Log to diary</string>
+    <string name="settings_notif_quick_add">“Log to diary” button on the notification</string>
+    <string name="settings_notif_quick_add_desc">Shows the button on GluView\'s ongoing notification. It opens a quick log window without opening the app. Applies from the next reading.</string>
+    <string name="widget_diary_label">GluView + diary</string>
+    <string name="widget_diary_desc">Current glucose with a pencil to log to the diary without opening the app.</string>
+    <string name="widget_quickadd_label">Log to diary</string>
+    <string name="widget_quickadd_desc">A button that opens the diary quick log without opening the app.</string>
+    <string name="widget_quickadd_button">Log to diary</string>
+    <string name="widget_quickadd_short">Diary</string>
+</resources>

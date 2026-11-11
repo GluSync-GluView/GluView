@@ -50,7 +50,11 @@ import com.gluview.app.ui.screen.caregiver.CaregiverScreen
 import com.gluview.app.ui.screen.caregiver.FollowedPatientScreen
 import com.gluview.app.ui.screen.applog.LogScreen
 import com.gluview.app.ui.screen.diagnostic.DiagnosticScreen
-import com.gluview.app.ui.screen.eventlog.EventLogScreen
+import com.gluview.app.ui.screen.diary.DiaryCatalogScreen
+import com.gluview.app.ui.screen.diary.DiaryScreen
+import com.gluview.app.ui.screen.diary.MealEditorScreen
+import com.gluview.app.ui.screen.reminders.RemindersScreen
+import com.gluview.app.data.diary.DiaryType
 import com.gluview.app.ui.screen.history.HistoryScreen
 import com.gluview.app.ui.screen.home.HomeScreen
 import com.gluview.app.ui.screen.insulinpump.InsulinPumpScreen
@@ -146,7 +150,8 @@ fun AppNavigation(
         composable(Screen.Home.route) {
             HomeScreen(
                 onNavigateToSettings     = { nav.navigate(Screen.Settings.route) },
-                onNavigateToAlertHistory = { nav.navigate(Screen.AlertHistory.route) }
+                onNavigateToAlertHistory = { nav.navigate(Screen.AlertHistory.route) },
+                onNavigateToDiary        = { type -> nav.navigate(Screen.Diary.createRoute(type)) }
             )
         }
         composable(Screen.Settings.route) {
@@ -164,6 +169,8 @@ fun AppNavigation(
                 onIntegrations    = { nav.navigate(Screen.ExternalIntegrations.route) },
                 onUpdates         = { nav.navigate(Screen.SettingsUpdates.route) },
                 onDonate          = { nav.navigate(Screen.Donation.route) },
+                onDiary           = { nav.navigate(Screen.Diary.createRoute()) },
+                onReminders       = { nav.navigate(Screen.Reminders.route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -222,7 +229,7 @@ fun AppNavigation(
             SupportSettingsScreen(
                 onBack       = { nav.popBackStack() },
                 onDiagnostic = { nav.navigate(Screen.Diagnostic.route) },
-                onEventLog   = { nav.navigate(Screen.EventLog.route) },
+                onEventLog   = { nav.navigate(Screen.Diary.createRoute()) },
                 onReport     = { nav.navigate(Screen.Report.route) },
                 onAppLogs    = { nav.navigate(Screen.AppLogs.route) }
             )
@@ -333,8 +340,31 @@ fun AppNavigation(
                 initialTab = backStackEntry.arguments?.getString("tab") ?: "chart"
             )
         }
-        composable(Screen.EventLog.route) {
-            EventLogScreen(onBack = { nav.popBackStack() })
+        composable(
+            Screen.Diary.route,
+            arguments = listOf(navArgument("type") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { entry ->
+            val initialType = entry.arguments?.getString("type")?.let { k -> DiaryType.entries.firstOrNull { it.key == k } }
+            DiaryScreen(
+                onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Home.route) },
+                onMeal = { uuid -> nav.navigate(Screen.MealEditor.createRoute(uuid)) },
+                onCatalog = { nav.navigate(Screen.DiaryCatalog.route) },
+                onReminders = { nav.navigate(Screen.Reminders.route) },
+                initialType = initialType
+            )
+        }
+        composable(
+            Screen.MealEditor.route,
+            arguments = listOf(navArgument("uuid") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) {
+            MealEditorScreen(onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Diary.createRoute()) })
+        }
+        composable(Screen.DiaryCatalog.route) {
+            DiaryCatalogScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Screen.Reminders.route) {
+            RemindersScreen(onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Home.route) },
+                onCatalog = { nav.navigate(Screen.DiaryCatalog.route) })
         }
         composable(Screen.Diagnostic.route) {
             DiagnosticScreen(onBack = { nav.popBackStack() })

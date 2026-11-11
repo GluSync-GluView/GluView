@@ -1,4 +1,4 @@
-package com.gluview.app.ui.screen.eventlog
+package com.gluview.app.ui.screen.diary
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

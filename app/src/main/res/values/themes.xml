@@ -6,4 +6,14 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/window_bg</item>
     </style>
+
+    <!-- Registro rápido do diário (widget e notificação): janela transparente por cima do que
+         estiver na tela; só a folha de registro aparece e some ao salvar. -->
+    <style name="Theme.GluView.QuickAdd" parent="Theme.GluView">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+    </style>
 </resources>

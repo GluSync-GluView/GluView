@@ -61,7 +61,10 @@ class SettingsViewModel @Inject constructor(
     private val cloudAccess: CloudAccessRepository,
     private val accuChekBle: com.gluview.app.data.accuchek.AccuChekBleManager,
     private val medLevSource: com.gluview.app.data.medlevensohn.MedLevensohnSource,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    // Plano 17 (F1.7/F2.5) — o backup leva diário, cadastros e lembretes.
+    private val diaryBackup: com.gluview.app.data.diary.DiaryBackup,
+    private val diarySync: com.gluview.app.data.diary.DiarySyncScheduler
 ) : ViewModel() {
 
     /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum) — seção "Sensor atual". */
@@ -294,7 +297,8 @@ class SettingsViewModel @Inject constructor(
     fun exportBackup() {
         viewModelScope.launch {
             runCatching {
-                val json = preferences.toJsonString()
+                val json = org.json.JSONObject(preferences.toJsonString())
+                    .put("diary", diaryBackup.export()).toString(2)
                 val dir  = File(context.cacheDir, "exports").also { it.mkdirs() }
                 val file = File(dir, "gluview_backup.json").also { it.writeText(json) }
                 val uri  = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -322,6 +326,10 @@ class SettingsViewModel @Inject constructor(
                 val json = context.contentResolver.openInputStream(uri)
                     ?.bufferedReader()?.readText() ?: error("empty file")
                 preferences.fromJsonString(json)
+                org.json.JSONObject(json).optJSONObject("diary")?.let {
+                    diaryBackup.import(it)
+                    diarySync.requestSync()
+                }
                 _state.value = _state.value.copy(backupMsg = text(R.string.settings_backup_restored))
             }.onFailure {
                 _state.value = _state.value.copy(backupMsg = text(R.string.settings_backup_import_failed))

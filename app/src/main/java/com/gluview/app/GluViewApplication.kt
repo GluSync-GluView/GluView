@@ -28,6 +28,10 @@ class GluViewApplication : Application() {
 
     @Inject lateinit var postUpdateVerifier: PostUpdateVerifier
     @Inject lateinit var donationTracker: DonationTracker
+    // Plano 17 — lembretes (canal + remarcar alarmes) e volta periódica do diário (só age com liberação de nuvem).
+    @Inject lateinit var reminderNotifier: com.gluview.app.notification.ReminderNotifier
+    @Inject lateinit var reminderScheduler: com.gluview.app.data.reminder.ReminderScheduler
+    @Inject lateinit var diarySyncScheduler: com.gluview.app.data.diary.DiarySyncScheduler
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -43,6 +47,9 @@ class GluViewApplication : Application() {
         appScope.launch { runCatching { postUpdateVerifier.reconcile() } }
         // Doação via Pix: o processo pode ter morrido com um Pix pendente — volta a acompanhar.
         donationTracker.resume()
+        runCatching { reminderNotifier.createChannels() }
+        runCatching { diarySyncScheduler.schedulePeriodic() }
+        appScope.launch { runCatching { reminderScheduler.rescheduleAll() } }
     }
 
     /**

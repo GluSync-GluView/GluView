@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
@@ -58,6 +60,8 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onUpdates: () -> Unit = {},
     onDonate: () -> Unit = {},
+    onDiary: () -> Unit = {},
+    onReminders: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updatesViewModel: UpdatesViewModel = hiltViewModel(),
     donationEntryViewModel: DonationEntryViewModel = hiltViewModel()
@@ -126,7 +130,7 @@ fun SettingsScreen(
         isAdmin = isAdmin, isFollowerOnly = isFollowerOnly, isLocalOnly = isLocalOnly,
         debugSeedEnabled = debugSeedEnabled, debugBusy = debugBusy,
         nav = SettingsNav(onAccountSettings, onGeneralSettings, onSyncSettings, onAlertSettings, onWatchFaces,
-            onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate),
+            onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate, onDiary, onReminders),
         updateAvailableName = updatesUi.available?.versionName,
         showDonate = donationsEnabled,
         onDebugSeedToggle = viewModel::onDebugSeedToggle,
@@ -160,7 +164,10 @@ internal data class SettingsNav(
     // 9º campo com padrão: não quebra a construção posicional no SettingsCaptureTest (plano OTA, 5.4).
     val updates: () -> Unit = {},
     // 10º, com padrão pelo mesmo motivo (doação via Pix).
-    val donate: () -> Unit = {}
+    val donate: () -> Unit = {},
+    // Plano 17 — diário e lembretes (com padrão, mesmo motivo).
+    val diary: () -> Unit = {},
+    val reminders: () -> Unit = {}
 )
 
 /**
@@ -203,6 +210,10 @@ internal fun SettingsContent(
                         subtitle = stringResource(R.string.settings_general_section_subtitle)) }
                     add { NavRow(stringResource(R.string.settings_configure_alerts), nav.alerts, icon = Icons.Default.NotificationsActive,
                         subtitle = stringResource(R.string.settings_alerts_section_subtitle)) }
+                    if (!isFollowerOnly) add { NavRow(stringResource(R.string.diary_title), nav.diary, icon = Icons.Default.EventNote,
+                        subtitle = stringResource(R.string.settings_diary_subtitle)) }
+                    if (!isFollowerOnly) add { NavRow(stringResource(R.string.reminders_title), nav.reminders, icon = Icons.Default.Alarm,
+                        subtitle = stringResource(R.string.settings_reminders_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.settings_sync_section_title), nav.sync, icon = Icons.Default.Devices,
                         subtitle = stringResource(R.string.settings_sync_section_subtitle)) }
                     // ADR-0029 — Wearables saiu da barra inferior (deu lugar à Bomba).

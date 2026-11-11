@@ -11,7 +11,8 @@ import com.gluview.app.ui.screen.applog.LogContent
 import com.gluview.app.ui.screen.diagnostic.DiagnosticContent
 import com.gluview.app.ui.screen.diagnostic.DiagnosticUiState
 import com.gluview.app.ui.screen.diagnostic.FingerstickPair
-import com.gluview.app.ui.screen.eventlog.EventLogContent
+import com.gluview.app.data.diary.DaySummary
+import com.gluview.app.ui.screen.diary.DiaryContent
 import com.gluview.app.util.GlucoseUnit
 import com.gluview.app.util.TimeFormat
 import org.junit.After
@@ -65,13 +66,19 @@ class RecordsCaptureTest {
 
     @Test fun records() {
         val events = listOf(
-            EventLogEntity(1, ago(40), "insulin", "", 4.5, 182.0),
-            EventLogEntity(2, ago(60), "meal", "Almoço: arroz, feijão e salada", 60.0, 168.0),
-            EventLogEntity(3, ago(60 * 26), "exercise", "", 30.0, 0.0),
-            EventLogEntity(4, ago(60 * 24 * 4), "note", "Troquei o sensor no braço esquerdo", 0.0, 121.0)
+            EventLogEntity(1, ago(40), "insulin", "", 4.5, 182.0, subtype = "rapid", itemName = "Humalog"),
+            EventLogEntity(2, ago(60), "meal", "Almoço: arroz, feijão e salada", 60.0, 168.0, kcal = 520.0),
+            EventLogEntity(3, ago(90), "fingerstick", "", 131.0, 128.0),
+            EventLogEntity(4, ago(120), "ketone", "", 0.9, 240.0, subtype = "blood"),
+            EventLogEntity(5, ago(180), "medication", "", 500.0, 0.0, itemName = "Metformina", unit = "mg"),
+            EventLogEntity(6, ago(240), "exercise", "", 30.0, 0.0, subtype = "moderate", itemName = "Caminhada"),
+            EventLogEntity(7, ago(300), "note", "Troquei o sensor no braço esquerdo", 0.0, 121.0)
         )
-        shoot("eventos") { tf -> EventLogContent(events, GlucoseUnit.MG_DL, tf, {}, {}, {}, nowMs = now) }
-        shoot("eventos-vazio") { tf -> EventLogContent(emptyList(), GlucoseUnit.MG_DL, tf, {}, {}, {}, nowMs = now) }
+        val today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        shoot("eventos") { tf -> DiaryContent(today, events, DaySummary.of(events), GlucoseUnit.MG_DL, tf, false,
+            null, {}, {}, {}, {}, {}, {}, {}, {}, {}, nowMs = now) }
+        shoot("eventos-vazio") { tf -> DiaryContent(today, emptyList(), DaySummary(), GlucoseUnit.MG_DL, tf, false,
+            null, {}, {}, {}, {}, {}, {}, {}, {}, {}, nowMs = now) }
 
         val alerts = listOf(
             AlertLogEntity(1, ago(15), 52.0, "URGENT_LOW", "dnd"),

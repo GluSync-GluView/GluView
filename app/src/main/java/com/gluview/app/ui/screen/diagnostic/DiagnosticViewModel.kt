@@ -55,7 +55,9 @@ class DiagnosticViewModel @Inject constructor(
     private val sibionicsHolder: SibionicsStatusHolder,
     private val preferences: AppPreferences,
     private val repository: GlucoseRepository,
-    private val fingerstickDao: FingerstickLogDao
+    private val fingerstickDao: FingerstickLogDao,
+    // Plano 17 (F1.3): a ponta de dedo daqui também entra no diário.
+    private val diary: com.gluview.app.data.diary.DiaryRepository
 ) : ViewModel() {
 
     private val _pairs = MutableStateFlow<List<FingerstickPair>>(emptyList())
@@ -127,15 +129,17 @@ class DiagnosticViewModel @Inject constructor(
         viewModelScope.launch {
             val diff    = fingerstickMgDl - sensorMgDl
             val diffPct = if (fingerstickMgDl > 0) (diff / fingerstickMgDl) * 100.0 else 0.0
+            val now = System.currentTimeMillis()
             fingerstickDao.insert(
                 FingerstickLogEntity(
-                    ts              = System.currentTimeMillis(),
+                    ts              = now,
                     fingerstickMgDl = fingerstickMgDl,
                     sensorMgDl      = sensorMgDl,
                     diff            = diff,
                     diffPct         = diffPct
                 )
             )
+            diary.addFingerstickFromDiagnostic(fingerstickMgDl, sensorMgDl, now)
         }
     }
 

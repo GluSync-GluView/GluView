@@ -167,6 +167,13 @@ class AppPreferences @Inject constructor(
         val KEY_ACCOUNT_PROMPT_POSTPONED_AT = longPreferencesKey("account_prompt_postponed_at")
         val KEY_CLOUD_SYNC_STATE            = stringPreferencesKey("cloud_sync_state")
         val KEY_CLOUD_SYNC_CHECKED_AT       = longPreferencesKey("cloud_sync_checked_at")
+        // Plano 17 — diário e lembretes (GluView first; nuvem só com liberação).
+        val KEY_DIARY_CLOUD_BLOCKED_UNTIL   = longPreferencesKey("diary_cloud_blocked_until")
+        val KEY_DIARY_LAST_PULL_MS          = longPreferencesKey("diary_last_pull_ms")
+        val KEY_DIARY_LAST_SYNC_MS          = longPreferencesKey("diary_last_sync_ms")
+        val KEY_SMART_MEAL_PROMPT           = booleanPreferencesKey("smart_meal_prompt")
+        val KEY_SMART_MEAL_PROMPT_LAST_AT   = longPreferencesKey("smart_meal_prompt_last_at")
+        val KEY_NOTIF_QUICK_ADD             = booleanPreferencesKey("notif_quick_add")
         // Variante do sensor por modelo e região (SensorVariantCatalog); "" = padrão da fonte
         val KEY_SENSOR_VARIANT_ID           = stringPreferencesKey("sensor_variant_id")
 
@@ -377,6 +384,23 @@ class AppPreferences @Inject constructor(
         it[KEY_CLOUD_SYNC_STATE] = state
         it[KEY_CLOUD_SYNC_CHECKED_AT] = checkedAtMs
     }
+
+    // ── Diário e lembretes (plano 17) ─────────────────────────────────────────
+    /** O GluSync recusou o diário (sem liberação): não tenta de novo antes disto. */
+    val diaryCloudBlockedUntil: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_DIARY_CLOUD_BLOCKED_UNTIL] ?: 0L }
+    suspend fun saveDiaryCloudBlockedUntil(ms: Long) = dataStore.edit { it[KEY_DIARY_CLOUD_BLOCKED_UNTIL] = ms }
+    val diaryLastPullMs: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_DIARY_LAST_PULL_MS] ?: 0L }
+    suspend fun saveDiaryLastPullMs(ms: Long) = dataStore.edit { it[KEY_DIARY_LAST_PULL_MS] = ms }
+    val diaryLastSyncMs: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_DIARY_LAST_SYNC_MS] ?: 0L }
+    suspend fun saveDiaryLastSyncMs(ms: Long) = dataStore.edit { it[KEY_DIARY_LAST_SYNC_MS] = ms }
+    /** Aviso "subindo rápido sem refeição registrada" (F2.4) — desligado por padrão. */
+    val smartMealPrompt: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_SMART_MEAL_PROMPT] ?: false }
+    suspend fun saveSmartMealPrompt(enabled: Boolean) = dataStore.edit { it[KEY_SMART_MEAL_PROMPT] = enabled }
+    val smartMealPromptLastAt: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_SMART_MEAL_PROMPT_LAST_AT] ?: 0L }
+    suspend fun saveSmartMealPromptLastAt(ms: Long) = dataStore.edit { it[KEY_SMART_MEAL_PROMPT_LAST_AT] = ms }
+    /** Botão "Registrar no diário" na notificação fixa (pedido do Felipe, 10/11/2026) — ligado por padrão. */
+    val notifQuickAdd: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_NOTIF_QUICK_ADD] ?: true }
+    suspend fun saveNotifQuickAdd(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_QUICK_ADD] = enabled }
 
     // ── Idioma ────────────────────────────────────────────────────────────────
     // L21: sem escolha salva, segue o aparelho — inglês se o celular estiver em inglês, senão português.
@@ -998,6 +1022,8 @@ class AppPreferences @Inject constructor(
             it.remove(KEY_ACTIVE_FOLLOWED_PATIENT_NAME)
             it.remove(KEY_LOCAL_ONLY_MODE)
             it.remove(KEY_CLOUD_SYNC_STATE)
+            it.remove(KEY_DIARY_CLOUD_BLOCKED_UNTIL)
+            it.remove(KEY_DIARY_LAST_PULL_MS)
             it.remove(KEY_CLOUD_SYNC_CHECKED_AT)
         }
     }
@@ -1050,6 +1076,8 @@ class AppPreferences @Inject constructor(
         o.put("auto_show_graph",           p[KEY_AUTO_SHOW_GRAPH]       ?: false)
         o.put("auto_graph_hours",          p[KEY_AUTO_GRAPH_HOURS]      ?: 3)
         o.put("auto_graph_theme",          p[KEY_AUTO_GRAPH_THEME]      ?: "AUTO")
+        o.put("smart_meal_prompt",         p[KEY_SMART_MEAL_PROMPT]     ?: false)
+        o.put("notif_quick_add",           p[KEY_NOTIF_QUICK_ADD]       ?: true)
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1100,6 +1128,8 @@ class AppPreferences @Inject constructor(
             if (o.has("auto_show_graph"))           p[KEY_AUTO_SHOW_GRAPH]       = o.getBoolean("auto_show_graph")
             if (o.has("auto_graph_hours"))          p[KEY_AUTO_GRAPH_HOURS]      = o.getInt("auto_graph_hours")
             if (o.has("auto_graph_theme"))          p[KEY_AUTO_GRAPH_THEME]      = o.getString("auto_graph_theme")
+            if (o.has("smart_meal_prompt"))         p[KEY_SMART_MEAL_PROMPT]     = o.getBoolean("smart_meal_prompt")
+            if (o.has("notif_quick_add"))           p[KEY_NOTIF_QUICK_ADD]       = o.getBoolean("notif_quick_add")
             // Toggles de alerta
             if (o.has("alert_toggles")) {
                 val at = o.getJSONObject("alert_toggles")

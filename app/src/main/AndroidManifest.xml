@@ -25,6 +25,9 @@
 
     <!-- Boot (Sprint 5) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Plano 17 (F2.1) — lembretes na hora certa. SCHEDULE_EXACT_ALARM (a pessoa concede em
+         Ajustes do Android 14+); sem ela o lembrete usa alarme inexato e a tela avisa. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Isenção de otimização de bateria — necessário para o serviço não ser morto pelo SO -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -84,8 +87,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="gluview" android:host="diagnostic" />
                 <data android:scheme="gluview" android:host="caregiver" />
+                <data android:scheme="gluview" android:host="diary" />
+                <data android:scheme="gluview" android:host="reminders" />
             </intent-filter>
         </activity>
+
+        <!-- Plano 17 — registro rápido no diário (widget e notificação) sem abrir o app. -->
+        <activity
+            android:name=".QuickAddActivity"
+            android:exported="false"
+            android:theme="@style/Theme.GluView.QuickAdd"
+            android:taskAffinity="com.gluview.app.quickadd"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- Foreground Service de polling + SignalR + BLE (Frente B) -->
         <service
@@ -112,6 +127,25 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Plano 17 (Fase 2) — lembretes. Alarme e botões: só PendingIntent do próprio app. -->
+        <receiver
+            android:name=".service.ReminderAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".service.ReminderActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".service.ReminderRescheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -167,6 +201,32 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/gluview_xdrip_widget_info" />
+        </receiver>
+
+        <!-- Plano 17 — widget de glicemia com o lápis do diário (2×1) -->
+        <receiver
+            android:name=".widget.GluViewDiaryWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_diary_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_diary_widget_info" />
+        </receiver>
+
+        <!-- Plano 17 — só o botão "Registrar no diário" (1×1) -->
+        <receiver
+            android:name=".widget.GluViewQuickAddWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_quickadd_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/gluview_quickadd_widget_info" />
         </receiver>
 
         <!-- Widget faixa com gráfico (2×1) -->

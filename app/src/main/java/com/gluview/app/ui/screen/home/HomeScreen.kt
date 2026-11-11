@@ -26,6 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.Vaccines
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -67,6 +70,7 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     onNavigateToSettings:      () -> Unit,
     onNavigateToAlertHistory:  () -> Unit,
+    onNavigateToDiary:         (String?) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val isFollowerOnly by viewModel.isFollowerOnly.collectAsState()
@@ -78,6 +82,7 @@ fun HomeScreen(
         PatientHomeScreen(
             onNavigateToSettings     = onNavigateToSettings,
             onNavigateToAlertHistory = onNavigateToAlertHistory,
+            onNavigateToDiary        = onNavigateToDiary,
             viewModel                = viewModel
         )
     }
@@ -88,8 +93,19 @@ fun HomeScreen(
 private fun PatientHomeScreen(
     onNavigateToSettings:      () -> Unit,
     onNavigateToAlertHistory:  () -> Unit,
+    onNavigateToDiary:         (String?) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
+    val diaryToday   by viewModel.diaryToday.collectAsState()
+    val diaryMarkers by viewModel.diaryMarkers.collectAsState()
+    var quickAdd     by remember { mutableStateOf(false) }
+    if (quickAdd) {
+        com.gluview.app.ui.screen.diary.QuickAddFlow(
+            onDone = { quickAdd = false },
+            onOpenMealEditor = { quickAdd = false; onNavigateToDiary("meal") },
+            onOpenCatalog = { quickAdd = false; onNavigateToDiary(null) }
+        )
+    }
     val uiState      by viewModel.uiState.collectAsState()
     val homeReadings by viewModel.homeChartReadings.collectAsState()
     val homeHours    by viewModel.homeGraphHours.collectAsState()
@@ -127,13 +143,17 @@ private fun PatientHomeScreen(
             hiperThreshold   = hiperThreshold,
             urgentLowThreshold = urgentLowThreshold,
             urgentHighThreshold = urgentHighThreshold,
-            darkGraph        = darkGraph
+            darkGraph        = darkGraph,
+            diaryToday       = diaryToday,
+            diaryMarkers     = diaryMarkers
         ),
         onReconnectSensor        = viewModel::reconnectSensor,
         onRefresh                = viewModel::refresh,
         onPullRefresh            = viewModel::onPullRefresh,
         onHomeGraphHoursChange   = viewModel::onHomeGraphHoursChange,
-        onNavigateToAlertHistory = onNavigateToAlertHistory
+        onNavigateToAlertHistory = onNavigateToAlertHistory,
+        onOpenDiary              = onNavigateToDiary,
+        onQuickAdd               = { quickAdd = true }
     )
 }
 
@@ -154,7 +174,10 @@ internal data class PatientHomeState(
     val hiperThreshold:   Float,
     val urgentLowThreshold: Float = 55f,
     val urgentHighThreshold: Float = 250f,
-    val darkGraph:        Boolean
+    val darkGraph:        Boolean,
+    // Plano 17 — null = não mostra a linha do diário (seguidor, harness antigo).
+    val diaryToday:       com.gluview.app.data.diary.DaySummary? = null,
+    val diaryMarkers:     List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList()
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -165,7 +188,9 @@ internal fun PatientHomeContent(
     onRefresh:                () -> Unit,
     onPullRefresh:            () -> Unit,
     onHomeGraphHoursChange:   (Int) -> Unit,
-    onNavigateToAlertHistory: () -> Unit
+    onNavigateToAlertHistory: () -> Unit,
+    onOpenDiary:              (String?) -> Unit = {},
+    onQuickAdd:               () -> Unit = {}
 ) {
     val uiState          = state.uiState
     val homeReadings     = state.homeReadings
@@ -208,6 +233,10 @@ internal fun PatientHomeContent(
                 title = { Text("GluView") },
                 expandedHeight = 48.dp,
                 actions = {
+                    // Plano 17 — registro rápido no diário, à esquerda do Bluetooth/atualizar.
+                    IconButton(onClick = onQuickAdd) {
+                        Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.quick_add_title))
+                    }
                     if (isSensorSource) {
                         val connected = sensorStatus.connected
                         IconButton(onClick = onReconnectSensor) {
@@ -312,6 +341,8 @@ internal fun PatientHomeContent(
                             }
                         }
 
+                        state.diaryToday?.let { d -> DiaryTodayRow(d, onOpenDiary) }
+
                         HomeChart(
                             readings      = homeReadings,
                             selectedHours = homeHours,
@@ -319,7 +350,8 @@ internal fun PatientHomeContent(
                             appearance    = ChartAppearance(darkGraph, hipoThreshold, hiperThreshold, uiState.unit, uiState.timeFormat,
                                 state.urgentLowThreshold, state.urgentHighThreshold),
                             modifier      = if (tight) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().weight(1f),
-                            fill          = !tight
+                            fill          = !tight,
+                            markers       = state.diaryMarkers
                         )
                     }
                 }
@@ -351,7 +383,8 @@ private fun HomeChart(
     onHoursChange: (Int) -> Unit,
     appearance: ChartAppearance,
     modifier: Modifier = Modifier,
-    fill: Boolean = false
+    fill: Boolean = false,
+    markers: List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList()
 ) {
     GlucoseChartPanel(
         title = stringResource(R.string.home_history),
@@ -369,7 +402,8 @@ private fun HomeChart(
             },
             window = GraphWindow.Trailing(selectedHours),
             appearance = appearance,
-            modifier = if (fill) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().aspectRatio(900f / 400f)
+            modifier = if (fill) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().aspectRatio(900f / 400f),
+            markers = markers
         )
     }
 }
@@ -521,4 +555,32 @@ private fun GlucoseCard(
             }
         }
     )
+}
+
+
+/**
+ * Diário de hoje na Home (plano 17, F1.6): carboidrato e insulina do dia numa linha só e os atalhos
+ * de registro mais usados. Toque na linha abre o diário.
+ */
+@Composable
+private fun DiaryTodayRow(d: com.gluview.app.data.diary.DaySummary, onOpen: (String?) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val text = remember(context) { com.gluview.app.util.DiaryText(context) }
+    com.gluview.app.ui.components.kit.GluCard(onClick = { onOpen(null) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.home_diary_today), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(R.string.home_diary_summary, text.amount(d.carbsG), text.amount(d.rapidU + d.mixedU), text.amount(d.basalU)),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            IconButton(onClick = { onOpen("meal") }) {
+                Icon(Icons.Outlined.Restaurant, stringResource(R.string.home_diary_add_meal))
+            }
+            IconButton(onClick = { onOpen("insulin") }) {
+                Icon(Icons.Outlined.Vaccines, stringResource(R.string.home_diary_add_insulin))
+            }
+        }
+    }
 }

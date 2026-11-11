@@ -162,7 +162,9 @@ fun GlucoseChart(
     /** Texto do balão; null = a hora da leitura no formato do usuário. */
     bubbleText: ((GraphReading) -> BubbleText)? = null,
     /** Descrição falada; null = período, última, mínima e máxima. */
-    description: String? = null
+    description: String? = null,
+    /** Registros do diário (plano 17) desenhados por cima da curva. */
+    markers: List<ChartMarker> = emptyList()
 ) {
     val panel = chartPanelColor(appearance.dark)
     val ink = if (appearance.dark) Color.White else Color.Black
@@ -189,7 +191,7 @@ fun GlucoseChart(
                         ErrorState(state.message.asString(), onRetry, scroll.padding(Spacing.md), detail = state.detail)
                     }
                     is LoadState.Ready -> ChartCanvas(state.data, window, appearance, labelSize, interactive,
-                        xTickStepHours, gapBreakMs, bubbleText, description)
+                        xTickStepHours, gapBreakMs, bubbleText, description, markers)
                 }
             }
         }
@@ -213,7 +215,8 @@ private fun ChartCanvas(
     xTickStepHours: Int?,
     gapBreakMs: Long?,
     bubbleText: ((GraphReading) -> BubbleText)?,
-    descriptionOverride: String?
+    descriptionOverride: String?,
+    markers: List<ChartMarker> = emptyList()
 ) {
     val clock = LocalClock.current
     // Janela que anda: re-desenha a cada minuto mesmo sem leitura nova (o eixo X não para no
@@ -258,6 +261,23 @@ private fun ChartCanvas(
                     } else Modifier
                 )
         )
+
+        if (markers.isNotEmpty()) {
+            val ring = if (appearance.dark) Color.Black else Color.White
+            Spacer(
+                Modifier.fillMaxSize().drawBehind {
+                    val geo = layout.geometry
+                    val r = 4.5.dp.toPx()
+                    markers.forEach { m ->
+                        if (m.timestampMs < geo.fromMs || m.timestampMs > geo.nowMs) return@forEach
+                        val x = geo.xOf(m.timestampMs)
+                        val y = if (m.sgvMgDl > 0) geo.yOf(m.sgvMgDl.toFloat()) else geo.padT + geo.chartH - r * 1.5f
+                        drawCircle(ring, radius = r + 1.5.dp.toPx(), center = Offset(x, y))
+                        drawCircle(Color(m.argb), radius = r, center = Offset(x, y))
+                    }
+                }
+            )
+        }
 
         selected?.let { r ->
             val geo = layout.geometry
