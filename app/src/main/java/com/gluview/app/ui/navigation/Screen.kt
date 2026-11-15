@@ -35,6 +35,9 @@ sealed class Screen(val route: String) {
     }
     data object DiaryCatalog  : Screen("diary_catalog")
     data object Reminders     : Screen("reminders")
+    // Plano 17, Fase 3 — Health Connect e cruzamentos.
+    data object HealthConnect : Screen("health_connect")
+    data object Patterns      : Screen("patterns")
     data object Diagnostic    : Screen("diagnostic")
     data object Report        : Screen("report")
     // Sprint 6

@@ -164,7 +164,9 @@ fun GlucoseChart(
     /** Descrição falada; null = período, última, mínima e máxima. */
     description: String? = null,
     /** Registros do diário (plano 17) desenhados por cima da curva. */
-    markers: List<ChartMarker> = emptyList()
+    markers: List<ChartMarker> = emptyList(),
+    /** Rolagem e zoom (Home, como no xDrip); null = gráfico parado. */
+    gestures: ChartGestures? = null
 ) {
     val panel = chartPanelColor(appearance.dark)
     val ink = if (appearance.dark) Color.White else Color.Black
@@ -191,7 +193,7 @@ fun GlucoseChart(
                         ErrorState(state.message.asString(), onRetry, scroll.padding(Spacing.md), detail = state.detail)
                     }
                     is LoadState.Ready -> ChartCanvas(state.data, window, appearance, labelSize, interactive,
-                        xTickStepHours, gapBreakMs, bubbleText, description, markers)
+                        xTickStepHours, gapBreakMs, bubbleText, description, markers, gestures)
                 }
             }
         }
@@ -216,7 +218,8 @@ private fun ChartCanvas(
     gapBreakMs: Long?,
     bubbleText: ((GraphReading) -> BubbleText)?,
     descriptionOverride: String?,
-    markers: List<ChartMarker> = emptyList()
+    markers: List<ChartMarker> = emptyList(),
+    gestures: ChartGestures? = null
 ) {
     val clock = LocalClock.current
     // Janela que anda: re-desenha a cada minuto mesmo sem leitura nova (o eixo X não para no
@@ -253,6 +256,7 @@ private fun ChartCanvas(
                 .testTag(CHART_TEST_TAG)
                 .semantics { contentDescription = description }
                 .drawBehind { drawIntoCanvas { GlucoseGraphRenderer.draw(it.nativeCanvas, layout) } }
+                .chartGestures(gestures, with(density) { 12.dp.toPx() })
                 .then(
                     if (interactive) Modifier.pointerInput(layout) {
                         detectTapGestures { offset ->

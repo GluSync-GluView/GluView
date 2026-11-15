@@ -29,6 +29,12 @@ class PhoneListenerService : WearableListenerService() {
     private val tag = "GluViewWear"
 
     override fun onDataChanged(events: DataEventBuffer) {
+        // Plano 17, Fase 4 — resumo do dia, próximo lembrete, avisos e cadastros do celular.
+        events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WearPaths.DAY_INFO }
+            .forEach { event ->
+                com.gluview.wear.contract.WearDayInfo.fromMap(DataMapItem.fromDataItem(event.dataItem).dataMap.toPlainMap())
+                    ?.let { DiaryStore.saveDay(this, it) }
+            }
         events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WearPaths.WATCHFACE }
             .forEach { event -> installFace(DataMapItem.fromDataItem(event.dataItem).dataMap, event.dataItem.uri.host) }
         events.filter { it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WearPaths.READING }
@@ -47,6 +53,10 @@ class PhoneListenerService : WearableListenerService() {
     }
 
     override fun onMessageReceived(event: MessageEvent) {
+        if (event.path == WearPaths.DIARY_ACK) {
+            DiaryStore.acked(this, event.data.toString(Charsets.UTF_8))
+            return
+        }
         if (event.path != WearPaths.TOKEN) return
         val token = WearToken.decode(event.data) ?: return
         if (token.accessToken.isBlank()) TokenStore.clear(this) else TokenStore.save(this, token)

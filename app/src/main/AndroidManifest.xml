@@ -3,6 +3,7 @@
 
     <!-- Consulta ao app oficial FreeStyle Libre 2 (para o tracer apontar o maps ao APK oficial) -->
     <queries>
+        <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.freestylelibre.app.br" />
     </queries>
 
@@ -28,6 +29,17 @@
     <!-- Plano 17 (F2.1) — lembretes na hora certa. SCHEDULE_EXACT_ALARM (a pessoa concede em
          Ajustes do Android 14+); sem ela o lembrete usa alarme inexato e a tela avisa. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Plano 17 (Fase 3) — Health Connect. Cada tipo só é pedido quando a pessoa liga a opção. -->
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.WRITE_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_MENSTRUATION" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <!-- Isenção de otimização de bateria — necessário para o serviço não ser morto pelo SO -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -89,8 +101,40 @@
                 <data android:scheme="gluview" android:host="caregiver" />
                 <data android:scheme="gluview" android:host="diary" />
                 <data android:scheme="gluview" android:host="reminders" />
+                <data android:scheme="gluview" android:host="diarycatalog" />
             </intent-filter>
         </activity>
+
+        <!-- Plano 17 (Fase 3) — explicação de privacidade que o Health Connect abre ao pedir
+             permissão (Android 13-) e em Ajustes > Privacidade > Permissões (Android 14+). -->
+        <activity
+            android:name=".HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.GluView">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".HealthPermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Plano 17 (Fase 4) — registros do diário feitos no relógio Wear OS. -->
+        <service
+            android:name=".wear.WearDiaryListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:host="*" android:pathPrefix="/gluview/diary/entry" android:scheme="wear" />
+            </intent-filter>
+        </service>
 
         <!-- Plano 17 — registro rápido no diário (widget e notificação) sem abrir o app. -->
         <activity

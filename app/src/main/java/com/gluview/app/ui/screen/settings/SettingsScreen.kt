@@ -62,6 +62,7 @@ fun SettingsScreen(
     onDonate: () -> Unit = {},
     onDiary: () -> Unit = {},
     onReminders: () -> Unit = {},
+    onHealthConnect: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updatesViewModel: UpdatesViewModel = hiltViewModel(),
     donationEntryViewModel: DonationEntryViewModel = hiltViewModel()
@@ -130,7 +131,7 @@ fun SettingsScreen(
         isAdmin = isAdmin, isFollowerOnly = isFollowerOnly, isLocalOnly = isLocalOnly,
         debugSeedEnabled = debugSeedEnabled, debugBusy = debugBusy,
         nav = SettingsNav(onAccountSettings, onGeneralSettings, onSyncSettings, onAlertSettings, onWatchFaces,
-            onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate, onDiary, onReminders),
+            onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate, onDiary, onReminders, onHealthConnect),
         updateAvailableName = updatesUi.available?.versionName,
         showDonate = donationsEnabled,
         onDebugSeedToggle = viewModel::onDebugSeedToggle,
@@ -167,7 +168,8 @@ internal data class SettingsNav(
     val donate: () -> Unit = {},
     // Plano 17 — diário e lembretes (com padrão, mesmo motivo).
     val diary: () -> Unit = {},
-    val reminders: () -> Unit = {}
+    val reminders: () -> Unit = {},
+    val healthConnect: () -> Unit = {}
 )
 
 /**
@@ -214,6 +216,8 @@ internal fun SettingsContent(
                         subtitle = stringResource(R.string.settings_diary_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.reminders_title), nav.reminders, icon = Icons.Default.Alarm,
                         subtitle = stringResource(R.string.settings_reminders_subtitle)) }
+                    if (!isFollowerOnly) add { NavRow(stringResource(R.string.hc_title), nav.healthConnect, icon = Icons.Default.MonitorHeart,
+                        subtitle = stringResource(R.string.settings_hc_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.settings_sync_section_title), nav.sync, icon = Icons.Default.Devices,
                         subtitle = stringResource(R.string.settings_sync_section_subtitle)) }
                     // ADR-0029 — Wearables saiu da barra inferior (deu lugar à Bomba).

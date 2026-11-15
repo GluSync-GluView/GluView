@@ -23,7 +23,9 @@ class ReminderRepository @Inject constructor(
     private val dao: ReminderDao,
     private val scheduler: ReminderScheduler,
     private val diary: DiaryRepository,
-    private val notifier: ReminderNotifier
+    private val notifier: ReminderNotifier,
+    // Plano 17, Fase 4 — próximo lembrete e avisos no relógio.
+    private val wearDaySync: com.gluview.app.wear.WearDaySync
 ) {
     fun observeAll(): Flow<List<ReminderEntity>> = dao.observeAll()
     fun observeLogFrom(fromMs: Long): Flow<List<ReminderLogEntity>> = dao.observeLogFrom(fromMs)
@@ -35,6 +37,7 @@ class ReminderRepository @Inject constructor(
         val id = dao.upsert(toSave)
         val saved = toSave.copy(id = if (toSave.id == 0L) id else toSave.id)
         scheduler.schedule(saved, now)
+        wearDaySync.request()
         return saved
     }
 
@@ -56,6 +59,7 @@ class ReminderRepository @Inject constructor(
             return
         }
         notifier.show(r, scheduledAt, linkedName(r))
+        wearDaySync.request()
         dao.log(ReminderLogEntity(reminderId = id, scheduledAt = scheduledAt, action = ACTION_FIRED, at = now))
     }
 

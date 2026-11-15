@@ -33,6 +33,8 @@ android {
 
     defaultConfig {
         applicationId = "com.gluview.app"
+        // Mesmo sufixo opcional do :app (-Pgluview.applicationIdSuffix=...), para o par de teste conversar.
+        (findProperty("gluview.applicationIdSuffix") as String?)?.let { applicationIdSuffix = it }
         minSdk        = 30   // Wear OS 3 (Galaxy Watch 4 em diante)
         targetSdk     = 35
         versionCode   = wearVersionCode

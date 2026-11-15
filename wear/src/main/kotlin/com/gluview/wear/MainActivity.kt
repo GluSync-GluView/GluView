@@ -120,6 +120,15 @@ private fun GlucoseScreen() {
                 fontSize = 12.sp, color = Color(Display.COLOR_TEXT_DIM))
         }
 
+        // Plano 17, Fase 4 — registrar no diário e o resumo de hoje.
+        Chip(
+            onClick = { context.startActivity(LogActivity.intent(context)) },
+            label = { ChipLabel(stringResource(R.string.log_title)) },
+            colors = ChipDefaults.primaryChipColors(),
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        TodaySection(now)
+
         if (faceInactive) {
             Chip(
                 onClick = {
@@ -168,4 +177,29 @@ private fun GlucoseScreen() {
 @Composable
 private fun ChipLabel(text: String) {
     Text(text, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+}
+
+/** "Hoje" (plano 17, F4.3): totais do diário, próximo lembrete, avisos e o que espera o celular. */
+@Composable
+private fun TodaySection(now: Long) {
+    val context = LocalContext.current
+    val day by com.gluview.wear.data.DiaryStore.day(context).collectAsState()
+    val pending by com.gluview.wear.data.DiaryStore.pendingCount(context).collectAsState()
+    val d = day?.takeIf { com.gluview.wear.contract.WearDayInfo.isFromToday(it, now) }
+    val dim = Color(Display.COLOR_TEXT_DIM)
+    Text(stringResource(R.string.today), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+    val fmt = java.text.DecimalFormat("0.#")
+    Text(
+        stringResource(R.string.today_totals, fmt.format(d?.carbsG ?: 0.0), fmt.format(d?.rapidU ?: 0.0), fmt.format(d?.basalU ?: 0.0)),
+        fontSize = 12.sp, textAlign = TextAlign.Center
+    )
+    val next = d?.takeIf { it.nextReminderAtMs > now }
+    Text(
+        if (next != null) stringResource(R.string.next_reminder_at,
+            java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(next.nextReminderAtMs)), next.nextReminderTitle)
+        else stringResource(R.string.no_reminder),
+        fontSize = 11.sp, color = dim, textAlign = TextAlign.Center
+    )
+    if (pending > 0) Text(stringResource(R.string.pending_phone, pending), fontSize = 11.sp, color = Color(Display.COLOR_STALE), textAlign = TextAlign.Center)
+    d?.notices?.take(3)?.forEach { Text(it, fontSize = 11.sp, color = dim, textAlign = TextAlign.Center) }
 }

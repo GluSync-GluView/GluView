@@ -18,4 +18,36 @@
     <string name="face_use">Usar o visor do GluView</string>
     <string name="face_activated">Visor do GluView ativo</string>
     <string name="face_manual">Para usar o visor do GluView: toque e segure o mostrador e escolha "GluView".</string>
+    <!-- Plano 17, Fase 4 — diário e lembretes no relógio -->
+    <string name="log_title">Registrar no diário</string>
+    <string name="log_favorites">Favoritas</string>
+    <string name="log_next">Continuar</string>
+    <string name="log_confirm">Registrar?</string>
+    <string name="log_save">Registrar</string>
+    <string name="log_cancel">Voltar</string>
+    <string name="log_sent">Registrado. O celular grava no diário.</string>
+    <string name="log_rotary_hint">Gire a coroa ou use + e −</string>
+    <string name="type_meal">Carboidrato</string>
+    <string name="type_insulin">Insulina</string>
+    <string name="type_fingerstick">Ponta de dedo</string>
+    <string name="type_ketone">Cetona</string>
+    <string name="type_exercise">Exercício</string>
+    <string name="insulin_rapid">Rápida</string>
+    <string name="insulin_basal">Basal</string>
+    <string name="insulin_mixed">Mista</string>
+    <string name="unit_carbs">g de carboidrato</string>
+    <string name="unit_insulin">U</string>
+    <string name="unit_mgdl">mg/dL</string>
+    <string name="unit_mmol">mmol/L (sangue)</string>
+    <string name="unit_minutes">min</string>
+    <string name="today">Hoje</string>
+    <string name="today_totals">Carb %1$s g · Rápida %2$s U · Basal %3$s U</string>
+    <string name="next_reminder">Próximo lembrete</string>
+    <string name="next_reminder_at">Lembrete %1$s · %2$s</string>
+    <string name="no_reminder">Sem lembrete agendado</string>
+    <string name="reminder_short">Lembr.</string>
+    <string name="preview_reminder">Basal</string>
+    <string name="pending_phone">%1$d aguardando o celular</string>
+    <string name="tile_add_carbs">+ Carb</string>
+    <string name="tile_add_insulin">+ Insulina</string>
 </resources>

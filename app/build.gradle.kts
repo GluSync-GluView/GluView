@@ -23,7 +23,7 @@ val localProps = Properties().also { props ->
 // minuto e invalidaria o cache dos testes Robolectric/Roborazzi. -Pgluview.versionCode=N fixa o valor
 // (só para testes locais — a publicação usa a fórmula). versionName segue a série v1.0.x das releases
 // e precisa crescer junto (o Obtainium compara a string); sobrescrevível com -Pgluview.versionName.
-val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.2.0"
+val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.3.0"
 val gluviewVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.toInt() ?: run {
     val buildsApk = gradle.startParameter.taskNames.any {
         it.contains("assemble", ignoreCase = true) || it.contains("install", ignoreCase = true) ||
@@ -37,7 +37,7 @@ val gluviewVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.
 
 android {
     namespace   = "com.gluview.app"
-    compileSdk  = 35
+    compileSdk  = 36 // 36: exigido pelo Health Connect 1.1.0 (plano 17, Fase 3); targetSdk segue 35
 
     defaultConfig {
         applicationId = "com.gluview.app"
@@ -279,6 +279,8 @@ dependencies {
 
     // WorkManager — watchdog para reiniciar o serviço se morto pelo SO
     implementation(libs.androidx.work.runtime.ktx)
+    // Plano 17, Fase 3 — Health Connect (gravar glicemia do CGM, ler exercício/sono/ciclo/nutrição).
+    implementation(libs.androidx.health.connect)
 
     // S33 — Biometric + AppCompat
     implementation(libs.androidx.biometric)

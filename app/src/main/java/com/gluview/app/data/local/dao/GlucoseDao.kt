@@ -37,6 +37,10 @@ interface GlucoseDao {
     // backfill de leituras antigas não estoura a janela local. Hard delete.
     // Global (não filtra por conta) — retenção é preferência de aparelho (AppPreferences.
     // dataRetentionDays), não de conta; não tem relação com o isolamento acima.
+    /** Apaga as leituras da conta em [fromMs, toMs) (ferramenta de teste da versão de demonstração). */
+    @Query("DELETE FROM glucose_readings WHERE ownerEmail = :owner AND dateMs >= :fromMs AND dateMs < :toMs")
+    suspend fun deleteBetween(owner: String, fromMs: Long, toMs: Long)
+
     @Query("DELETE FROM glucose_readings WHERE dateMs < :cutoffMs")
     suspend fun deleteOlderThan(cutoffMs: Long)
 

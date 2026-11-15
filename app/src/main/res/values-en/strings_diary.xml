@@ -218,6 +218,7 @@
     <string name="quick_add_title">Log to diary</string>
     <string name="quick_add_favorites">Favorites (one tap logs it)</string>
     <string name="quick_add_kcal">Calories (optional)</string>
+    <string name="quick_add_meal_full_in_app">Build from foods</string>
     <string name="quick_add_meal_full">Build from foods (opens the app)</string>
     <string name="notif_quick_add_action">Log to diary</string>
     <string name="settings_notif_quick_add">“Log to diary” button on the notification</string>
@@ -228,4 +229,15 @@
     <string name="widget_quickadd_desc">A button that opens the diary quick log without opening the app.</string>
     <string name="widget_quickadd_button">Log to diary</string>
     <string name="widget_quickadd_short">Diary</string>
+    <string name="home_chart_last_hours">Last %1$d h · drag to see earlier</string>
+    <string name="home_chart_range">%1$s – %2$s</string>
+    <string name="home_chart_now">Now</string>
+    <string name="home_diary_compact">Carbs %1$s g · Rapid %2$s U · Basal %3$s U</string>
+    <string name="home_stats_24h">24 h</string>
+    <plurals name="home_activity_steps">
+        <item quantity="one">%1$s step</item>
+        <item quantity="other">%1$s steps</item>
+    </plurals>
+    <string name="home_activity_kcal">%1$s kcal</string>
+    <string name="home_activity_today">Today\'s activity</string>
 </resources>

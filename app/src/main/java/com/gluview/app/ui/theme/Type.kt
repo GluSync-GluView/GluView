@@ -73,4 +73,11 @@ object GluType {
         fontSize   = 48.sp,
         lineHeight = 56.sp
     )
+    /** Home compacta (14/11/2026): o valor um pouco menor, para o gráfico ganhar altura. */
+    val GlucoseValueCompact: TextStyle get() = GlucoseValue.copy(fontSize = 60.sp, lineHeight = 64.sp)
+    val GlucoseArrowCompact = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontSize   = 40.sp,
+        lineHeight = 46.sp
+    )
 }

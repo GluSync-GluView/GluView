@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var nfcController: Libre2NfcController
     @Inject lateinit var updateChecker: com.gluview.app.data.update.UpdateChecker
     @Inject lateinit var termsRepository: com.gluview.app.data.repository.TermsRepository
+    // Plano 17, Fase 3 — com o app aberto o Health Connect sempre deixa ler; troca ao voltar ao app.
+    @Inject lateinit var healthSync: com.gluview.app.data.health.HealthConnectSync
 
     private var deepLinkRoute: String? by mutableStateOf(null)
     private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
@@ -177,7 +179,17 @@ class MainActivity : AppCompatActivity() {
                 data.getQueryParameter("type")?.takeIf { t -> com.gluview.app.data.diary.DiaryType.entries.any { it.key == t } }
             )
             "reminders"    -> Screen.Reminders.route
+            "diarycatalog" -> Screen.DiaryCatalog.route
             else           -> return
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            runCatching {
+                if (System.currentTimeMillis() - preferences.hcLastSyncMs.first() > 10 * 60_000L) healthSync.sync(foreground = true)
+            }
         }
     }
 

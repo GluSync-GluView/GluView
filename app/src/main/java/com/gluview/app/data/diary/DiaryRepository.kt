@@ -34,7 +34,12 @@ class DiaryRepository @Inject constructor(
     private val fingerstickDao: FingerstickLogDao,
     private val glucose: GlucoseRepository,
     private val preferences: AppPreferences,
-    private val syncScheduler: DiarySyncScheduler
+    private val syncScheduler: DiarySyncScheduler,
+    // Plano 17, Fase 3 — refeição e ponta de dedo também vão ao Health Connect (se ligado).
+    private val healthScheduler: com.gluview.app.data.health.HealthConnectScheduler,
+    private val healthSync: com.gluview.app.data.health.HealthConnectSync,
+    // Plano 17, Fase 4 — o relógio mostra os totais do dia.
+    private val wearDaySync: com.gluview.app.wear.WearDaySync
 ) {
     private suspend fun owner(): String = preferences.userEmail.first()
 
@@ -82,12 +87,16 @@ class DiaryRepository @Inject constructor(
             recordFingerstickPair(toSave.occurredAt, toSave.value, sgv)
         }
         syncScheduler.requestSync()
+        wearDaySync.request()
+        if (toSave.type == DiaryType.MEAL.key || toSave.type == DiaryType.FINGERSTICK.key) healthScheduler.requestSync()
         return dao.getByUuid(toSave.uuid) ?: toSave
     }
 
     /** Apaga. O que já foi à nuvem vira "apagado pendente" até a nuvem saber; o resto sai na hora. */
     suspend fun delete(entry: EventLogEntity, now: Long = System.currentTimeMillis()) {
         val current = dao.getByUuid(entry.uuid) ?: return
+        healthSync.onDiaryEntryDeleted(current)
+        wearDaySync.request()
         if (current.remoteId == null) dao.hardDelete(current.id)
         else {
             dao.update(current.copy(deleted = true, dirty = true, updatedAt = now))
@@ -124,8 +133,9 @@ class DiaryRepository @Inject constructor(
     // ── Cadastros (F1.2) ──
     fun observeInsulins(): Flow<List<InsulinEntity>> = catalog.observeInsulins()
     fun observeMedications(): Flow<List<MedicationEntity>> = catalog.observeMedications()
-    suspend fun saveInsulin(insulin: InsulinEntity) { catalog.upsertInsulin(insulin) }
-    suspend fun archiveInsulin(uuid: String) = catalog.archiveInsulin(uuid)
+    // O relógio usa a lista de insulinas no seletor (plano 17, F4.2): mudou, avisa.
+    suspend fun saveInsulin(insulin: InsulinEntity) { catalog.upsertInsulin(insulin); wearDaySync.request() }
+    suspend fun archiveInsulin(uuid: String) { catalog.archiveInsulin(uuid); wearDaySync.request() }
     suspend fun saveMedication(medication: MedicationEntity) { catalog.upsertMedication(medication) }
     suspend fun archiveMedication(uuid: String) = catalog.archiveMedication(uuid)
     suspend fun getInsulin(uuid: String) = catalog.getInsulin(uuid)

@@ -2,7 +2,7 @@
 
 Resumo: a conta é grátis, sem anúncios, e seus dados **não são vendidos, compartilhados nem usados
 para marketing**. Sem pedir a nuvem, suas leituras ficam só no seu aparelho. Este texto é o mesmo
-da seção 8 dos Termos de Uso dentro do app (versão 3).
+da seção 8 dos Termos de Uso dentro do app (versão 4).
 
 ## Responsável
 
@@ -22,6 +22,26 @@ privacidade: `glusync.gluview@gmail.com`.
 - Elas só vão para a **nuvem** (servidor GluSync) se a nuvem estiver liberada para a sua conta
   (Ajustes › Conta › Nuvem e acompanhamento).
 - Registros de diagnóstico só saem do aparelho quando você toca em **Enviar log para o suporte**.
+
+## Diário, lembretes e Health Connect
+
+Complemento desta política para os recursos do GluView 1.2 em diante:
+
+- **Diário e lembretes** (refeições, insulina, ponta de dedo, cetona, remédios, exercício, notas e
+  horários de lembrete) ficam **só no seu aparelho**. O diário só vai ao GluSync se a nuvem estiver
+  liberada para a sua conta; os lembretes nunca saem do aparelho.
+- **Health Connect** (desligado por padrão; cada tipo liga separado em Ajustes › Health Connect):
+  - o GluView pode **gravar** no Health Connect as leituras do sensor, as pontas de dedo e as
+    refeições (carboidrato e calorias) do diário, para outros apps de saúde do seu celular verem;
+  - o GluView pode **ler** do Health Connect exercício, sono, ciclo menstrual, refeições e glicemia
+    registrados por outros apps. Esses dados ficam **só no aparelho**, servem para o diário e a tela
+    Padrões e **nunca são enviados ao GluSync** nem a terceiros;
+  - se você ligar "Passos e calorias de hoje", o GluView lê do Health Connect, só com o app aberto,
+    o total de passos e de calorias ativas do dia para mostrar no quadro da glicemia; esses números
+    não são gravados no GluView nem enviados a lugar nenhum;
+  - os Padrões são só observação do que já aconteceu; o GluView não recomenda dose nem tratamento;
+  - você pode desligar cada tipo a qualquer momento, apagar no app o que foi lido (Ajustes ›
+    Health Connect › Apagar o que foi lido) e revogar as permissões no próprio Health Connect.
 
 ## Para que usamos
 

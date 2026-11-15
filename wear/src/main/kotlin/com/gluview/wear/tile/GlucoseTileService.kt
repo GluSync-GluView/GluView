@@ -73,6 +73,31 @@ class GlucoseTileService : TileService() {
             column.addContent(text("${getString(R.string.measured_at, Display.measuredTime(snapshot))} · $source", 12f, Display.COLOR_TEXT_DIM))
         }
 
+        // Plano 17, Fase 4 — próximo lembrete e atalhos de registro no diário.
+        val day = com.gluview.wear.data.DiaryStore.loadDay(this)?.takeIf { com.gluview.wear.contract.WearDayInfo.isFromToday(it, now) }
+        day?.takeIf { it.nextReminderAtMs > now }?.let { d ->
+            val t = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(d.nextReminderAtMs))
+            // Largura fixa e uma linha só: na tela redonda o texto comprido encostava na borda.
+            column.addContent(
+                LayoutElementBuilders.Box.Builder().setWidth(dp(170f))
+                    .addContent(
+                        LayoutElementBuilders.Text.Builder().setText(getString(R.string.next_reminder_at, t, d.nextReminderTitle))
+                            .setMaxLines(1).setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
+                            .setFontStyle(LayoutElementBuilders.FontStyle.Builder().setSize(sp(11f))
+                                .setColor(argb(Display.COLOR_TEXT_DIM)).build())
+                            .build()
+                    ).build()
+            )
+        }
+        column.addContent(LayoutElementBuilders.Spacer.Builder().setHeight(dp(4f)).build())
+        column.addContent(
+            LayoutElementBuilders.Row.Builder()
+                .addContent(shortcut("log_meal", getString(R.string.tile_add_carbs), "meal"))
+                .addContent(LayoutElementBuilders.Spacer.Builder().setWidth(dp(6f)).build())
+                .addContent(shortcut("log_insulin", getString(R.string.tile_add_insulin), "insulin"))
+                .build()
+        )
+
         return LayoutElementBuilders.Box.Builder()
             .setWidth(androidx.wear.protolayout.DimensionBuilders.expand())
             .setHeight(androidx.wear.protolayout.DimensionBuilders.expand())
@@ -90,6 +115,32 @@ class GlucoseTileService : TileService() {
             .addContent(column.build())
             .build()
     }
+
+    /** Botão do bloco que abre o registro do diário já no tipo certo. */
+    private fun shortcut(id: String, label: String, type: String): LayoutElementBuilders.LayoutElement =
+        LayoutElementBuilders.Box.Builder()
+            .setWidth(dp(64f)).setHeight(dp(32f))
+            .setModifiers(
+                ModifiersBuilders.Modifiers.Builder()
+                    .setBackground(
+                        ModifiersBuilders.Background.Builder().setColor(argb(0xFF1E5AA8.toInt()))
+                            .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(16f)).build()).build()
+                    )
+                    .setClickable(
+                        ModifiersBuilders.Clickable.Builder().setId(id).setOnClick(
+                            ActionBuilders.LaunchAction.Builder().setAndroidActivity(
+                                ActionBuilders.AndroidActivity.Builder()
+                                    .setPackageName(packageName)
+                                    .setClassName(com.gluview.wear.LogActivity::class.java.name)
+                                    .addKeyToExtraMapping(com.gluview.wear.LogActivity.EXTRA_TYPE,
+                                        ActionBuilders.AndroidStringExtra.Builder().setValue(type).build())
+                                    .build()
+                            ).build()
+                        ).build()
+                    ).build()
+            )
+            .addContent(text(label, 12f, 0xFFFFFFFF.toInt(), bold = true))
+            .build()
 
     private fun text(s: String, size: Float, color: Int, bold: Boolean = false) =
         LayoutElementBuilders.Text.Builder().setText(s).setMaxLines(2)

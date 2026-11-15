@@ -40,8 +40,8 @@ class DiaryText(private val res: Context, private val unit: GlucoseUnit = Glucos
     fun title(e: EventLogEntity): String {
         val type = DiaryType.of(e.type)
         return when (type) {
-            DiaryType.INSULIN -> listOf(insulinKind(InsulinKind.of(e.subtype)), e.itemName).filter { it.isNotBlank() }
-                .joinToString(" · ").let { s(R.string.diary_insulin_title, it) }
+            DiaryType.INSULIN -> listOf(s(R.string.diary_insulin_title, insulinKind(InsulinKind.of(e.subtype))), e.itemName)
+                .filter { it.isNotBlank() }.joinToString(" · ")
             DiaryType.MEDICATION -> listOf(typeLabel(type), e.itemName).filter { it.isNotBlank() }.joinToString(" · ")
             DiaryType.EXERCISE -> listOf(typeLabel(type), e.itemName).filter { it.isNotBlank() }.joinToString(" · ")
             DiaryType.KETONE -> s(if (KetoneMethod.of(e.subtype) == KetoneMethod.URINE) R.string.diary_ketone_urine_title

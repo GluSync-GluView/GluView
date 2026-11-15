@@ -174,6 +174,20 @@ class AppPreferences @Inject constructor(
         val KEY_SMART_MEAL_PROMPT           = booleanPreferencesKey("smart_meal_prompt")
         val KEY_SMART_MEAL_PROMPT_LAST_AT   = longPreferencesKey("smart_meal_prompt_last_at")
         val KEY_NOTIF_QUICK_ADD             = booleanPreferencesKey("notif_quick_add")
+        // Plano 17, Fase 3 — Health Connect (tudo desligado por padrão; cada tipo liga separado).
+        val KEY_HC_WRITE_GLUCOSE            = booleanPreferencesKey("hc_write_glucose")
+        val KEY_HC_READ_GLUCOSE             = booleanPreferencesKey("hc_read_glucose")
+        val KEY_HC_READ_EXERCISE            = booleanPreferencesKey("hc_read_exercise")
+        val KEY_HC_READ_SLEEP               = booleanPreferencesKey("hc_read_sleep")
+        val KEY_HC_READ_CYCLE               = booleanPreferencesKey("hc_read_cycle")
+        val KEY_HC_WRITE_NUTRITION          = booleanPreferencesKey("hc_write_nutrition")
+        val KEY_HC_READ_NUTRITION           = booleanPreferencesKey("hc_read_nutrition")
+        val KEY_HC_READ_ACTIVITY            = booleanPreferencesKey("hc_read_activity")
+        val KEY_HC_GLUCOSE_WRITTEN_UNTIL    = longPreferencesKey("hc_glucose_written_until")
+        val KEY_HC_LAST_READ_MS             = longPreferencesKey("hc_last_read_ms")
+        val KEY_HC_LAST_SYNC_MS             = longPreferencesKey("hc_last_sync_ms")
+        val KEY_HC_LAST_ERROR               = stringPreferencesKey("hc_last_error")
+        val KEY_HC_BACKFILL_DAYS            = intPreferencesKey("hc_backfill_days")
         // Variante do sensor por modelo e região (SensorVariantCatalog); "" = padrão da fonte
         val KEY_SENSOR_VARIANT_ID           = stringPreferencesKey("sensor_variant_id")
 
@@ -401,6 +415,38 @@ class AppPreferences @Inject constructor(
     /** Botão "Registrar no diário" na notificação fixa (pedido do Felipe, 10/11/2026) — ligado por padrão. */
     val notifQuickAdd: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_NOTIF_QUICK_ADD] ?: true }
     suspend fun saveNotifQuickAdd(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_QUICK_ADD] = enabled }
+
+    // ── Health Connect (plano 17, Fase 3) ─────────────────────────────────────
+    val healthConnectToggles: Flow<HealthConnectToggles> = dataStore.data.safeMap(HealthConnectToggles()) {
+        HealthConnectToggles(
+            writeGlucose = it[KEY_HC_WRITE_GLUCOSE] ?: false,
+            readGlucose = it[KEY_HC_READ_GLUCOSE] ?: false,
+            readExercise = it[KEY_HC_READ_EXERCISE] ?: false,
+            readSleep = it[KEY_HC_READ_SLEEP] ?: false,
+            readCycle = it[KEY_HC_READ_CYCLE] ?: false,
+            writeNutrition = it[KEY_HC_WRITE_NUTRITION] ?: false,
+            readNutrition = it[KEY_HC_READ_NUTRITION] ?: false,
+            readActivity = it[KEY_HC_READ_ACTIVITY] ?: false
+        )
+    }
+    suspend fun saveHealthConnectToggles(t: HealthConnectToggles) = dataStore.edit {
+        it[KEY_HC_WRITE_GLUCOSE] = t.writeGlucose; it[KEY_HC_READ_GLUCOSE] = t.readGlucose
+        it[KEY_HC_READ_EXERCISE] = t.readExercise; it[KEY_HC_READ_SLEEP] = t.readSleep
+        it[KEY_HC_READ_CYCLE] = t.readCycle; it[KEY_HC_WRITE_NUTRITION] = t.writeNutrition
+        it[KEY_HC_READ_NUTRITION] = t.readNutrition; it[KEY_HC_READ_ACTIVITY] = t.readActivity
+    }
+    val hcGlucoseWrittenUntil: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_HC_GLUCOSE_WRITTEN_UNTIL] ?: 0L }
+    suspend fun saveHcGlucoseWrittenUntil(ms: Long) = dataStore.edit { it[KEY_HC_GLUCOSE_WRITTEN_UNTIL] = ms }
+    val hcLastReadMs: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_HC_LAST_READ_MS] ?: 0L }
+    suspend fun saveHcLastReadMs(ms: Long) = dataStore.edit { it[KEY_HC_LAST_READ_MS] = ms }
+    val hcLastSyncMs: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_HC_LAST_SYNC_MS] ?: 0L }
+    val hcLastError: Flow<String> = dataStore.data.safeMap("") { it[KEY_HC_LAST_ERROR] ?: "" }
+    suspend fun saveHcSyncResult(ms: Long, error: String) = dataStore.edit {
+        it[KEY_HC_LAST_SYNC_MS] = ms; it[KEY_HC_LAST_ERROR] = error
+    }
+    /** Quantos dias para trás gravar/ler na primeira vez (1, 7 ou 30). */
+    val hcBackfillDays: Flow<Int> = dataStore.data.safeMap(7) { it[KEY_HC_BACKFILL_DAYS] ?: 7 }
+    suspend fun saveHcBackfillDays(days: Int) = dataStore.edit { it[KEY_HC_BACKFILL_DAYS] = days.coerceIn(1, 30) }
 
     // ── Idioma ────────────────────────────────────────────────────────────────
     // L21: sem escolha salva, segue o aparelho — inglês se o celular estiver em inglês, senão português.
@@ -1166,3 +1212,21 @@ class AppPreferences @Inject constructor(
  */
 internal fun deviceLanguage(): String =
     if (android.content.res.Resources.getSystem().configuration.locales[0]?.language == "en") "en" else "pt"
+
+/** O que o GluView troca com o Health Connect (plano 17, Fase 3). Tudo começa desligado. */
+data class HealthConnectToggles(
+    val writeGlucose: Boolean = false,
+    val readGlucose: Boolean = false,
+    val readExercise: Boolean = false,
+    val readSleep: Boolean = false,
+    val readCycle: Boolean = false,
+    val writeNutrition: Boolean = false,
+    val readNutrition: Boolean = false,
+    /** Passos e calorias ativas de hoje na Home (lidos só com o app aberto). */
+    val readActivity: Boolean = false
+) {
+    val any: Boolean get() = writeGlucose || readGlucose || readExercise || readSleep || readCycle || writeNutrition || readNutrition || readActivity
+    val anyRead: Boolean get() = readGlucose || readExercise || readSleep || readCycle || readNutrition || readActivity
+    /** Leituras que o worker faz com o app fechado (passos/calorias não entram). */
+    val anyBackgroundRead: Boolean get() = readGlucose || readExercise || readSleep || readCycle || readNutrition
+}

@@ -6,6 +6,7 @@ import com.gluview.app.data.local.AppDatabase
 import com.gluview.app.data.local.dao.AlertLogDao
 import com.gluview.app.data.local.dao.AppLogDao
 import com.gluview.app.data.local.dao.DiaryCatalogDao
+import com.gluview.app.data.local.dao.HealthRecordDao
 import com.gluview.app.data.local.dao.ReminderDao
 import com.gluview.app.data.local.dao.EventLogDao
 import com.gluview.app.data.local.dao.FingerstickLogDao
@@ -37,7 +38,8 @@ object DatabaseModule {
         AppDatabase.MIGRATION_10_11,
         AppDatabase.MIGRATION_11_12,
         AppDatabase.MIGRATION_12_13,
-        AppDatabase.MIGRATION_13_14
+        AppDatabase.MIGRATION_13_14,
+        AppDatabase.MIGRATION_14_15
     )
 
     @Provides
@@ -56,4 +58,5 @@ object DatabaseModule {
     @Provides fun provideSensorHistoryDao(db: AppDatabase): SensorHistoryDao = db.sensorHistoryDao()
     @Provides fun provideDiaryCatalogDao(db: AppDatabase): DiaryCatalogDao = db.diaryCatalogDao()
     @Provides fun provideReminderDao(db: AppDatabase):    ReminderDao      = db.reminderDao()
+    @Provides fun provideHealthRecordDao(db: AppDatabase): HealthRecordDao = db.healthRecordDao()
 }

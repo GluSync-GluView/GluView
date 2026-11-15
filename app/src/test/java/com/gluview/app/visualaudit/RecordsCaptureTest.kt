@@ -76,9 +76,9 @@ class RecordsCaptureTest {
         )
         val today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
         shoot("eventos") { tf -> DiaryContent(today, events, DaySummary.of(events), GlucoseUnit.MG_DL, tf, false,
-            null, {}, {}, {}, {}, {}, {}, {}, {}, {}, nowMs = now) }
+            null, {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> }, nowMs = now) }
         shoot("eventos-vazio") { tf -> DiaryContent(today, emptyList(), DaySummary(), GlucoseUnit.MG_DL, tf, false,
-            null, {}, {}, {}, {}, {}, {}, {}, {}, {}, nowMs = now) }
+            null, {}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> }, nowMs = now) }
 
         val alerts = listOf(
             AlertLogEntity(1, ago(15), 52.0, "URGENT_LOW", "dnd"),

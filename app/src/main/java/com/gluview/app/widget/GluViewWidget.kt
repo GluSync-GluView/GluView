@@ -80,7 +80,9 @@ internal fun WidgetContent(
     unitStr: String,
     lastMsStr: String,
     timeFormatStr: String,
-    lang: String? = null
+    lang: String? = null,
+    /** O Android aceita UM fundo de widget por layout: false quando este conteúdo vai dentro de outro (GluView + diário). */
+    asBackground: Boolean = true
 ) {
     val ctx = LocalContext.current.widgetContext(lang)
     val noData = isStale || sgv == 0f
@@ -100,7 +102,7 @@ internal fun WidgetContent(
 
     Box(
         modifier         = GlanceModifier.fillMaxSize()
-            .appWidgetBackground()
+            .let { if (asBackground) it.appWidgetBackground() else it }
             .cornerRadius(16.dp)
             .background(ColorProvider(bgColor))
             .clickable(actionStartActivity<MainActivity>()),

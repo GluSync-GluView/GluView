@@ -2,8 +2,6 @@ package com.gluview.app.ui.screen.home
 
 import com.gluview.app.ui.components.kit.Tone
 import com.gluview.app.ui.components.kit.GluCallout
-import com.gluview.app.ui.components.glucose.GlucoseStat
-import com.gluview.app.ui.components.glucose.GlucoseStatsCard
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,11 +30,20 @@ import androidx.compose.material.icons.outlined.Vaccines
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.gluview.app.util.formatTime
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +78,7 @@ fun HomeScreen(
     onNavigateToSettings:      () -> Unit,
     onNavigateToAlertHistory:  () -> Unit,
     onNavigateToDiary:         (String?) -> Unit = {},
+    onNavigateToDiaryCatalog:  () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val isFollowerOnly by viewModel.isFollowerOnly.collectAsState()
@@ -83,6 +91,7 @@ fun HomeScreen(
             onNavigateToSettings     = onNavigateToSettings,
             onNavigateToAlertHistory = onNavigateToAlertHistory,
             onNavigateToDiary        = onNavigateToDiary,
+            onNavigateToDiaryCatalog = onNavigateToDiaryCatalog,
             viewModel                = viewModel
         )
     }
@@ -94,16 +103,19 @@ private fun PatientHomeScreen(
     onNavigateToSettings:      () -> Unit,
     onNavigateToAlertHistory:  () -> Unit,
     onNavigateToDiary:         (String?) -> Unit,
+    onNavigateToDiaryCatalog:  () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val diaryToday   by viewModel.diaryToday.collectAsState()
     val diaryMarkers by viewModel.diaryMarkers.collectAsState()
+    // Com o ciclo de vida: fora da tela, para de reler o Health Connect.
+    val activityToday by viewModel.activityToday.collectAsStateWithLifecycle()
     var quickAdd     by remember { mutableStateOf(false) }
     if (quickAdd) {
         com.gluview.app.ui.screen.diary.QuickAddFlow(
             onDone = { quickAdd = false },
             onOpenMealEditor = { quickAdd = false; onNavigateToDiary("meal") },
-            onOpenCatalog = { quickAdd = false; onNavigateToDiary(null) }
+            onOpenCatalog = { quickAdd = false; onNavigateToDiaryCatalog() }
         )
     }
     val uiState      by viewModel.uiState.collectAsState()
@@ -145,7 +157,8 @@ private fun PatientHomeScreen(
             urgentHighThreshold = urgentHighThreshold,
             darkGraph        = darkGraph,
             diaryToday       = diaryToday,
-            diaryMarkers     = diaryMarkers
+            diaryMarkers     = diaryMarkers,
+            activityToday    = activityToday
         ),
         onReconnectSensor        = viewModel::reconnectSensor,
         onRefresh                = viewModel::refresh,
@@ -177,7 +190,9 @@ internal data class PatientHomeState(
     val darkGraph:        Boolean,
     // Plano 17 — null = não mostra a linha do diário (seguidor, harness antigo).
     val diaryToday:       com.gluview.app.data.diary.DaySummary? = null,
-    val diaryMarkers:     List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList()
+    val diaryMarkers:     List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList(),
+    // Passos e calorias do Health Connect; vazio = nada aparece.
+    val activityToday:    com.gluview.app.data.health.TodayActivity = com.gluview.app.data.health.TodayActivity()
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -316,7 +331,8 @@ internal fun PatientHomeContent(
                                 sensorWarmup       = sensorWarmup,
                                 showAgingAlert     = sensorAgingAlert.visible,
                                 onAgingAlertClick  = { showAgingDialog = true },
-                                onCheckSensorClick = { showCheckDialog = true }
+                                onCheckSensorClick = { showCheckDialog = true },
+                                activity           = state.activityToday
                             )
                         } ?: if (uiState.error != null && !sensorWarmup.active) {
                             // L5: sem leitura E a busca falhou — diz que falhou (antes "aguardando dados").
@@ -330,13 +346,11 @@ internal fun PatientHomeContent(
 
                         uiState.dayStats?.let { stats ->
                             with(uiState.unit) {
-                                GlucoseStatsCard(
-                                    stats = listOf(
-                                        GlucoseStat(stringResource(R.string.home_stat_min), stats.minSgv?.toDisplay() ?: "--"),
-                                        GlucoseStat(stringResource(R.string.home_stat_avg), stats.avgSgv?.toDisplay() ?: "--"),
-                                        GlucoseStat(stringResource(R.string.home_stat_max), stats.maxSgv?.toDisplay() ?: "--")
-                                    ),
-                                    caption = stringResource(R.string.home_last_24_hours)
+                                // Uma linha só, na mesma altura do diário (pedido do Felipe, 14/11/2026).
+                                HomeStatsRow(
+                                    min = stats.minSgv?.toDisplay() ?: "--",
+                                    avg = stats.avgSgv?.toDisplay() ?: "--",
+                                    max = stats.maxSgv?.toDisplay() ?: "--"
                                 )
                             }
                         }
@@ -375,7 +389,11 @@ internal fun PatientHomeContent(
     }
 }
 
-/** Gráfico da Home: painel com título e chips 1/3/6/12/24h e o [GlucoseChart] ocupando o resto. */
+/**
+ * Gráfico da Home (pedido do Felipe, 14/11/2026): sem os chips de horas — como no xDrip, arrastar
+ * na horizontal volta no tempo (até [HOME_SCROLL_HOURS] h) e pinçar muda a janela (1 a 24 h). A
+ * janela escolhida fica salva; "Agora" volta para o fim.
+ */
 @Composable
 private fun HomeChart(
     readings: List<GraphReading>?,
@@ -386,12 +404,46 @@ private fun HomeChart(
     fill: Boolean = false,
     markers: List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList()
 ) {
+    val clock = LocalClock.current
+    var hours by remember(selectedHours) { mutableStateOf(selectedHours.coerceIn(1, 24)) }
+    // Quanto a janela está para trás de "agora" (0 = ao vivo).
+    var offsetMs by remember { mutableLongStateOf(0L) }
+    var zoomAcc by remember { mutableStateOf(1f) }
+    val spanMs = hours * 3_600_000L
+    val maxOffset = (HOME_SCROLL_HOURS * 3_600_000L - spanMs).coerceAtLeast(0L)
+    val gestures = remember(hours, maxOffset) {
+        com.gluview.app.ui.components.chart.ChartGestures(
+            onPan = { frac -> offsetMs = (offsetMs + (frac * spanMs).toLong()).coerceIn(0L, maxOffset) },
+            onZoom = { z ->
+                zoomAcc *= z
+                val idx = HOME_ZOOM_STEPS.indexOf(hours).let { if (it < 0) HOME_ZOOM_STEPS.indexOfFirst { h -> h >= hours } else it }
+                if (zoomAcc > 1.25f && idx > 0) { hours = HOME_ZOOM_STEPS[idx - 1]; zoomAcc = 1f }
+                else if (zoomAcc < 0.8f && idx < HOME_ZOOM_STEPS.lastIndex) { hours = HOME_ZOOM_STEPS[idx + 1]; zoomAcc = 1f }
+            },
+            onGestureEnd = {
+                zoomAcc = 1f
+                if (hours != selectedHours) onHoursChange(hours)
+            }
+        )
+    }
+    val window = if (offsetMs <= 0L) GraphWindow.Trailing(hours)
+                 else (clock() - offsetMs).let { to -> GraphWindow.Fixed(to - spanMs, to) }
+
     GlucoseChartPanel(
-        title = stringResource(R.string.home_history),
+        title = null,
         modifier = modifier,
-        periods = listOf(1, 3, 6, 12, 24),
-        selectedPeriod = selectedHours,
-        onSelectPeriod = onHoursChange
+        extraControls = {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (window is GraphWindow.Fixed) stringResource(R.string.home_chart_range,
+                        formatTime(window.fromMs, appearance.timeFormat), formatTime(window.toMs, appearance.timeFormat))
+                    else stringResource(R.string.home_chart_last_hours, hours),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f).semantics { heading() }
+                )
+                if (offsetMs > 0L) TextButton(onClick = { offsetMs = 0L }) { Text(stringResource(R.string.home_chart_now)) }
+            }
+        }
     ) {
         GlucoseChart(
             // Sem leitura: estado "vazio" que explica, não o spinner eterno de antes.
@@ -400,13 +452,19 @@ private fun HomeChart(
                 readings.isEmpty() -> LoadState.Empty
                 else -> LoadState.Ready(readings)
             },
-            window = GraphWindow.Trailing(selectedHours),
+            window = window,
             appearance = appearance,
             modifier = if (fill) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().aspectRatio(900f / 400f),
-            markers = markers
+            markers = markers,
+            gestures = gestures,
+            description = null
         )
     }
 }
+
+/** Passos do pinçar (horas na tela) e até onde dá para voltar no gráfico da Home. */
+internal val HOME_ZOOM_STEPS = listOf(1, 2, 3, 4, 6, 8, 12, 24)
+internal const val HOME_SCROLL_HOURS = 48
 
 /** Dialog com as possíveis causas quando o sensor fica silencioso por muito tempo. */
 @Composable
@@ -447,6 +505,31 @@ private fun SensorAgingDialog(days: Int, agingDays: Int, onDismiss: () -> Unit) 
     )
 }
 
+/** "👣 8.432 passos · 🔥 320 kcal" — só o que existir. */
+@Composable
+private fun ActivityTodayLine(a: com.gluview.app.data.health.TodayActivity) {
+    val nf = remember { java.text.NumberFormat.getIntegerInstance() }
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    val steps = a.steps?.let { pluralStringResource(R.plurals.home_activity_steps, it.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), nf.format(it)) }
+    val kcal = a.activeKcal?.let { stringResource(R.string.home_activity_kcal, nf.format(Math.round(it))) }
+    val a11y = listOfNotNull(stringResource(R.string.home_activity_today), steps, kcal).joinToString(", ")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.clearAndSetSemantics { contentDescription = a11y }
+    ) {
+        if (steps != null) {
+            Icon(Icons.AutoMirrored.Filled.DirectionsWalk, null, tint = color, modifier = Modifier.size(14.dp))
+            Text(steps, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
+        }
+        if (steps != null && kcal != null) Spacer(Modifier.width(6.dp))
+        if (kcal != null) {
+            Icon(Icons.Default.LocalFireDepartment, null, tint = color, modifier = Modifier.size(14.dp))
+            Text(kcal, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
+        }
+    }
+}
+
 /** Card da leitura atual da Home: o [GlucoseHeroCard] com os slots do sensor. */
 @Composable
 private fun GlucoseCard(
@@ -460,7 +543,8 @@ private fun GlucoseCard(
     sensorWarmup: SensorWarmup,
     showAgingAlert: Boolean,
     onAgingAlertClick: () -> Unit,
-    onCheckSensorClick: () -> Unit
+    onCheckSensorClick: () -> Unit,
+    activity: com.gluview.app.data.health.TodayActivity = com.gluview.app.data.health.TodayActivity()
 ) {
     // Horário real da medição, no formato 24h/AM-PM do usuário; vermelho se passar de 12 min.
     val ageSec = if (reading.epochMs > 0L) ((nowMs - reading.epochMs) / 1_000L).toInt().coerceAtLeast(0)
@@ -477,6 +561,9 @@ private fun GlucoseCard(
         trendDescription = trendLabel(reading.direction) ?: trendLabel(reading.arrow),
         timeText = epochMsToTimeOfDay(measuredAtMs, timeFormat),
         timeIsOld = ageSec >= 12 * 60,
+        compact = true,
+        // Pedido do Felipe (14/11/2026): passos e calorias acima do "Conectado"; sem dado, nada.
+        activity = if (activity.isEmpty) null else { { ActivityTodayLine(activity) } },
         statusStart = if (!isSensorSource) null else {
             {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -566,20 +653,56 @@ private fun GlucoseCard(
 private fun DiaryTodayRow(d: com.gluview.app.data.diary.DaySummary, onOpen: (String?) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val text = remember(context) { com.gluview.app.util.DiaryText(context) }
-    com.gluview.app.ui.components.kit.GluCard(onClick = { onOpen(null) }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.home_diary_today), style = MaterialTheme.typography.labelLarge)
-                Text(
-                    stringResource(R.string.home_diary_summary, text.amount(d.carbsG), text.amount(d.rapidU + d.mixedU), text.amount(d.basalU)),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+    // Uma linha só e mais fina (14/11/2026): o gráfico fica com o espaço.
+    Surface(
+        onClick = { onOpen(null) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.home_diary_compact, text.amount(d.carbsG), text.amount(d.rapidU + d.mixedU), text.amount(d.basalU)),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                modifier = Modifier.weight(1f)
+            )
             IconButton(onClick = { onOpen("meal") }) {
                 Icon(Icons.Outlined.Restaurant, stringResource(R.string.home_diary_add_meal))
             }
             IconButton(onClick = { onOpen("insulin") }) {
                 Icon(Icons.Outlined.Vaccines, stringResource(R.string.home_diary_add_insulin))
+            }
+        }
+    }
+}
+
+
+/** Mínima, média e máxima das últimas 24 h numa linha, do mesmo tamanho da linha do diário. */
+@Composable
+private fun HomeStatsRow(min: String, avg: String, max: String) {
+    val lMin = stringResource(R.string.home_stat_min)
+    val lAvg = stringResource(R.string.home_stat_avg)
+    val lMax = stringResource(R.string.home_stat_max)
+    val period = stringResource(R.string.home_stats_24h)
+    val a11y = "${stringResource(R.string.home_last_24_hours)}: $lMin $min, $lAvg $avg, $lMax $max"
+    Surface(
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = a11y },
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(period, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            listOf(lMin to min, lAvg to avg, lMax to max).forEach { (label, value) ->
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Text(label + " ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                }
             }
         }
     }

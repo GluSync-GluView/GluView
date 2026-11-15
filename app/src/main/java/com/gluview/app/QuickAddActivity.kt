@@ -39,7 +39,8 @@ class QuickAddActivity : AppCompatActivity() {
                     initialType = initialType,
                     onDone = { finish() },
                     onOpenMealEditor = { openApp("gluview://diary?type=meal") },
-                    onOpenCatalog = { openApp("gluview://diary") }
+                    onOpenCatalog = { openApp("gluview://diarycatalog") },
+                    insideApp = false
                 )
             }
         }

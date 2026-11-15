@@ -52,7 +52,9 @@ class GluViewDiaryWidget : GlanceAppWidget() {
         provideContent {
             val prefs = currentState<androidx.datastore.preferences.core.Preferences>()
             val lang = prefs[GluViewWidget.KEY_LANG]
-            Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            // Um só fundo de widget (a Row): marcar o valor e o lápis como fundo derrubava o widget
+            // com "Não é possível mostrar o conteúdo" (IllegalStateException do Glance).
+            Row(GlanceModifier.fillMaxSize().appWidgetBackground(), verticalAlignment = Alignment.CenterVertically) {
                 Box(GlanceModifier.defaultWeight().fillMaxHeight()) {
                     WidgetContent(
                         sgv           = prefs[GluViewWidget.KEY_SGV]     ?: 0f,
@@ -62,40 +64,61 @@ class GluViewDiaryWidget : GlanceAppWidget() {
                         unitStr       = prefs[GluViewWidget.KEY_UNIT]    ?: "MG_DL",
                         lastMsStr     = prefs[GluViewWidget.KEY_LAST_MS] ?: "0",
                         timeFormatStr = prefs[GluViewWidget.KEY_TIME_FORMAT] ?: "H24",
-                        lang          = lang
+                        lang          = lang,
+                        asBackground  = false
                     )
                 }
                 Box(GlanceModifier.width(4.dp)) {}
-                QuickAddButton(GlanceModifier.width(52.dp).fillMaxHeight(), lang, showLabel = false)
+                QuickAddButton(GlanceModifier.width(52.dp).fillMaxHeight(), lang, showLabel = false, asBackground = false)
             }
         }
     }
 }
 
-class GluViewDiaryWidgetReceiver : GlanceAppWidgetReceiver() {
+class GluViewDiaryWidgetReceiver : GlucoseWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = GluViewDiaryWidget()
 }
 
-/** Só o botão "Registrar no diário" (1×1). Sem dado de glicemia, não precisa de atualização. */
-class GluViewQuickAddWidget : GlanceAppWidget() {
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        provideContent { QuickAddButton(GlanceModifier.fillMaxSize(), null, showLabel = true) }
+/**
+ * Só o botão "Registrar no diário" (1×1). AppWidgetProvider simples (RemoteViews), não Glance: não
+ * tem dado para mostrar, e assim desenha sempre — com Glance ele ficava em branco quando o
+ * processo reiniciava (sessão ainda não existia ao atualizar o app).
+ */
+class GluViewQuickAddWidgetReceiver : android.appwidget.AppWidgetProvider() {
+    override fun onUpdate(context: Context, manager: android.appwidget.AppWidgetManager, ids: IntArray) {
+        ids.forEach { manager.updateAppWidget(it, views(context)) }
     }
-}
 
-class GluViewQuickAddWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = GluViewQuickAddWidget()
+    companion object {
+        fun views(context: Context): android.widget.RemoteViews =
+            android.widget.RemoteViews(context.packageName, R.layout.widget_quick_add).apply {
+                val pi = android.app.PendingIntent.getActivity(
+                    context, 70_001,
+                    android.content.Intent(context, QuickAddActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+                setOnClickPendingIntent(R.id.quick_add_root, pi)
+                setContentDescription(R.id.quick_add_root, context.getString(R.string.widget_quickadd_button))
+            }
+
+        /** Redesenha os botões já colocados (idioma novo, app atualizado). */
+        fun refreshAll(context: Context) {
+            val m = android.appwidget.AppWidgetManager.getInstance(context)
+            val ids = m.getAppWidgetIds(android.content.ComponentName(context, GluViewQuickAddWidgetReceiver::class.java))
+            ids.forEach { m.updateAppWidget(it, views(context)) }
+        }
+    }
 }
 
 private val QUICK_ADD_BG = Color(0xFF1E5AA8)
 
 @Composable
-private fun QuickAddButton(modifier: GlanceModifier, lang: String?, showLabel: Boolean) {
+private fun QuickAddButton(modifier: GlanceModifier, lang: String?, showLabel: Boolean, asBackground: Boolean = true) {
     val ctx = LocalContext.current.widgetContext(lang)
     val label = ctx.getString(R.string.widget_quickadd_button)
     Box(
         modifier = modifier
-            .appWidgetBackground()
+            .let { if (asBackground) it.appWidgetBackground() else it }
             .cornerRadius(16.dp)
             .background(ColorProvider(QUICK_ADD_BG))
             .clickable(actionStartActivity<QuickAddActivity>())

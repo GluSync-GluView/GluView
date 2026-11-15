@@ -54,6 +54,8 @@ import com.gluview.app.ui.screen.diary.DiaryCatalogScreen
 import com.gluview.app.ui.screen.diary.DiaryScreen
 import com.gluview.app.ui.screen.diary.MealEditorScreen
 import com.gluview.app.ui.screen.reminders.RemindersScreen
+import com.gluview.app.ui.screen.health.HealthConnectScreen
+import com.gluview.app.ui.screen.health.PatternsScreen
 import com.gluview.app.data.diary.DiaryType
 import com.gluview.app.ui.screen.history.HistoryScreen
 import com.gluview.app.ui.screen.home.HomeScreen
@@ -151,7 +153,8 @@ fun AppNavigation(
             HomeScreen(
                 onNavigateToSettings     = { nav.navigate(Screen.Settings.route) },
                 onNavigateToAlertHistory = { nav.navigate(Screen.AlertHistory.route) },
-                onNavigateToDiary        = { type -> nav.navigate(Screen.Diary.createRoute(type)) }
+                onNavigateToDiary        = { type -> nav.navigate(Screen.Diary.createRoute(type)) },
+                onNavigateToDiaryCatalog = { nav.navigate(Screen.DiaryCatalog.route) }
             )
         }
         composable(Screen.Settings.route) {
@@ -171,6 +174,7 @@ fun AppNavigation(
                 onDonate          = { nav.navigate(Screen.Donation.route) },
                 onDiary           = { nav.navigate(Screen.Diary.createRoute()) },
                 onReminders       = { nav.navigate(Screen.Reminders.route) },
+                onHealthConnect   = { nav.navigate(Screen.HealthConnect.route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -365,6 +369,12 @@ fun AppNavigation(
         composable(Screen.Reminders.route) {
             RemindersScreen(onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Home.route) },
                 onCatalog = { nav.navigate(Screen.DiaryCatalog.route) })
+        }
+        composable(Screen.HealthConnect.route) {
+            HealthConnectScreen(onBack = { nav.popBackStack() }, onPatterns = { nav.navigate(Screen.Patterns.route) })
+        }
+        composable(Screen.Patterns.route) {
+            PatternsScreen(onBack = { nav.popBackStack() }, onHealthConnect = { nav.navigate(Screen.HealthConnect.route) })
         }
         composable(Screen.Diagnostic.route) {
             DiagnosticScreen(onBack = { nav.popBackStack() })

@@ -219,6 +219,7 @@
     <string name="quick_add_title">Registrar no diário</string>
     <string name="quick_add_favorites">Favoritas (um toque registra)</string>
     <string name="quick_add_kcal">Calorias (opcional)</string>
+    <string name="quick_add_meal_full_in_app">Montar com alimentos</string>
     <string name="quick_add_meal_full">Montar com alimentos (abre o app)</string>
     <string name="notif_quick_add_action">Registrar no diário</string>
     <string name="settings_notif_quick_add">Botão “Registrar no diário” na notificação</string>
@@ -229,4 +230,15 @@
     <string name="widget_quickadd_desc">Botão que abre o registro rápido do diário sem abrir o app.</string>
     <string name="widget_quickadd_button">Registrar no diário</string>
     <string name="widget_quickadd_short">Diário</string>
+    <string name="home_chart_last_hours">Últimas %1$d h · arraste para ver antes</string>
+    <string name="home_chart_range">%1$s – %2$s</string>
+    <string name="home_chart_now">Agora</string>
+    <string name="home_diary_compact">Carb %1$s g · Rápida %2$s U · Basal %3$s U</string>
+    <string name="home_stats_24h">24 h</string>
+    <plurals name="home_activity_steps">
+        <item quantity="one">%1$s passo</item>
+        <item quantity="other">%1$s passos</item>
+    </plurals>
+    <string name="home_activity_kcal">%1$s kcal</string>
+    <string name="home_activity_today">Atividade de hoje</string>
 </resources>

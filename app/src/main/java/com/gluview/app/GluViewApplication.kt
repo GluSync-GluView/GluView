@@ -32,6 +32,8 @@ class GluViewApplication : Application() {
     @Inject lateinit var reminderNotifier: com.gluview.app.notification.ReminderNotifier
     @Inject lateinit var reminderScheduler: com.gluview.app.data.reminder.ReminderScheduler
     @Inject lateinit var diarySyncScheduler: com.gluview.app.data.diary.DiarySyncScheduler
+    @Inject lateinit var healthScheduler: com.gluview.app.data.health.HealthConnectScheduler
+    @Inject lateinit var wearDaySync: com.gluview.app.wear.WearDaySync
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -49,7 +51,12 @@ class GluViewApplication : Application() {
         donationTracker.resume()
         runCatching { reminderNotifier.createChannels() }
         runCatching { diarySyncScheduler.schedulePeriodic() }
+        runCatching { healthScheduler.schedulePeriodic() }
+        runCatching { wearDaySync.request(10) }
         appScope.launch { runCatching { reminderScheduler.rescheduleAll() } }
+        // Depois de atualizar o app (ou o processo reiniciar), os widgets ficavam em branco até chegar
+        // uma leitura nova — redesenha já com a última guardada (ou "Sem sinal").
+        appScope.launch { runCatching { com.gluview.app.widget.WidgetUpdater.from(this@GluViewApplication).refreshFromLatest() } }
     }
 
     /**

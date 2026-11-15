@@ -39,7 +39,8 @@ class ReportViewModel @Inject constructor(
     private val exportHelper: ExportHelper,
     private val preferences: AppPreferences,
     // Plano 17 — o diário do mês entra no fim do PDF (só do próprio paciente, nunca no modo seguidor).
-    private val diary: com.gluview.app.data.diary.DiaryRepository
+    private val diary: com.gluview.app.data.diary.DiaryRepository,
+    private val patterns: com.gluview.app.data.health.HealthPatterns
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportUiState())
@@ -57,16 +58,26 @@ class ReportViewModel @Inject constructor(
         load()
     }
 
-    fun exportPdf() = export(ExportKind.PDF, R.string.report_export_pdf_ok, R.string.report_export_pdf_fail) { report ->
-        val s = _uiState.value
-        val first = java.time.LocalDate.of(s.ano, s.mes, 1)
-        val last = first.plusMonths(1).minusDays(1)
-        val zone = java.time.ZoneId.systemDefault()
-        val entries = if (activePatientId() != null) emptyList() else diary.getBetween(
-            com.gluview.app.data.diary.DiaryRepository.dayBounds(first, zone).first,
-            com.gluview.app.data.diary.DiaryRepository.dayBounds(last, zone).second)
-        exportHelper.exportPdf(report, entries, first to last)
-    }
+    /**
+     * PDF do mês (plano 17): o relatório sempre; o diário do mês e os padrões (exercício, sono e
+     * ciclo) só se pedidos — 4 combinações. No modo seguidor não há diário nem padrões de outra pessoa.
+     */
+    fun exportPdf(includeDiary: Boolean = false, includePatterns: Boolean = false) =
+        export(ExportKind.PDF, R.string.report_export_pdf_ok, R.string.report_export_pdf_fail) { report ->
+            val s = _uiState.value
+            val first = java.time.LocalDate.of(s.ano, s.mes, 1)
+            val last = first.plusMonths(1).minusDays(1)
+            val zone = java.time.ZoneId.systemDefault()
+            val follower = activePatientId() != null
+            val (from, to) = com.gluview.app.data.diary.DiaryRepository.dayBounds(first, zone).first to
+                com.gluview.app.data.diary.DiaryRepository.dayBounds(last, zone).second
+            val entries = if (includeDiary && !follower) diary.getBetween(from, to) else emptyList()
+            val pat = if (includePatterns && !follower) patterns.computeBetween(from, minOf(to, System.currentTimeMillis())) else null
+            exportHelper.exportPdf(report, entries, first to last, pat)
+        }
+
+    /** Diário/padrões só fazem sentido para o próprio paciente. */
+    suspend fun canIncludeLocalData(): Boolean = activePatientId() == null
 
     fun exportCsv() = export(ExportKind.CSV, R.string.report_export_csv_ok, R.string.report_export_csv_fail) { exportHelper.exportCsv(it) }
 

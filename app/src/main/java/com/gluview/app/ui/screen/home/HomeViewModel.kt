@@ -80,8 +80,19 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     serviceMonitor: com.gluview.app.util.ServiceMonitor,
     // Plano 17 — diário de hoje na Home e marcadores no gráfico.
-    diary: com.gluview.app.data.diary.DiaryRepository
+    diary: com.gluview.app.data.diary.DiaryRepository,
+    healthRecords: com.gluview.app.data.local.dao.HealthRecordDao,
+    healthActivity: com.gluview.app.data.health.HealthActivityToday
 ) : ViewModel() {
+
+    /**
+     * Passos e calorias ativas de hoje (Health Connect, se ligado). Relê a cada 5 min só enquanto a
+     * Home está na tela (a coleta para quando o app sai da frente).
+     */
+    val activityToday: StateFlow<com.gluview.app.data.health.TodayActivity> = channelFlow {
+        launch { while (true) { healthActivity.refresh(); delay(5 * 60_000L) } }
+        healthActivity.today.collect { send(it) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), healthActivity.today.value)
 
     /** Resumo do diário de hoje (vira a meia-noite sozinho). */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -93,8 +104,14 @@ class HomeViewModel @Inject constructor(
 
     /** Registros das últimas 24 h como marcadores do gráfico. */
     val diaryMarkers: StateFlow<List<com.gluview.app.ui.components.chart.ChartMarker>> =
-        diary.observeFrom(System.currentTimeMillis() - 24 * 3_600_000L)
-            .map { list -> list.map { com.gluview.app.ui.screen.diary.toChartMarker(it) } }
+        combine(
+            diary.observeFrom(System.currentTimeMillis() - HOME_SCROLL_HOURS * 3_600_000L),
+            // F3.2 — glicemia de OUTROS apps (Health Connect): só pontos cinza no gráfico, nunca alerta.
+            healthRecords.observeFrom(com.gluview.app.data.health.HealthConnectMapper.KIND_GLUCOSE, System.currentTimeMillis() - HOME_SCROLL_HOURS * 3_600_000L)
+        ) { list, external ->
+            external.map { com.gluview.app.ui.components.chart.ChartMarker(it.startMs, it.value, EXTERNAL_GLUCOSE_ARGB) } +
+                list.map { com.gluview.app.ui.screen.diary.toChartMarker(it) }
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** O banco já respondeu (com ou sem leitura) — L5: sem leitura nenhuma, sai do spinner. */
@@ -102,6 +119,9 @@ class HomeViewModel @Inject constructor(
     private val syncError: StateFlow<String?> = serviceMonitor.syncError
 
     companion object {
+        /** Cinza dos pontos de glicemia vindos de outros apps (Health Connect). */
+        const val EXTERNAL_GLUCOSE_ARGB = 0xFF9E9E9E.toInt()
+
         /**
          * Nunca deixa o card do topo mostrar algo mais velho do que o próprio histórico
          * local (mesma fonte do gráfico) já tem — ver [latestDbReading]. Extraída como
@@ -346,9 +366,11 @@ class HomeViewModel @Inject constructor(
 
     // Reactive: switches DB query whenever hours preference changes. null = o banco ainda não
     // respondeu (L5: antes começava vazio e o gráfico piscava "Sem leituras").
-    val homeChartReadings: StateFlow<List<GraphReading>?> = homeGraphHours
-        .flatMapLatest { hours ->
-            val fromMs = System.currentTimeMillis() - hours * 3_600_000L
+    // Pedido do Felipe (14/11/2026): o gráfico da Home rola como o xDrip, então carrega as últimas
+    // HOME_SCROLL_HOURS horas inteiras — a janela visível (e o zoom) é escolhida na tela.
+    val homeChartReadings: StateFlow<List<GraphReading>?> = kotlinx.coroutines.flow.flowOf(Unit)
+        .flatMapLatest {
+            val fromMs = System.currentTimeMillis() - HOME_SCROLL_HOURS * 3_600_000L
             combine(
                 repository.observeRecentReadings(fromMs),
                 preferences.sibionicsCalFactor,

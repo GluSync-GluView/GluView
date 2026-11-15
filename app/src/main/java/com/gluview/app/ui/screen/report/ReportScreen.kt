@@ -83,6 +83,7 @@ fun ReportScreen(
         }
     }
 
+    var pdfOptions by remember { mutableStateOf(false) }
     Scaffold(
         topBar = { AppTopBar(title = stringResource(R.string.settings_medical_report), onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -96,10 +97,21 @@ fun ReportScreen(
                 subjectName = rememberFollowedSubject(),
                 onMonthChanged = vm::onMonthChanged,
                 onRetry = vm::retry,
-                onExportPdf = vm::exportPdf,
+                onExportPdf = { pdfOptions = true },
                 onExportCsv = vm::exportCsv
             )
         }
+    }
+
+    // Plano 17: o PDF pode levar o diário do mês e os padrões (exercício, sono, ciclo), ou não.
+    if (pdfOptions) {
+        var localOk by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) { localOk = vm.canIncludeLocalData() }
+        com.gluview.app.ui.screen.diary.PdfOptionsDialog(
+            showDiary = localOk, showPatterns = localOk,
+            onDismiss = { pdfOptions = false },
+            onExport = { diary, patterns, _ -> pdfOptions = false; vm.exportPdf(diary, patterns) }
+        )
     }
 }
 

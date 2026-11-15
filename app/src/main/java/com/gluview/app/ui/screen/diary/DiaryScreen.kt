@@ -132,6 +132,7 @@ fun DiaryScreen(
     val medications by vm.medications.collectAsState()
     val cloudOn by vm.cloudOn.collectAsState()
     val message by vm.message.collectAsState()
+    val suggestions by vm.suggestions.collectAsState()
     var editing by remember { mutableStateOf<EventLogEntity?>(null) }
     var deleting by remember { mutableStateOf<EventLogEntity?>(null) }
     var handledInitial by remember { mutableStateOf(false) }
@@ -165,7 +166,9 @@ fun DiaryScreen(
         onDelete = { deleting = it },
         onCatalog = onCatalog,
         onReminders = onReminders,
-        onExport = vm::exportPdf
+        onExport = { d, p -> vm.exportPdf(d, p) },
+        suggestions = suggestions,
+        onAddSuggestion = vm::addSuggestion
     )
 
     editing?.let { entry ->
@@ -220,13 +223,16 @@ internal fun DiaryContent(
     onDelete: (EventLogEntity) -> Unit,
     onCatalog: () -> Unit,
     onReminders: () -> Unit,
-    onExport: (Int) -> Unit,
+    onExport: (days: Int, patterns: Boolean) -> Unit,
+    suggestions: List<com.gluview.app.data.local.entity.HealthRecordEntity> = emptyList(),
+    onAddSuggestion: (com.gluview.app.data.local.entity.HealthRecordEntity) -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
     nowMs: Long = System.currentTimeMillis()
 ) {
     val context = LocalContext.current
     val text = remember(context, unit) { DiaryText(context, unit) }
     var menu by remember { mutableStateOf(false) }
+    var pdfOptions by remember { mutableStateOf(false) }
     val zone = ZoneId.systemDefault()
     val today = java.time.Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
 
@@ -238,12 +244,10 @@ internal fun DiaryContent(
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.diary_more)) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DiaryViewModel.EXPORT_DAYS.forEach { d ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.diary_export_days, d)) },
-                                onClick = { menu = false; onExport(d) }
-                            )
-                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.diary_export_pdf)) },
+                            onClick = { menu = false; pdfOptions = true }
+                        )
                     }
                 }
             }
@@ -288,6 +292,26 @@ internal fun DiaryContent(
                     }
                 }
             }
+            if (suggestions.isNotEmpty()) item(key = "hc-suggestions") {
+                GluCard {
+                    Text(stringResource(R.string.hc_suggestions_title), style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.semantics { heading() })
+                    Text(stringResource(R.string.hc_suggestions_desc), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    suggestions.forEach { r ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(r.title.ifBlank { text.typeLabel(DiaryType.MEAL) }, style = MaterialTheme.typography.bodyLarge)
+                                Text(formatTime(r.startMs, timeFormat) + " · " +
+                                    stringResource(R.string.diary_value_carbs, text.amount(r.value)) +
+                                    if (r.value2 > 0) " · " + stringResource(R.string.diary_value_kcal, text.amount(r.value2)) else "",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { onAddSuggestion(r) }) { Text(stringResource(R.string.hc_suggestion_add)) }
+                        }
+                    }
+                }
+            }
             when {
                 entries == null -> item { ListSkeleton(rows = 3) }
                 entries.isEmpty() -> item {
@@ -305,6 +329,11 @@ internal fun DiaryContent(
             }
         }
     }
+    if (pdfOptions) PdfOptionsDialog(
+        showDiary = false, showPatterns = true, days = DiaryViewModel.EXPORT_DAYS,
+        onDismiss = { pdfOptions = false },
+        onExport = { _, patterns, days -> pdfOptions = false; onExport(days ?: 7, patterns) }
+    )
 }
 
 @Composable
@@ -390,4 +419,42 @@ fun toChartMarker(e: EventLogEntity): com.gluview.app.ui.components.chart.ChartM
     val type = DiaryType.of(e.type)
     val y = if (type == DiaryType.FINGERSTICK) e.value else e.sgvAtEvent
     return com.gluview.app.ui.components.chart.ChartMarker(e.occurredAt, y, type.markerArgb())
+}
+
+
+/**
+ * Opções do PDF (plano 17): incluir o diário e/ou os padrões (exercício, sono e ciclo); no diário,
+ * também o período. Cada combinação gera um PDF diferente.
+ */
+@Composable
+internal fun PdfOptionsDialog(
+    showDiary: Boolean,
+    showPatterns: Boolean,
+    onDismiss: () -> Unit,
+    onExport: (diary: Boolean, patterns: Boolean, days: Int?) -> Unit,
+    days: List<Int> = emptyList()
+) {
+    var diary by remember { mutableStateOf(true) }
+    var patterns by remember { mutableStateOf(false) }
+    var period by remember { mutableStateOf(days.firstOrNull()) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.pdf_options_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                if (days.isNotEmpty()) {
+                    Text(stringResource(R.string.pdf_options_period), style = MaterialTheme.typography.labelLarge)
+                    com.gluview.app.ui.components.kit.ChoiceChips(days, period ?: days.first(), { period = it },
+                        { stringResource(R.string.hc_days, it) })
+                }
+                if (showDiary) com.gluview.app.ui.components.kit.CheckboxRow(stringResource(R.string.pdf_options_diary), diary, { diary = it },
+                    description = stringResource(R.string.pdf_options_diary_desc))
+                if (showPatterns) com.gluview.app.ui.components.kit.CheckboxRow(stringResource(R.string.pdf_options_patterns), patterns, { patterns = it },
+                    description = stringResource(R.string.pdf_options_patterns_desc))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onExport(showDiary && diary, showPatterns && patterns, period) }) {
+            Text(stringResource(R.string.pdf_options_export)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } }
+    )
 }

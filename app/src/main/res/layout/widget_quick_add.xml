@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plano 17 — botão "Registrar no diário" (1×1). RemoteViews puro: desenha sempre, sem sessão. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_add_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_quickadd_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="6dp">
+    <ImageView
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_diary_edit" />
+    <TextView
+        android:id="@+id/quick_add_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_quickadd_short"
+        android:textColor="#FFFFFFFF"
+        android:textSize="11sp" />
+</LinearLayout>

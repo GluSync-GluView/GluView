@@ -51,10 +51,12 @@ class ExportHelper @Inject constructor(
     // S24 — PDF simples (texto). I/O no dispatcher IO para não bloquear a Main.
     // Plano 17: [diary] = registros do diário do mesmo período, que entram no fim do relatório.
     suspend fun exportPdf(report: SummaryReportDto, diary: List<com.gluview.app.data.local.entity.EventLogEntity> = emptyList(),
-                          diaryRange: Pair<java.time.LocalDate, java.time.LocalDate>? = null) = withContext(Dispatchers.IO) {
+                          diaryRange: Pair<java.time.LocalDate, java.time.LocalDate>? = null,
+                          patterns: com.gluview.app.data.health.PatternsResult? = null) = withContext(Dispatchers.IO) {
         val (text, localized) = texts()
-        val lines = text.pdfLines(report) + if (diary.isNotEmpty() && diaryRange != null)
-            diaryText(localized).lines(diary, diaryRange.first, diaryRange.second, includeTitle = false) else emptyList()
+        val lines = text.pdfLines(report) + (if (diary.isNotEmpty() && diaryRange != null)
+            diaryText(localized).lines(diary, diaryRange.first, diaryRange.second, includeTitle = false) else emptyList()) +
+            (patterns?.let { patternsText(localized).lines(it) } ?: emptyList())
         val file = File(exportDir, "${text.fileName}.pdf")
         writePdf(lines, file)
         share(file, "application/pdf", text.chooserTitle)
@@ -62,12 +64,16 @@ class ExportHelper @Inject constructor(
 
     /** PDF só do diário (plano 17, F1.7) — funciona sem conta e sem internet. */
     suspend fun exportDiaryPdf(entries: List<com.gluview.app.data.local.entity.EventLogEntity>,
-                               first: java.time.LocalDate, last: java.time.LocalDate) = withContext(Dispatchers.IO) {
+                               first: java.time.LocalDate, last: java.time.LocalDate,
+                               patterns: com.gluview.app.data.health.PatternsResult? = null) = withContext(Dispatchers.IO) {
         val (_, localized) = texts()
         val file = File(exportDir, localized.getString(com.gluview.app.R.string.diary_pdf_file) + ".pdf")
-        writePdf(diaryText(localized).lines(entries, first, last), file)
+        writePdf(diaryText(localized).lines(entries, first, last) + (patterns?.let { patternsText(localized).lines(it) } ?: emptyList()), file)
         share(file, "application/pdf", localized.getString(com.gluview.app.R.string.export_chooser))
     }
+
+    private suspend fun patternsText(localized: Context) =
+        PatternsReportText(localized, GlucoseUnit.fromString(preferences.glucoseUnit.first()))
 
     private suspend fun diaryText(localized: Context) = DiaryReportText(
         localized, GlucoseUnit.fromString(preferences.glucoseUnit.first()), TimeFormat.fromString(preferences.timeFormat.first())

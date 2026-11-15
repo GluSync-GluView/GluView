@@ -23,4 +23,9 @@
     <string name="wear_apply_prompt_body">O visor vai para o relógio pelo app GluView instalado nele.</string>
     <string name="wear_send_to_one">O visor vai para %1$s pelo app GluView do relógio.</string>
     <string name="wf_manager_intro_any">Desenhe visores de glicemia para a sua pulseira ou relógio, a partir de um modelo pronto ou do zero, e envie direto do celular.</string>
+    <!-- Plano 17, Fase 4 — avisos do dia no relógio -->
+    <string name="wear_notice_glucose">Alerta: %1$s %2$s</string>
+    <string name="wear_notice_predictive">Previsão de baixa</string>
+    <string name="wear_notice_generic">Aviso do GluView</string>
+    <string name="wear_from_watch">Pelo relógio</string>
 </resources>

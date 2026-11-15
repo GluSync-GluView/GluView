@@ -39,4 +39,19 @@ object WearPaths {
 
     /** Anunciada pelo relógio só quando ele tem Watch Face Push (Wear OS 6+). */
     const val CAPABILITY_FACE_PUSH = "gluview_watchface_push"
+
+    // ── Plano 17, Fase 4 — diário e lembretes no relógio ──
+
+    /**
+     * relógio → celular: registro do diário feito no relógio. DataItem em `DIARY_ENTRY/<uuid>`: o
+     * Data Layer guarda e entrega quando o celular aparecer (fila offline). O celular grava, apaga o
+     * item e responde em [DIARY_ACK].
+     */
+    const val DIARY_ENTRY = "/gluview/diary/entry"
+
+    /** celular → relógio: uuid do registro já gravado no diário do celular (mensagem). */
+    const val DIARY_ACK = "/gluview/diary/ack"
+
+    /** celular → relógio: [WearDayInfo] — resumo do dia, próximo lembrete, avisos e cadastros. */
+    const val DAY_INFO = "/gluview/day"
 }

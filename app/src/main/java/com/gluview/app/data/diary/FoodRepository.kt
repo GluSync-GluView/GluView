@@ -121,7 +121,9 @@ object FoodCatalog {
 class FoodRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: DiaryCatalogDao,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    // As favoritas aparecem no relógio (plano 17, F4.2).
+    private val wearDaySync: com.gluview.app.wear.WearDaySync
 ) {
     @Volatile private var baseCache: Pair<String, List<FoodItem>>? = null
 
@@ -168,11 +170,12 @@ class FoodRepository @Inject constructor(
 
     suspend fun saveFavorite(name: String, items: List<MealItem>, carbsG: Double, kcal: Double) {
         dao.upsertFavorite(MealFavoriteEntity(name = name.trim(), itemsJson = MealItem.encode(items), carbsG = carbsG, kcal = kcal))
+        wearDaySync.request()
     }
 
     suspend fun markFavoriteUsed(uuid: String, now: Long = System.currentTimeMillis()) {
         dao.getFavorite(uuid)?.let { dao.updateFavorite(it.copy(useCount = it.useCount + 1, lastUsedAt = now)) }
     }
 
-    suspend fun deleteFavorite(uuid: String) = dao.deleteFavorite(uuid)
+    suspend fun deleteFavorite(uuid: String) { dao.deleteFavorite(uuid); wearDaySync.request() }
 }

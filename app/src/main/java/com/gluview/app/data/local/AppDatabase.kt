@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.gluview.app.data.local.dao.AlertLogDao
 import com.gluview.app.data.local.dao.AppLogDao
 import com.gluview.app.data.local.dao.DiaryCatalogDao
+import com.gluview.app.data.local.dao.HealthRecordDao
 import com.gluview.app.data.local.dao.ReminderDao
 import com.gluview.app.data.local.dao.EventLogDao
 import com.gluview.app.data.local.dao.FingerstickLogDao
@@ -17,6 +18,7 @@ import com.gluview.app.data.local.entity.AlertLogEntity
 import com.gluview.app.data.local.entity.AppLogEntity
 import com.gluview.app.data.local.entity.FoodEntity
 import com.gluview.app.data.local.entity.FoodUsageEntity
+import com.gluview.app.data.local.entity.HealthRecordEntity
 import com.gluview.app.data.local.entity.InsulinEntity
 import com.gluview.app.data.local.entity.MealFavoriteEntity
 import com.gluview.app.data.local.entity.MedicationEntity
@@ -43,9 +45,10 @@ import com.gluview.app.data.local.entity.WatchFaceEntity
         FoodUsageEntity::class,
         MealFavoriteEntity::class,
         ReminderEntity::class,
-        ReminderLogEntity::class
+        ReminderLogEntity::class,
+        HealthRecordEntity::class
     ],
-    version   = 14,
+    version   = 15,
     // E8 do plano OTA: esquema exportado em app/schemas (versionado) para testar migrações futuras
     // com MigrationTestHelper. Os esquemas 1–12 não foram guardados na época; daqui pra frente sim.
     exportSchema = true
@@ -60,6 +63,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sensorHistoryDao(): SensorHistoryDao
     abstract fun diaryCatalogDao(): DiaryCatalogDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun healthRecordDao(): HealthRecordDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -269,6 +273,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `reminder_log` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `reminderId` INTEGER NOT NULL, `scheduledAt` INTEGER NOT NULL, `action` TEXT NOT NULL, `at` INTEGER NOT NULL)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_reminder_log_reminderId` ON `reminder_log` (`reminderId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_reminder_log_scheduledAt` ON `reminder_log` (`scheduledAt`)")
+            }
+        }
+
+        // Plano 17 (Fase 3) — dados lidos do Health Connect (outros apps). Aditiva.
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `health_record` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `hcId` TEXT NOT NULL, `kind` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `value` REAL NOT NULL, `value2` REAL NOT NULL, `subtype` TEXT NOT NULL, `title` TEXT NOT NULL, `sourcePkg` TEXT NOT NULL, `importedAt` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_health_record_hcId` ON `health_record` (`hcId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_health_record_kind_startMs` ON `health_record` (`kind`, `startMs`)")
             }
         }
     }

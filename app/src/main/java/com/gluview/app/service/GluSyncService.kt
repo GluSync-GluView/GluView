@@ -100,9 +100,13 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
     @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
+    @Inject lateinit var widgetUpdater: com.gluview.app.widget.WidgetUpdater
     // Plano 17 (F2.4) — aviso "subindo rápido sem refeição registrada" (desligado por padrão).
     @Inject lateinit var smartMealPrompt: com.gluview.app.data.reminder.SmartMealPrompt
     private var smartMealJob: kotlinx.coroutines.Job? = null
+    // Plano 17, Fase 4 — avisos do dia no relógio (no máximo a cada 5 min).
+    @Inject lateinit var wearDaySync: com.gluview.app.wear.WearDaySync
+    @Volatile private var lastWearDayMs = 0L
     @Inject lateinit var networkMonitor: NetworkMonitor
     @Inject lateinit var tokenRefresher: TokenRefresher
     @Inject lateinit var caregiverRepository: CaregiverRepository
@@ -270,7 +274,11 @@ class GluSyncService : LifecycleService() {
         }
         smartMealJob?.cancel()
         smartMealJob = lifecycleScope.launch {
-            repository.currentReading.filterNotNull().collect { runCatching { smartMealPrompt.onNewReading() } }
+            repository.currentReading.filterNotNull().collect {
+                runCatching { smartMealPrompt.onNewReading() }
+                val now = System.currentTimeMillis()
+                if (now - lastWearDayMs > 5 * 60_000L) { lastWearDayMs = now; wearDaySync.request() }
+            }
         }
         // F6 — Acompanhamento: convite recebido/aceito vira notificação + badge do sino.
         startCaregiverInviteWatch()
@@ -478,112 +486,8 @@ class GluSyncService : LifecycleService() {
         updateWidget(reading, unit, dark)
     }
 
-    private suspend fun updateWidget(reading: GlucoseReading, unit: GlucoseUnit, dark: Boolean) {
-        val manager = GlanceAppWidgetManager(this@GluSyncService)
-        // Horário exibido no widget deve refletir o instante da MEDIÇÃO, não o do push —
-        // assim um sensor sem sinal mostra o horário real mesmo que o serviço re-publique.
-        val readingMs = reading.epochMs.takeIf { it > 0 } ?: System.currentTimeMillis()
-        val timeFormatStr = preferences.timeFormat.first()
-        val lang = preferences.appLanguage.first()
-
-        // Simple widget (existing)
-        val simpleIds = manager.getGlanceIds(GluViewWidget::class.java)
-        simpleIds.forEach { id ->
-            updateAppWidgetState(this@GluSyncService, id) { prefs ->
-                prefs[GluViewWidget.KEY_SGV]         = reading.sgvMgDl.toFloat()
-                prefs[GluViewWidget.KEY_ARROW]       = reading.arrow
-                prefs[GluViewWidget.KEY_ZONE]        = reading.zone.name
-                prefs[GluViewWidget.KEY_STALE]       = reading.isStale
-                prefs[GluViewWidget.KEY_UNIT]        = unit.name
-                prefs[GluViewWidget.KEY_LAST_MS]     = readingMs.toString()
-                prefs[GluViewWidget.KEY_TIME_FORMAT] = timeFormatStr
-                prefs[GluViewWidget.KEY_LANG]        = lang
-            }
-            GluViewWidget().update(this@GluSyncService, id)
-        }
-        // Plano 17 — widget de glicemia com o lápis do diário: mesmas chaves do simples.
-        manager.getGlanceIds(com.gluview.app.widget.GluViewDiaryWidget::class.java).forEach { id ->
-            updateAppWidgetState(this@GluSyncService, id) { prefs ->
-                prefs[GluViewWidget.KEY_SGV]         = reading.sgvMgDl.toFloat()
-                prefs[GluViewWidget.KEY_ARROW]       = reading.arrow
-                prefs[GluViewWidget.KEY_ZONE]        = reading.zone.name
-                prefs[GluViewWidget.KEY_STALE]       = reading.isStale
-                prefs[GluViewWidget.KEY_UNIT]        = unit.name
-                prefs[GluViewWidget.KEY_LAST_MS]     = readingMs.toString()
-                prefs[GluViewWidget.KEY_TIME_FORMAT] = timeFormatStr
-                prefs[GluViewWidget.KEY_LANG]        = lang
-            }
-            com.gluview.app.widget.GluViewDiaryWidget().update(this@GluSyncService, id)
-        }
-
-        // Chart widget + xDrip widget compartilham os mesmos dados de leitura recente
-        val widgetHours = preferences.widgetGraphHours.first()
-        val calFactor = preferences.sibionicsCalFactor.first()
-        val limits = preferences.glucoseThresholds.first()
-        val hipo = limits.low
-        val hiper = limits.high
-        val fromMs = System.currentTimeMillis() - widgetHours * 3_600_000L
-        val recentReadings = repository.getRecentReadingsForNotification(fromMs) // seguidor: o buffer do paciente (L9)
-        val displayMode = GlucoseDisplayMode.fromId(preferences.glucoseDisplayMode.first())
-        val graphReadings = recentReadings.map { it.toGraphReading(calFactor) }.applyDisplayMode(displayMode)
-
-        val chartIds = manager.getGlanceIds(GluViewChartWidget::class.java)
-        if (chartIds.isNotEmpty()) {
-            // As leituras (não um bitmap pronto): o widget desenha no tamanho real dele.
-            val points = encodeWidgetPoints(graphReadings)
-            with(unit) {
-                val displayDelta = reading.sgvMgDl.deltaToDisplay(reading.delta)
-                chartIds.forEach { id ->
-                    updateAppWidgetState(this@GluSyncService, id) { prefs ->
-                        prefs[GluViewChartWidget.KEY_SGV]         = reading.sgvMgDl.toFloat()
-                        prefs[GluViewChartWidget.KEY_ARROW]       = reading.arrow
-                        prefs[GluViewChartWidget.KEY_ZONE]        = reading.zone.name
-                        prefs[GluViewChartWidget.KEY_STALE]       = reading.isStale
-                        prefs[GluViewChartWidget.KEY_UNIT]        = unit.name
-                        prefs[GluViewChartWidget.KEY_DELTA]       = displayDelta
-                        prefs[GluViewChartWidget.KEY_POINTS]      = points
-                        prefs[GluViewChartWidget.KEY_HIPO]        = hipo
-                        prefs[GluViewChartWidget.KEY_HIPER]       = hiper
-                        prefs[GluViewChartWidget.KEY_URGENT_LOW]  = limits.urgentLow
-                        prefs[GluViewChartWidget.KEY_URGENT_HIGH] = limits.urgentHigh
-                        prefs[GluViewChartWidget.KEY_LANG]        = lang
-                        prefs[GluViewChartWidget.KEY_HOURS]       = widgetHours.toFloat()
-                        prefs[GluViewChartWidget.KEY_LAST_MS]     = readingMs.toString()
-                        prefs[GluViewChartWidget.KEY_IS_DARK]     = dark
-                        prefs[GluViewChartWidget.KEY_TIME_FORMAT] = timeFormatStr
-                    }
-                    GluViewChartWidget().update(this@GluSyncService, id)
-                }
-            }
-        }
-
-        // Widget estilo xDrip
-        val xdripIds = manager.getGlanceIds(GluViewXDripWidget::class.java)
-        if (xdripIds.isNotEmpty()) {
-            val dotsB64 = if (graphReadings.isNotEmpty()) {
-                GluViewXDripWidget.renderDotsToBase64(graphReadings, widgetHours, hipo, hiper, limits.urgentLow, limits.urgentHigh)
-            } else ""
-            with(unit) {
-                val displayDelta = reading.sgvMgDl.deltaToDisplay(reading.delta)
-                xdripIds.forEach { id ->
-                    updateAppWidgetState(this@GluSyncService, id) { prefs ->
-                        prefs[GluViewXDripWidget.KEY_SGV]         = reading.sgvMgDl.toFloat()
-                        prefs[GluViewXDripWidget.KEY_ARROW]       = reading.arrow
-                        prefs[GluViewXDripWidget.KEY_ZONE]        = reading.zone.name
-                        prefs[GluViewXDripWidget.KEY_STALE]       = reading.isStale
-                        prefs[GluViewXDripWidget.KEY_UNIT]        = unit.name
-                        prefs[GluViewXDripWidget.KEY_DELTA]       = displayDelta
-                        prefs[GluViewXDripWidget.KEY_LAST_MS]     = readingMs.toString()
-                        prefs[GluViewXDripWidget.KEY_DOTS]        = dotsB64
-                        prefs[GluViewXDripWidget.KEY_IS_DARK]     = dark
-                        prefs[GluViewXDripWidget.KEY_TIME_FORMAT] = timeFormatStr
-                        prefs[GluViewXDripWidget.KEY_LANG]        = lang
-                    }
-                    GluViewXDripWidget().update(this@GluSyncService, id)
-                }
-            }
-        }
-    }
+    private suspend fun updateWidget(reading: GlucoseReading, unit: GlucoseUnit, dark: Boolean) =
+        widgetUpdater.update(reading, unit, dark)
 
     // A URL do GluSync é fixa e igual pra todo mundo (GluSyncConstants.BASE_URL), mas só é
     // regravada em DataStore no momento do login (AuthRepository.login/register). Sessão que já

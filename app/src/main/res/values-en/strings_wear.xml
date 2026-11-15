@@ -22,4 +22,8 @@
     <string name="wear_apply_prompt_body">The watch face goes to the watch through the GluView app installed on it.</string>
     <string name="wear_send_to_one">The watch face goes to %1$s through the GluView app on the watch.</string>
     <string name="wf_manager_intro_any">Design glucose watch faces for your band or watch, from a ready-made template or from scratch, and send them straight from the phone.</string>
+    <string name="wear_notice_glucose">Alert: %1$s %2$s</string>
+    <string name="wear_notice_predictive">Low predicted</string>
+    <string name="wear_notice_generic">GluView notice</string>
+    <string name="wear_from_watch">From the watch</string>
 </resources>

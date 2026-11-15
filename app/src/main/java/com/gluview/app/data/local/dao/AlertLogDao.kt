@@ -28,6 +28,10 @@ interface AlertLogDao {
     @Query("SELECT * FROM alert_log ORDER BY triggeredAt DESC LIMIT 100")
     fun observeRecent(): Flow<List<AlertLogEntity>>
 
+    /** Avisos desde [fromMs] (plano 17, F4.3: "avisos do dia" no relógio). */
+    @Query("SELECT * FROM alert_log WHERE triggeredAt >= :fromMs ORDER BY triggeredAt DESC LIMIT 20")
+    suspend fun getFrom(fromMs: Long): List<AlertLogEntity>
+
     @Query("DELETE FROM alert_log WHERE triggeredAt < :cutoffMs")
     suspend fun deleteOlderThan(cutoffMs: Long)
 }

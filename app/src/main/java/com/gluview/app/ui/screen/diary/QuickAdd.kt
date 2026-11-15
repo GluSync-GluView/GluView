@@ -104,6 +104,8 @@ fun QuickAddFlow(
     onOpenMealEditor: () -> Unit,
     /** Cadastrar insulina/remédio (abre o diário no app). */
     onOpenCatalog: () -> Unit = onDone,
+    /** false = janela por cima de outro app (widget/notificação): o atalho avisa que abre o app. */
+    insideApp: Boolean = true,
     vm: QuickAddViewModel = hiltViewModel()
 ) {
     var type by remember { mutableStateOf(initialType) }
@@ -119,7 +121,8 @@ fun QuickAddFlow(
             favorites = favorites, timeFormat = timeFormat, onDismiss = onDone,
             onSave = { vm.save(it, onDone) },
             onFavorite = { f, at -> vm.saveFavorite(f, at, onDone) },
-            onOpenMealEditor = onOpenMealEditor
+            onOpenMealEditor = onOpenMealEditor,
+            insideApp = insideApp
         )
         else -> DiaryEntrySheet(
             initial = newEntry(t, insulins), insulins = insulins, medications = medications, unit = unit,
@@ -158,7 +161,8 @@ private fun QuickMealSheet(
     onDismiss: () -> Unit,
     onSave: (EventLogEntity) -> Unit,
     onFavorite: (MealFavoriteEntity, Long) -> Unit,
-    onOpenMealEditor: () -> Unit
+    onOpenMealEditor: () -> Unit,
+    insideApp: Boolean
 ) {
     val context = LocalContext.current
     val text = remember(context) { DiaryText(context) }
@@ -192,7 +196,7 @@ private fun QuickMealSheet(
                     kcal = parseDecimalInput(kcal) ?: 0.0, notes = notes.trim()))
             }) { Text(stringResource(R.string.settings_save)) }
             TextButton(onClick = onOpenMealEditor, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.quick_add_meal_full))
+                Text(stringResource(if (insideApp) R.string.quick_add_meal_full_in_app else R.string.quick_add_meal_full))
             }
         }
     }

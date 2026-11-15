@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gluview.app.R
@@ -78,7 +78,11 @@ fun GlucoseHeroCard(
     subtitle: String? = null,
     statusStart: (@Composable () -> Unit)? = null,
     statusEnd: (@Composable () -> Unit)? = null,
-    below: (@Composable () -> Unit)? = null
+    below: (@Composable () -> Unit)? = null,
+    /** Linha centralizada logo acima da linha de status (passos e calorias na Home). */
+    activity: (@Composable () -> Unit)? = null,
+    /** Home (pedido do Felipe, 14/11/2026): um pouco mais baixo, para sobrar altura ao gráfico. */
+    compact: Boolean = false
 ) {
     val color = glucoseZoneTextColor(zone)
     val zoneName = stringResource(zoneLabelRes(zone))
@@ -97,9 +101,9 @@ fun GlucoseHeroCard(
         color = zone.graphicColor().copy(alpha = 0.12f)
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = if (compact) Spacing.xs else Spacing.sm),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+            verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else Spacing.xxs)
         ) {
             // Leitura principal: uma parada só do TalkBack com a frase completa.
             Column(
@@ -109,35 +113,41 @@ fun GlucoseHeroCard(
                 CappedFontScale(GLUCOSE_VALUE_MAX_FONT_SCALE) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(Modifier.width(ArrowSlotWidth))
-                        Text(valueText, style = GluType.GlucoseValue, color = color, maxLines = 1, softWrap = false)
+                        Text(valueText, style = if (compact) GluType.GlucoseValueCompact else GluType.GlucoseValue,
+                            color = color, maxLines = 1, softWrap = false)
                         Box(Modifier.width(ArrowSlotWidth), contentAlignment = Alignment.CenterStart) {
-                            Text(arrow, style = GluType.GlucoseArrow, color = color, maxLines = 1, softWrap = false,
+                            Text(arrow, style = if (compact) GluType.GlucoseArrowCompact else GluType.GlucoseArrow,
+                                color = color, maxLines = 1, softWrap = false,
                                 modifier = Modifier.padding(start = Spacing.xs))
                         }
                     }
                 }
                 // Só a unidade, centralizada (o selo da zona ao lado ou à direita foi testado e saiu
                 // a pedido do mantenedor em 18/10; a zona segue na cor e na leitura do TalkBack).
-                Text(unitLabel, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(unitLabel, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (subtitle != null) {
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            activity?.invoke()
             if (statusStart != null || timeText != null || statusEnd != null) {
                 // Conexão — horário da medição — sensor. Quebra de linha em vez de cortar palavra
                 // ("Conecta/do" com fonte grande).
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.xxs),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+                // Hora SEMPRE no centro (alinhada com o valor e a unidade): antes, com SpaceBetween,
+                // um lado mais largo ("Sensor 14d ⚠") empurrava a hora para fora do meio (S23, 14/11).
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else Spacing.xxs),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.align(Alignment.CenterVertically)) { statusStart?.invoke() }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { statusStart?.invoke() }
                     if (timeText != null) {
                         Text(timeText, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Clip,
                             color = if (timeIsOld) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.align(Alignment.CenterVertically).clearAndSetSemantics { })
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = Spacing.xs).clearAndSetSemantics { })
                     }
-                    Box(Modifier.align(Alignment.CenterVertically)) { statusEnd?.invoke() }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { statusEnd?.invoke() }
                 }
             }
             below?.invoke()

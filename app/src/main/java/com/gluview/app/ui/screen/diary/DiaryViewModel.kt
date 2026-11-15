@@ -29,7 +29,9 @@ import javax.inject.Inject
 class DiaryViewModel @Inject constructor(
     private val repo: DiaryRepository,
     private val exportHelper: ExportHelper,
-    private val cloud: DiaryCloudSync
+    private val cloud: DiaryCloudSync,
+    private val healthRecords: com.gluview.app.data.local.dao.HealthRecordDao,
+    private val patterns: com.gluview.app.data.health.HealthPatterns
 ) : ViewModel() {
 
     private val _day = MutableStateFlow(LocalDate.now())
@@ -41,6 +43,27 @@ class DiaryViewModel @Inject constructor(
 
     val summary: StateFlow<DaySummary> = entries.map { DaySummary.of(it.orEmpty()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DaySummary())
+
+    /** F3.5 — refeições de outros apps (Health Connect) neste dia que ainda não estão no diário. */
+    val suggestions: StateFlow<List<com.gluview.app.data.local.entity.HealthRecordEntity>> = _day.flatMapLatest { d ->
+        val (from, to) = DiaryRepository.dayBounds(d, ZoneId.systemDefault())
+        kotlinx.coroutines.flow.combine(
+            healthRecords.observeStartingBetween(com.gluview.app.data.health.HealthConnectMapper.KIND_NUTRITION, from, to),
+            repo.observeDay(d)
+        ) { recs, entries ->
+            val have = entries.map { it.uuid }.toSet()
+            recs.filter { "hc-" + it.hcId !in have && (it.value > 0 || it.value2 > 0) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun addSuggestion(r: com.gluview.app.data.local.entity.HealthRecordEntity) {
+        viewModelScope.launch {
+            repo.save(EventLogEntity(
+                occurredAt = r.startMs, type = com.gluview.app.data.diary.DiaryType.MEAL.key, value = r.value, kcal = r.value2,
+                notes = r.title, uuid = "hc-" + r.hcId, source = com.gluview.app.data.health.HealthConnectSync.SOURCE_HC
+            ))
+        }
+    }
 
     val insulins: StateFlow<List<InsulinEntity>> = repo.observeInsulins()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -75,7 +98,7 @@ class DiaryViewModel @Inject constructor(
     fun delete(entry: EventLogEntity) { viewModelScope.launch { repo.delete(entry) } }
 
     /** PDF do diário dos últimos [days] dias até o dia aberto. */
-    fun exportPdf(days: Int) {
+    fun exportPdf(days: Int, includePatterns: Boolean = false) {
         viewModelScope.launch {
             val zone = ZoneId.systemDefault()
             val last = _day.value
@@ -84,7 +107,10 @@ class DiaryViewModel @Inject constructor(
             val to = DiaryRepository.dayBounds(last, zone).second
             val list = repo.getBetween(from, to)
             _message.value = if (list.isEmpty()) R.string.diary_export_empty
-            else runCatching { exportHelper.exportDiaryPdf(list, first, last) }
+            else runCatching {
+                val pat = if (includePatterns) patterns.computeBetween(from, minOf(to, System.currentTimeMillis())) else null
+                exportHelper.exportDiaryPdf(list, first, last, pat)
+            }
                 .fold({ null }, { R.string.diary_export_fail })
         }
     }

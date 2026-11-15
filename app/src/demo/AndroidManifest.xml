@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SÓ na versão de demonstração: ferramentas de teste do plano 17 (Health Connect e aviso de
+     subida). Nada disto entra no APK publicado. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
+    <uses-permission android:name="android.permission.health.WRITE_MENSTRUATION" />
+    <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+
+    <application>
+        <receiver
+            android:name="com.gluview.app.demo.DemoTestReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.gluview.app.demo.SEED_HC" />
+                <action android:name="com.gluview.app.demo.RAPID_RISE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
