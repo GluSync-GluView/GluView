@@ -48,4 +48,9 @@
     <string name="pending_phone">%1$d waiting for the phone</string>
     <string name="tile_add_carbs">+ Carbs</string>
     <string name="tile_add_insulin">+ Insulin</string>
+    <string name="info_reading_age">Reading age (GluView)</string>
+    <string name="info_low_alert">Low alert (GluView)</string>
+    <string name="info_high_alert">High alert (GluView)</string>
+    <string name="info_sensor">Sensor (GluView)</string>
+    <string name="info_phone_battery">Phone battery (GluView)</string>
 </resources>

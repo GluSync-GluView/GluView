@@ -51,7 +51,19 @@ data class WatchFaceSnapshot(
     val use24h: Boolean,
     val source: SnapshotSource,
     val staleAfterMin: Int = DEFAULT_STALE_AFTER_MIN,
+    // Opcionais (visor do relógio, componentes "sensor" e "bateria do celular"): só o celular sabe.
+    // null = não veio (celular antigo ou leitura buscada na nuvem) → o relógio mostra "--".
+    /** Início do sensor atual (epoch ms), para "Sensor 5d". */
+    val sensorStartMs: Long? = null,
+    /** O celular está conectado ao sensor agora ("Sensor ON/OFF"). */
+    val sensorConnected: Boolean? = null,
+    /** Bateria do celular (0–100). */
+    val phoneBatteryPct: Int? = null,
 ) {
+    /** Dias de uso do sensor, ou null se o início não veio. */
+    fun sensorAgeDays(nowMs: Long): Int? =
+        sensorStartMs?.takeIf { it in 1..nowMs }?.let { ((nowMs - it) / 86_400_000L).toInt() }
+
     /** Velho = medição há mais de [staleAfterMin] min, ou no futuro além de 5 min (relógio errado). */
     fun isStale(nowMs: Long): Boolean {
         val age = nowMs - measuredAtMs
@@ -98,6 +110,9 @@ data class WatchFaceSnapshot(
         put(K_USE_24H, use24h)
         put(K_SOURCE, source.name)
         put(K_STALE_AFTER, staleAfterMin)
+        sensorStartMs?.let { put(K_SENSOR_START, it) }
+        sensorConnected?.let { put(K_SENSOR_ON, it) }
+        phoneBatteryPct?.let { put(K_PHONE_BATTERY, it) }
     }
 
     companion object {
@@ -125,6 +140,9 @@ data class WatchFaceSnapshot(
         const val K_USE_24H = "use24h"
         const val K_SOURCE = "source"
         const val K_STALE_AFTER = "staleAfterMin"
+        const val K_SENSOR_START = "sensorStart"
+        const val K_SENSOR_ON = "sensorOn"
+        const val K_PHONE_BATTERY = "phoneBattery"
 
         /**
          * Lê o que veio do Data Layer. Qualquer campo faltando, de tipo errado ou fora de faixa →
@@ -157,6 +175,10 @@ data class WatchFaceSnapshot(
                 use24h = map[K_USE_24H] as? Boolean ?: true,
                 source = enumOrNull<SnapshotSource>(map[K_SOURCE]) ?: SnapshotSource.PHONE,
                 staleAfterMin = (map[K_STALE_AFTER] as? Int)?.takeIf { it in 1..120 } ?: DEFAULT_STALE_AFTER_MIN,
+                // Opcionais: inválido vira null (nunca derruba a leitura inteira).
+                sensorStartMs = (map[K_SENSOR_START] as? Number)?.toLong()?.takeIf { it > 0 },
+                sensorConnected = map[K_SENSOR_ON] as? Boolean,
+                phoneBatteryPct = (map[K_PHONE_BATTERY] as? Int)?.takeIf { it in 0..100 },
             )
         }
 

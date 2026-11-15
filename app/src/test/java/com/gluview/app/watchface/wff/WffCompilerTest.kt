@@ -1,5 +1,6 @@
 package com.gluview.app.watchface.wff
 
+import com.gluview.app.watchface.ComponentRegistry
 import com.gluview.app.watchface.WatchFaceComponent
 import com.gluview.app.watchface.WatchFaceDesign
 import com.gluview.app.watchface.WatchFacePresets
@@ -40,13 +41,32 @@ class WffCompilerTest {
         assertEquals(1, r.slotCount)
     }
 
-    @Test fun naoSuportadosVaoParaALista_semQuebrarOResto() {
+    @Test fun todoComponenteDoConstrutor_temEquivalenteNoWearOs() {
+        // 14/11/2026: idade da leitura, alertas, sensor, bateria e bomba deixaram de ser "não disponível".
+        val semMapa = ComponentRegistry.all.map { it.id }.filterNot { WffCompiler.isSupported(it) }
+        assertEquals(emptyList<String>(), semMapa)
+    }
+
+    @Test fun componentesDeInformacao_apontamParaAComplicationCerta() {
         val watch = WearableCatalog.find("galaxy_watch_6_44")
-        val design = WatchFaceDesign(wearable = watch, components = listOf(
-            comp("time_hm"), comp("reading_age"), comp("insulin_iob"), comp("sensor_life"), comp("hipo_alert")))
+        val ids = listOf("reading_age", "hipo_alert", "hiper_alert", "sensor_life", "sensor_connected", "phone_battery")
+        val design = WatchFaceDesign(wearable = watch, components = ids.mapIndexed { i, id -> comp(id, y = 20f + i * 60f, h = 50f) })
         val r = WffCompiler.compile(design, opts)
-        assertEquals(listOf("reading_age", "insulin_iob", "sensor_life", "hipo_alert"), r.unsupported.map { it.typeId })
-        assertTrue(r.xml.contains("<DigitalClock"))
+        assertEquals(emptyList<String>(), r.unsupported.map { it.typeId })
+        assertEquals(6, r.slotCount)
+        for (svc in listOf("ReadingAge", "LowAlert", "HighAlert", "Sensor", "PhoneBattery"))
+            assertTrue(svc, r.xml.contains("primaryProvider=\"com.gluview.app/com.gluview.wear.complication.${svc}ComplicationService\""))
+        assertTrue(r.xml.contains("<Template>Sensor %s<Parameter expression=\"[COMPLICATION.TEXT]\" />"))
+        assertTrue(r.xml.contains("<Template>Sensor %s<Parameter expression=\"[COMPLICATION.TITLE]\" />"))
+        assertEquals(emptyList<String>(), WffRules.check(r.xml))
+        File("build/wff-presets").apply { mkdirs() }.resolve("informacao__galaxy_watch_6_44.xml").writeText(r.xml)
+    }
+
+    @Test fun bombaDeInsulina_viraTracinhosFixos_comoNaMiBand() {
+        val watch = WearableCatalog.find("galaxy_watch_6_44")
+        val r = WffCompiler.compile(WatchFaceDesign(wearable = watch, components = listOf(comp("insulin_iob"))), opts)
+        assertEquals(0, r.slotCount)
+        assertTrue(r.xml.contains(">--</Font>"))
         assertEquals(emptyList<String>(), WffRules.check(r.xml))
     }
 
@@ -86,6 +106,7 @@ class WffCompilerTest {
         listOf("time_hm", "date_dmy", "weekday", "glucose_current", "glucose_delta", "glucose_chart", "fixed_text")
             .forEach { assertTrue(it, WffCompiler.isSupported(it)) }
         listOf("reading_age", "phone_battery", "sensor_connected", "insulin_pump_connected")
-            .forEach { assertFalse(it, WffCompiler.isSupported(it)) }
+            .forEach { assertTrue(it, WffCompiler.isSupported(it)) }
+        assertFalse(WffCompiler.isSupported("tipo_que_nao_existe"))
     }
 }

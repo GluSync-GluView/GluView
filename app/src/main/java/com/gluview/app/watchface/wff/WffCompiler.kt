@@ -13,18 +13,27 @@ import kotlin.math.roundToInt
  *
  * No WFF o relógio executa o mostrador sozinho; por isso cada componente vira uma de três coisas:
  *  - **nativo** (hora/data): elementos do próprio WFF, atualizados pelo relógio;
- *  - **complication** (glicemia, variação, hora da medição, gráfico): um slot cujo provedor padrão é
- *    a complication do GluView do relógio — a regra "dado velho vira --" vem pronta dela;
- *  - **texto fixo** (unidade, faixa-alvo, texto do usuário): compilado com o valor de agora.
- * O resto ainda não existe no Wear OS v1 e vai em [WffResult.unsupported] (o editor avisa — W4).
+ *  - **complication** (glicemia, variação, hora da medição, gráfico, idade da leitura, alertas, sensor e
+ *    bateria do celular): um slot cujo provedor padrão é uma complication do GluView do relógio — a regra
+ *    "dado velho vira --" vem pronta dela;
+ *  - **texto fixo** (unidade, faixa-alvo, texto do usuário e, por enquanto, os da bomba de insulina, que
+ *    mostram "--" também na Mi Band — ainda não existe dado de bomba): compilado com o valor de agora.
+ * O que não tiver mapeamento vai em [WffResult.unsupported] (o editor avisa — W4).
  *
  * Achado do W0: o validador oficial NÃO pega tipo padrão fora de `supportedTypes` (só falha ao
  * ativar), então este tradutor só gera combinações conferidas em [WffRules].
  */
 object WffCompiler {
 
-    /** Provedor padrão dos slots: a complication do GluView do relógio (mesmo pacote do celular). */
-    fun gluviewProvider(appPackage: String) = "$appPackage/com.gluview.wear.complication.GlucoseComplicationService"
+    /** Provedor padrão dos slots: uma complication do GluView do relógio (mesmo pacote do celular). */
+    fun gluviewProvider(appPackage: String, service: String = GLUCOSE) = "$appPackage/com.gluview.wear.complication.$service"
+
+    const val GLUCOSE = "GlucoseComplicationService"
+    const val READING_AGE = "ReadingAgeComplicationService"
+    const val LOW_ALERT = "LowAlertComplicationService"
+    const val HIGH_ALERT = "HighAlertComplicationService"
+    const val SENSOR = "SensorComplicationService"
+    const val PHONE_BATTERY = "PhoneBatteryComplicationService"
 
     data class Options(
         /** Pacote do app GluView (com.gluview.app ou com.gluview.app.demo) — dono da complication. */
@@ -40,7 +49,9 @@ object WffCompiler {
     sealed interface Mapping {
         data class Clock(val format: String) : Mapping
         data class DateText(val template: String, val params: List<String>) : Mapping
-        data class Slot(val type: String, val field: String) : Mapping
+        /** [prefix] vai antes do valor da complication ("Sensor " + "5d"); [sample] dimensiona a fonte. */
+        data class Slot(val type: String, val field: String, val service: String = GLUCOSE,
+                        val prefix: String = "", val sample: String? = null) : Mapping
         data class Static(val text: (WatchFaceComponent, Options) -> String) : Mapping
         data object Unsupported : Mapping
     }
@@ -62,6 +73,16 @@ object WffCompiler {
         "glucose_delta" -> Mapping.Slot("SHORT_TEXT", "TITLE")
         "last_reading_time" -> Mapping.Slot("LONG_TEXT", "TITLE")
         "glucose_chart" -> Mapping.Slot("SMALL_IMAGE", "SMALL_IMAGE")
+        // Complications de informação do relógio (mesmos textos do visor da Mi Band).
+        "reading_age" -> Mapping.Slot("SHORT_TEXT", "TEXT", READING_AGE, sample = "00 min")
+        "hipo_alert" -> Mapping.Slot("SHORT_TEXT", "TEXT", LOW_ALERT, sample = "⚠ Baixo")
+        "hiper_alert" -> Mapping.Slot("SHORT_TEXT", "TEXT", HIGH_ALERT, sample = "⚠ Alto")
+        "sensor_life" -> Mapping.Slot("SHORT_TEXT", "TEXT", SENSOR, prefix = "Sensor ", sample = "Sensor 00d")
+        "sensor_connected" -> Mapping.Slot("SHORT_TEXT", "TITLE", SENSOR, prefix = "Sensor ", sample = "Sensor OFF")
+        "phone_battery" -> Mapping.Slot("SHORT_TEXT", "TEXT", PHONE_BATTERY, sample = "100%")
+        // Bomba de insulina: nenhum dado existe ainda (ComponentKind devolve "--" na Mi Band também).
+        "insulin_iob", "insulin_basal_rate", "insulin_last_bolus", "insulin_reservoir",
+        "insulin_pump_battery", "insulin_pump_connected" -> Mapping.Static { _, _ -> "--" }
         "glucose_unit" -> Mapping.Static { _, o -> o.unitLabel }
         "target_range" -> Mapping.Static { _, o -> "${o.targetLow}-${o.targetHigh}" }
         "fixed_text" -> Mapping.Static { c, _ -> c.customText.orEmpty() }
@@ -153,7 +174,7 @@ object WffCompiler {
     private fun slot(c: WatchFaceComponent, b: Box, id: Int, m: Mapping.Slot, o: Options) = buildString {
         // Achado do W0: o tipo padrão PRECISA estar em supportedTypes (ver WffRules.checkSlots).
         append("""    <ComplicationSlot slotId="$id" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" supportedTypes="${m.type}" isCustomizable="TRUE">""").append('\n')
-        append("""      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="${m.type}" primaryProvider="${gluviewProvider(o.appPackage)}" primaryProviderType="${m.type}" />""").append('\n')
+        append("""      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="${m.type}" primaryProvider="${gluviewProvider(o.appPackage, m.service)}" primaryProviderType="${m.type}" />""").append('\n')
         append("""      <BoundingBox x="0" y="0" width="${b.w}" height="${b.h}" />""").append('\n')
         append("""      <Complication type="${m.type}">""").append('\n')
         if (m.type == "SMALL_IMAGE") {
@@ -163,10 +184,10 @@ object WffCompiler {
             append("""          <Variant mode="AMBIENT" target="alpha" value="0" />""").append('\n')
             append("        </PartImage>\n")
         } else {
-            val sample = if (m.field == "TEXT") "000→" else "às 00:00"
+            val sample = m.sample ?: if (m.field == "TEXT") "000→" else "às 00:00"
             append("""        <PartText x="0" y="0" width="${b.w}" height="${b.h}"${angle(c)}${alpha(c)}>""").append('\n')
             append("""          <Text align="${align(c)}">""").append('\n')
-            append("""            <Font family="SYNC_TO_DEVICE" size="${fontSize(c, b, sample)}" color="${color(c.color)}"${weight(c)}>${template("%s", listOf("[COMPLICATION.${m.field}]"))}</Font>""").append('\n')
+            append("""            <Font family="SYNC_TO_DEVICE" size="${fontSize(c, b, sample)}" color="${color(c.color)}"${weight(c)}>${template(xmlEscape(m.prefix) + "%s", listOf("[COMPLICATION.${m.field}]"))}</Font>""").append('\n')
             append("          </Text>\n")
             append("        </PartText>\n")
         }

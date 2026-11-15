@@ -78,10 +78,16 @@ object SnapshotStore {
 
     /** Pede para complication e tile se redesenharem (leitura nova ou mudança de estado). */
     fun refreshSurfaces(context: Context) {
-        runCatching {
-            ComplicationDataSourceUpdateRequester.create(
-                context, ComponentName(context, GlucoseComplicationService::class.java)
-            ).requestUpdateAll()
+        // Glicemia e as complications de informação (idade, alertas, sensor, bateria) usam o mesmo snapshot.
+        for (service in listOf(
+            GlucoseComplicationService::class.java,
+            com.gluview.wear.complication.ReadingAgeComplicationService::class.java,
+            com.gluview.wear.complication.LowAlertComplicationService::class.java,
+            com.gluview.wear.complication.HighAlertComplicationService::class.java,
+            com.gluview.wear.complication.SensorComplicationService::class.java,
+            com.gluview.wear.complication.PhoneBatteryComplicationService::class.java,
+        )) runCatching {
+            ComplicationDataSourceUpdateRequester.create(context, ComponentName(context, service)).requestUpdateAll()
         }
         runCatching { TileService.getUpdater(context).requestUpdate(GlucoseTileService::class.java) }
     }

@@ -66,6 +66,8 @@ class WearBridge @Inject constructor(
     private val prefs: AppPreferences,
     private val repository: GlucoseRepository,
     private val wearCredential: WearCredentialProvider,
+    // Mesma fonte do visor da Mi Band (MiBand6WatchFaceApplier.snapshotRuntime): sensor e bateria.
+    private val sensorStatus: com.gluview.app.data.sibionics.SibionicsStatusHolder,
 ) {
     private val tag = "WearBridge"
     private val mutex = Mutex()
@@ -160,6 +162,8 @@ class WearBridge @Inject constructor(
             reading, limits, unit,
             use24h = prefs.timeFormat.first() != "H12",
             staleAfterMin = prefs.sensorNoSignalMin.first(),
+            sensor = sensorStatus.status.value,
+            phoneBatteryPct = com.gluview.app.util.PhoneBattery.currentPercent(context),
         )
         val graphPng = renderGraph(limits, unit)
 
@@ -227,6 +231,8 @@ class WearBridge @Inject constructor(
             unit: GlucoseUnit,
             use24h: Boolean,
             staleAfterMin: Int,
+            sensor: com.gluview.app.data.sibionics.SibionicsSensorStatus? = null,
+            phoneBatteryPct: Int? = null,
         ) = WatchFaceSnapshot(
             sgvMgdl = reading.sgvMgDl.roundToInt(),
             deltaMgdl = reading.delta,
@@ -241,6 +247,9 @@ class WearBridge @Inject constructor(
             use24h = use24h,
             source = SnapshotSource.PHONE,
             staleAfterMin = staleAfterMin.coerceIn(1, 120),
+            sensorStartMs = sensor?.sensorStartMs?.takeIf { it > 0 },
+            sensorConnected = sensor?.connected,
+            phoneBatteryPct = phoneBatteryPct?.takeIf { it in 0..100 },
         )
 
         /**

@@ -53,4 +53,18 @@ class WearBridgeTest {
         assertEquals("DoubleDown", s.direction)
         assertEquals("⇊", s.arrow(now))
     }
+
+    @Test fun levaSensorEBateria_paraOsComponentesDoVisor() {
+        val sensor = com.gluview.app.data.sibionics.SibionicsSensorStatus(connected = true, sensorStartMs = now - 4 * 86_400_000L)
+        val s = WearBridge.buildSnapshot(reading(), limits, GlucoseUnit.MG_DL, true, 20, sensor = sensor, phoneBatteryPct = 77)
+        assertEquals(now - 4 * 86_400_000L, s.sensorStartMs)
+        assertEquals(true, s.sensorConnected)
+        assertEquals(77, s.phoneBatteryPct)
+        // Sem sensor (início desconhecido) e bateria fora de faixa: não manda.
+        val vazio = WearBridge.buildSnapshot(reading(), limits, GlucoseUnit.MG_DL, true, 20,
+            sensor = com.gluview.app.data.sibionics.SibionicsSensorStatus(), phoneBatteryPct = -1)
+        assertEquals(null, vazio.sensorStartMs)
+        assertEquals(false, vazio.sensorConnected)
+        assertEquals(null, vazio.phoneBatteryPct)
+    }
 }

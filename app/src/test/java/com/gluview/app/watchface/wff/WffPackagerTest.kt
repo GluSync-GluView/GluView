@@ -84,6 +84,19 @@ class WffPackagerTest {
         }
     }
 
+    @Test fun pontaAPonta_visorComTodosOsComponentesNovos_passaNoValidadorOficial() {
+        // Idade da leitura, alertas, sensor (dias e ON/OFF), bateria do celular e um da bomba (14/11/2026).
+        val watch = WearableCatalog.find("galaxy_watch_6_44")
+        val ids = listOf("time_hm", "reading_age", "hipo_alert", "hiper_alert", "sensor_life", "sensor_connected", "phone_battery", "insulin_iob")
+        val comps = ids.mapIndexed { i, id ->
+            com.gluview.app.watchface.WatchFaceComponent(typeId = id, variation = 1, label = id, x = 80f, y = 20f + i * 52f,
+                width = 300f, height = 44f, color = 0xFFFFFFFFL, font = "Sans")
+        }
+        val xml = WffCompiler.compile(WatchFaceDesign(wearable = watch, components = comps), WffCompiler.Options(appPackage = "com.gluview.app")).xml
+        val r = DwfValidatorFactory.create().validate(build(xml), "com.gluview.app")
+        assertEquals(r.failures().map { "${it.name()}: ${it.failureMessage()}" }.toString(), 0, r.failures().size)
+    }
+
     @Test fun pacoteErrado_oValidadorRecusa() {
         // O token vale para o app que instala; com outro pacote, o validador reprova.
         val r = DwfValidatorFactory.create().validate(build(presetXml()), "com.outro.app")
