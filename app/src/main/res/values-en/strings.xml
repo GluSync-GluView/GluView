@@ -1581,4 +1581,16 @@
     <string name="local_broadcast_no_apps">No installed app receives this format.</string>
     <string name="local_broadcast_pick_one">Select the apps that may receive your glucose.</string>
     <string name="alerthistory_type_dnd_total_silence">Total silence: did not sound (only tried to vibrate)</string>
+    <string name="settings_home_title">Home</string>
+    <string name="settings_home_subtitle">What shows on the home screen</string>
+    <string name="settings_home_intro">Glucose and the chart always show. Rows you hide give the chart more room. On the home screen, a long press on a row also hides it.</string>
+    <string name="settings_home_section">Rows above the chart</string>
+    <string name="settings_home_stats">Last 24 h summary</string>
+    <string name="settings_home_stats_desc">Minimum, average and maximum glucose.</string>
+    <string name="settings_home_diary">Today\'s diary</string>
+    <string name="settings_home_diary_desc">Carbs and insulin for the day, with shortcuts to log.</string>
+    <string name="home_hide_stats_title">Hide the 24 h summary?</string>
+    <string name="home_hide_diary_title">Hide today\'s diary?</string>
+    <string name="home_hide_body">The chart gets bigger. To show it again, go to Settings › Home.</string>
+    <string name="home_hide_confirm">Hide</string>
 </resources>

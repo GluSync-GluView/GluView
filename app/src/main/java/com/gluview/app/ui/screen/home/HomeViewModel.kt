@@ -341,6 +341,14 @@ class HomeViewModel @Inject constructor(
 
     // ── Home chart ────────────────────────────────────────────────────────────
 
+    /** Ajustes › Home: quais linhas aparecem acima do gráfico (o gráfico cresce no lugar). */
+    val homeShowStats: StateFlow<Boolean> = preferences.homeShowStats
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    val homeShowDiary: StateFlow<Boolean> = preferences.homeShowDiary
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    fun hideHomeStats() { viewModelScope.launch { preferences.saveHomeShowStats(false) } }
+    fun hideHomeDiary() { viewModelScope.launch { preferences.saveHomeShowDiary(false) } }
+
     val homeGraphHours: StateFlow<Int> = preferences.homeGraphHours
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 3)
 

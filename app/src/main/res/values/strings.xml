@@ -1588,4 +1588,16 @@
     <string name="local_broadcast_no_apps">Nenhum app instalado recebe esse formato.</string>
     <string name="local_broadcast_pick_one">Marque os apps que podem receber sua glicemia.</string>
     <string name="alerthistory_type_dnd_total_silence">Silêncio total: não tocou (só tentou vibrar)</string>
+    <string name="settings_home_title">Home</string>
+    <string name="settings_home_subtitle">O que aparece na tela inicial</string>
+    <string name="settings_home_intro">A glicemia e o gráfico aparecem sempre. As linhas que você ocultar dão espaço para o gráfico ficar maior. Na tela inicial, um toque longo numa linha também oculta.</string>
+    <string name="settings_home_section">Linhas acima do gráfico</string>
+    <string name="settings_home_stats">Resumo das últimas 24 h</string>
+    <string name="settings_home_stats_desc">Mínima, média e máxima da glicemia.</string>
+    <string name="settings_home_diary">Diário de hoje</string>
+    <string name="settings_home_diary_desc">Carboidrato e insulina do dia, com atalhos para registrar.</string>
+    <string name="home_hide_stats_title">Ocultar o resumo de 24 h?</string>
+    <string name="home_hide_diary_title">Ocultar o diário de hoje?</string>
+    <string name="home_hide_body">O gráfico fica maior. Para mostrar de novo, vá em Ajustes › Home.</string>
+    <string name="home_hide_confirm">Ocultar</string>
 </resources>

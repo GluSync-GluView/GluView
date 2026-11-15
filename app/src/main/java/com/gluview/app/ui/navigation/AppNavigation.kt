@@ -175,6 +175,7 @@ fun AppNavigation(
                 onDiary           = { nav.navigate(Screen.Diary.createRoute()) },
                 onReminders       = { nav.navigate(Screen.Reminders.route) },
                 onHealthConnect   = { nav.navigate(Screen.HealthConnect.route) },
+                onHomeSettings    = { nav.navigate(Screen.SettingsHome.route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -187,6 +188,9 @@ fun AppNavigation(
         }
         composable(Screen.SettingsGeneral.route) {
             GeneralSettingsScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Screen.SettingsHome.route) {
+            com.gluview.app.ui.screen.settings.HomeSettingsScreen(onBack = { nav.popBackStack() })
         }
         composable(Screen.ExternalIntegrations.route) {
             // Integrações (decisão 5.5 #4): externas + chaves de API.

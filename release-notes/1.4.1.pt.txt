@@ -1,0 +1,1 @@
+Tela inicial: o gráfico não muda mais de tamanho quando você arrasta para ver horas anteriores, e o intervalo mostra o dia quando passa da meia-noite. Agora dá para ocultar o resumo das últimas 24 h e o diário de hoje (toque longo na linha) para deixar o gráfico maior; para mostrar de novo, use o novo Ajustes › Home.

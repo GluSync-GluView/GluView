@@ -184,6 +184,9 @@ class AppPreferences @Inject constructor(
         // PT-6: notificação fixa como Live Update (Android 16). Desligado por padrão: promovida, ela
         // perde o gráfico (o Android não promove notificação com layout próprio).
         val KEY_NOTIF_LIVE_UPDATE           = booleanPreferencesKey("notif_live_update")
+        // Ajustes › Home (15/11/2026): o que aparece na tela inicial além da glicemia e do gráfico.
+        val KEY_HOME_SHOW_STATS             = booleanPreferencesKey("home_show_stats")
+        val KEY_HOME_SHOW_DIARY             = booleanPreferencesKey("home_show_diary")
         // PT-7 Fase A: envio local no formato do xDrip, só para os apps escolhidos.
         val KEY_LOCAL_BROADCAST_ENABLED     = booleanPreferencesKey("local_broadcast_enabled")
         val KEY_LOCAL_BROADCAST_PACKAGES    = stringSetPreferencesKey("local_broadcast_packages")
@@ -439,6 +442,12 @@ class AppPreferences @Inject constructor(
     val localBroadcastPackages: Flow<Set<String>> = dataStore.data.safeMap(emptySet()) { it[KEY_LOCAL_BROADCAST_PACKAGES] ?: emptySet() }
     suspend fun saveLocalBroadcastEnabled(enabled: Boolean) = dataStore.edit { it[KEY_LOCAL_BROADCAST_ENABLED] = enabled }
     suspend fun saveLocalBroadcastPackages(pkgs: Set<String>) = dataStore.edit { it[KEY_LOCAL_BROADCAST_PACKAGES] = pkgs }
+    /** Home: linha de mínima/média/máxima das últimas 24 h. */
+    val homeShowStats: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_HOME_SHOW_STATS] ?: true }
+    suspend fun saveHomeShowStats(show: Boolean) = dataStore.edit { it[KEY_HOME_SHOW_STATS] = show }
+    /** Home: linha do diário de hoje (carboidrato e insulina). */
+    val homeShowDiary: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_HOME_SHOW_DIARY] ?: true }
+    suspend fun saveHomeShowDiary(show: Boolean) = dataStore.edit { it[KEY_HOME_SHOW_DIARY] = show }
     val notifLiveUpdate: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_NOTIF_LIVE_UPDATE] ?: false }
     suspend fun saveNotifLiveUpdate(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_LIVE_UPDATE] = enabled }
 
@@ -1181,6 +1190,8 @@ class AppPreferences @Inject constructor(
         o.put("smart_meal_prompt",         p[KEY_SMART_MEAL_PROMPT]     ?: false)
         o.put("notif_quick_add",           p[KEY_NOTIF_QUICK_ADD]       ?: true)
         o.put("notif_live_update",         p[KEY_NOTIF_LIVE_UPDATE]     ?: false)
+        o.put("home_show_stats",           p[KEY_HOME_SHOW_STATS]       ?: true)
+        o.put("home_show_diary",           p[KEY_HOME_SHOW_DIARY]       ?: true)
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1234,6 +1245,8 @@ class AppPreferences @Inject constructor(
             if (o.has("smart_meal_prompt"))         p[KEY_SMART_MEAL_PROMPT]     = o.getBoolean("smart_meal_prompt")
             if (o.has("notif_quick_add"))           p[KEY_NOTIF_QUICK_ADD]       = o.getBoolean("notif_quick_add")
             if (o.has("notif_live_update"))         p[KEY_NOTIF_LIVE_UPDATE]     = o.getBoolean("notif_live_update")
+            if (o.has("home_show_stats"))           p[KEY_HOME_SHOW_STATS]       = o.getBoolean("home_show_stats")
+            if (o.has("home_show_diary"))           p[KEY_HOME_SHOW_DIARY]       = o.getBoolean("home_show_diary")
             // Toggles de alerta
             if (o.has("alert_toggles")) {
                 val at = o.getJSONObject("alert_toggles")

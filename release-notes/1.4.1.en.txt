@@ -1,0 +1,1 @@
+Home screen: the chart no longer changes size when you drag back to earlier hours, and the range shows the day when it crosses midnight. You can now hide the last 24 h summary and today's diary (long press the row) to make the chart bigger; to show them again, use the new Settings › Home.

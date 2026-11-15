@@ -4,6 +4,8 @@ import com.gluview.app.ui.components.kit.Tone
 import com.gluview.app.ui.components.kit.GluCallout
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.minimumInteractiveComponentSize
 import com.gluview.app.ui.theme.glucoseZoneTextColor
@@ -46,7 +48,6 @@ import androidx.compose.ui.semantics.semantics
 import com.gluview.app.util.formatTime
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -110,6 +111,8 @@ private fun PatientHomeScreen(
     val diaryMarkers by viewModel.diaryMarkers.collectAsState()
     // Com o ciclo de vida: fora da tela, para de reler o Health Connect.
     val activityToday by viewModel.activityToday.collectAsStateWithLifecycle()
+    val showStats by viewModel.homeShowStats.collectAsState()
+    val showDiary by viewModel.homeShowDiary.collectAsState()
     var quickAdd     by remember { mutableStateOf(false) }
     if (quickAdd) {
         com.gluview.app.ui.screen.diary.QuickAddFlow(
@@ -158,8 +161,12 @@ private fun PatientHomeScreen(
             darkGraph        = darkGraph,
             diaryToday       = diaryToday,
             diaryMarkers     = diaryMarkers,
-            activityToday    = activityToday
+            activityToday    = activityToday,
+            showStats        = showStats,
+            showDiary        = showDiary
         ),
+        onHideStats              = viewModel::hideHomeStats,
+        onHideDiary              = viewModel::hideHomeDiary,
         onReconnectSensor        = viewModel::reconnectSensor,
         onRefresh                = viewModel::refresh,
         onPullRefresh            = viewModel::onPullRefresh,
@@ -192,7 +199,10 @@ internal data class PatientHomeState(
     val diaryToday:       com.gluview.app.data.diary.DaySummary? = null,
     val diaryMarkers:     List<com.gluview.app.ui.components.chart.ChartMarker> = emptyList(),
     // Passos e calorias do Health Connect; vazio = nada aparece.
-    val activityToday:    com.gluview.app.data.health.TodayActivity = com.gluview.app.data.health.TodayActivity()
+    val activityToday:    com.gluview.app.data.health.TodayActivity = com.gluview.app.data.health.TodayActivity(),
+    // Ajustes › Home: linhas acima do gráfico (ocultas = o gráfico ocupa o espaço).
+    val showStats:        Boolean = true,
+    val showDiary:        Boolean = true
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -205,7 +215,9 @@ internal fun PatientHomeContent(
     onHomeGraphHoursChange:   (Int) -> Unit,
     onNavigateToAlertHistory: () -> Unit,
     onOpenDiary:              (String?) -> Unit = {},
-    onQuickAdd:               () -> Unit = {}
+    onQuickAdd:               () -> Unit = {},
+    onHideStats:              () -> Unit = {},
+    onHideDiary:              () -> Unit = {}
 ) {
     val uiState          = state.uiState
     val homeReadings     = state.homeReadings
@@ -223,6 +235,8 @@ internal fun PatientHomeContent(
     val clock            = LocalClock.current
     var showAgingDialog by remember { mutableStateOf(false) }
     var showCheckDialog by remember { mutableStateOf(false) }
+    // Toque longo numa linha → pergunta se oculta (volta em Ajustes › Home).
+    var hideAsk by remember { mutableStateOf<HomeRow?>(null) }
 
     // Relógio que tica a cada 10 s — base da idade dinâmica ("agora"/"há Xs"/"há X min").
     // No nível da tela (robusto): independe de a leitura mudar.
@@ -344,18 +358,19 @@ internal fun PatientHomeContent(
                             tone = Tone.Info
                         )
 
-                        uiState.dayStats?.let { stats ->
+                        if (state.showStats) uiState.dayStats?.let { stats ->
                             with(uiState.unit) {
                                 // Uma linha só, na mesma altura do diário (pedido do Felipe, 14/11/2026).
                                 HomeStatsRow(
                                     min = stats.minSgv?.toDisplay() ?: "--",
                                     avg = stats.avgSgv?.toDisplay() ?: "--",
-                                    max = stats.maxSgv?.toDisplay() ?: "--"
+                                    max = stats.maxSgv?.toDisplay() ?: "--",
+                                    onLongPress = { hideAsk = HomeRow.STATS }
                                 )
                             }
                         }
 
-                        state.diaryToday?.let { d -> DiaryTodayRow(d, onOpenDiary) }
+                        if (state.showDiary) state.diaryToday?.let { d -> DiaryTodayRow(d, onOpenDiary) { hideAsk = HomeRow.DIARY } }
 
                         HomeChart(
                             readings      = homeReadings,
@@ -378,6 +393,20 @@ internal fun PatientHomeContent(
             days      = sensorAgingAlert.days,
             agingDays = sensorAgingAlert.agingDays,
             onDismiss = { showAgingDialog = false }
+        )
+    }
+
+    hideAsk?.let { row ->
+        com.gluview.app.ui.components.kit.AppDialog(
+            title = stringResource(if (row == HomeRow.STATS) R.string.home_hide_stats_title else R.string.home_hide_diary_title),
+            body = stringResource(R.string.home_hide_body),
+            onDismiss = { hideAsk = null },
+            confirmLabel = stringResource(R.string.home_hide_confirm),
+            onConfirm = {
+                if (row == HomeRow.STATS) onHideStats() else onHideDiary()
+                hideAsk = null
+            },
+            dismissLabel = stringResource(R.string.setup_cancel)
         )
     }
 
@@ -433,11 +462,13 @@ private fun HomeChart(
         title = null,
         modifier = modifier,
         extraControls = {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Altura fixa: com ou sem o botão "Agora" a linha mede o mesmo e o gráfico não muda de
+            // tamanho ao arrastar (pedido do Felipe, 15/11/2026).
+            Row(Modifier.fillMaxWidth().height(HOME_CHART_HEADER_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (window is GraphWindow.Fixed) stringResource(R.string.home_chart_range,
-                        formatTime(window.fromMs, appearance.timeFormat), formatTime(window.toMs, appearance.timeFormat))
+                    if (window is GraphWindow.Fixed) chartRangeLabel(window.fromMs, window.toMs, appearance.timeFormat)
                     else stringResource(R.string.home_chart_last_hours, hours),
+                    maxLines = 1,
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f).semantics { heading() }
                 )
@@ -460,6 +491,32 @@ private fun HomeChart(
             description = null
         )
     }
+}
+
+/** Linha acima do gráfico que a pessoa pode ocultar (Ajustes › Home). */
+internal enum class HomeRow { STATS, DIARY }
+
+/** Altura da linha de título do gráfico da Home: a do botão "Agora" (alvo de toque de 48 dp). */
+internal val HOME_CHART_HEADER_HEIGHT = 48.dp
+
+/**
+ * Intervalo do gráfico arrastado: só as horas quando os dois lados caem no mesmo dia; com o dia da
+ * semana quando atravessa a meia-noite ("sáb. 22:38 – dom. 22:38", antes "22:38 – 22:38").
+ */
+internal fun chartRangeLabel(
+    fromMs: Long,
+    toMs: Long,
+    format: com.gluview.app.util.TimeFormat,
+    locale: java.util.Locale = java.util.Locale.getDefault(),
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault()
+): String {
+    val from = java.time.Instant.ofEpochMilli(fromMs).atZone(zone)
+    val to = java.time.Instant.ofEpochMilli(toMs).atZone(zone)
+    val hFrom = formatTime(fromMs, format, zone)
+    val hTo = formatTime(toMs, format, zone)
+    if (from.toLocalDate() == to.toLocalDate()) return "$hFrom – $hTo"
+    val day = java.time.format.DateTimeFormatter.ofPattern("EEE", locale)
+    return "${from.format(day)} $hFrom – ${to.format(day)} $hTo"
 }
 
 /** Passos do pinçar (horas na tela) e até onde dá para voltar no gráfico da Home. */
@@ -649,14 +706,15 @@ private fun GlucoseCard(
  * Diário de hoje na Home (plano 17, F1.6): carboidrato e insulina do dia numa linha só e os atalhos
  * de registro mais usados. Toque na linha abre o diário.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DiaryTodayRow(d: com.gluview.app.data.diary.DaySummary, onOpen: (String?) -> Unit) {
+private fun DiaryTodayRow(d: com.gluview.app.data.diary.DaySummary, onOpen: (String?) -> Unit, onLongPress: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val text = remember(context) { com.gluview.app.util.DiaryText(context) }
-    // Uma linha só e mais fina (14/11/2026): o gráfico fica com o espaço.
+    // Uma linha só e mais fina (14/11/2026): o gráfico fica com o espaço. Toque longo: ocultar.
     Surface(
-        onClick = { onOpen(null) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+            .combinedClickable(onClick = { onOpen(null) }, onLongClick = onLongPress),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
@@ -680,15 +738,18 @@ private fun DiaryTodayRow(d: com.gluview.app.data.diary.DaySummary, onOpen: (Str
 
 
 /** Mínima, média e máxima das últimas 24 h numa linha, do mesmo tamanho da linha do diário. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun HomeStatsRow(min: String, avg: String, max: String) {
+private fun HomeStatsRow(min: String, avg: String, max: String, onLongPress: () -> Unit = {}) {
     val lMin = stringResource(R.string.home_stat_min)
     val lAvg = stringResource(R.string.home_stat_avg)
     val lMax = stringResource(R.string.home_stat_max)
     val period = stringResource(R.string.home_stats_24h)
     val a11y = "${stringResource(R.string.home_last_24_hours)}: $lMin $min, $lAvg $avg, $lMax $max"
     Surface(
-        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = a11y },
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+            .combinedClickable(onClick = {}, onLongClick = onLongPress)
+            .semantics(mergeDescendants = true) { contentDescription = a11y },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)

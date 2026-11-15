@@ -40,6 +40,8 @@ sealed class Screen(val route: String) {
     data object Patterns      : Screen("patterns")
     data object Diagnostic    : Screen("diagnostic")
     data object Report        : Screen("report")
+    // Ajustes › Home: linhas da tela inicial (15/11/2026)
+    data object SettingsHome  : Screen("settings_home")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6
