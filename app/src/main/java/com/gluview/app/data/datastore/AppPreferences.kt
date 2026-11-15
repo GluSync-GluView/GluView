@@ -267,6 +267,8 @@ class AppPreferences @Inject constructor(
         // transmissor), não descoberto por scan/NFC. Ver DexcomG6Source/DexcomG6BleManager.
         val KEY_DEXCOM_G6_TRANSMITTER_ID = stringPreferencesKey("dexcom_g6_transmitter_id")
         val KEY_DEXCOM_G6_MAC            = stringPreferencesKey("dexcom_g6_mac")
+        val KEY_DEXCOM_G6_TX_START       = longPreferencesKey("dexcom_g6_tx_start_ms")
+        val KEY_DEXCOM_G6_LAST_READING   = longPreferencesKey("dexcom_g6_last_reading_ms")
         // F8 — pareamento da Mi Band para envio do visor (auth key Huami + MAC)
         val KEY_MIBAND_MAC            = stringPreferencesKey("miband_mac")
         val KEY_MIBAND_AUTH_KEY       = stringPreferencesKey("miband_auth_key")
@@ -596,6 +598,10 @@ class AppPreferences @Inject constructor(
 
     val dexcomG6TransmitterId: Flow<String> = dataStore.data.safeMap("") { it[KEY_DEXCOM_G6_TRANSMITTER_ID] ?: "" }
     val dexcomG6Mac: Flow<String>           = dataStore.data.safeMap("") { it[KEY_DEXCOM_G6_MAC]            ?: "" }
+    /** Instante (ms) do "segundo zero" do transmissor (DexTimeKeeper do xDrip); 0 = ainda não perguntou a hora. */
+    val dexcomG6TxStartMs: Flow<Long>       = dataStore.data.safeMap(0L) { it[KEY_DEXCOM_G6_TX_START] ?: 0L }
+    /** Hora da última leitura do G6 gravada (para decidir o backfill). */
+    val dexcomG6LastReadingMs: Flow<Long>   = dataStore.data.safeMap(0L) { it[KEY_DEXCOM_G6_LAST_READING] ?: 0L }
     // F8 — Mi Band: MAC e auth key (hex de 32 chars) para o envio do visor via BLE Huami
     val miBandMac: Flow<String>             = dataStore.data.safeMap("") { it[KEY_MIBAND_MAC]      ?: "" }
     val miBandAuthKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_MIBAND_AUTH_KEY] ?: "" }
@@ -1034,10 +1040,26 @@ class AppPreferences @Inject constructor(
     suspend fun saveDexcomG6Mac(mac: String) =
         dataStore.edit { it[KEY_DEXCOM_G6_MAC] = mac }
 
+    suspend fun saveDexcomG6TxStartMs(ms: Long) = dataStore.edit { it[KEY_DEXCOM_G6_TX_START] = ms }
+    suspend fun saveDexcomG6LastReadingMs(ms: Long) = dataStore.edit { it[KEY_DEXCOM_G6_LAST_READING] = ms }
+
+    /**
+     * Transmitter ID novo (troca de transmissor ou ID corrigido): guarda o ID e esquece endereço e relógio
+     * do anterior. Mesmo ID: não mexe em nada.
+     */
+    suspend fun setDexcomG6Transmitter(transmitterId: String) = dataStore.edit {
+        if (it[KEY_DEXCOM_G6_TRANSMITTER_ID] == transmitterId) return@edit
+        it[KEY_DEXCOM_G6_TRANSMITTER_ID] = transmitterId
+        it.remove(KEY_DEXCOM_G6_MAC)
+        it.remove(KEY_DEXCOM_G6_TX_START)
+    }
+
     /** Esquece o transmissor Dexcom G6 configurado. */
     suspend fun clearDexcomG6Sensor() = dataStore.edit {
         it.remove(KEY_DEXCOM_G6_TRANSMITTER_ID)
         it.remove(KEY_DEXCOM_G6_MAC)
+        it.remove(KEY_DEXCOM_G6_TX_START)
+        it.remove(KEY_DEXCOM_G6_LAST_READING)
     }
 
     // ── Pushover ──────────────────────────────────────────────────────────────

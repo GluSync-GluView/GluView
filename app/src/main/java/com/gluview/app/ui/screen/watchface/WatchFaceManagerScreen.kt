@@ -296,7 +296,7 @@ private fun WatchFaceItem(
                 }
             }
         }
-        applyStateBadge(face.applyState)?.let { (tone, res) -> StatusBadge(stringResource(res), tone = tone) }
+        applyStateBadge(face.applyState, com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(design.wearable.id))?.let { (tone, res) -> StatusBadge(stringResource(res), tone = tone) }
         // O do visor enviando continua habilitado (só ignora o toque) para o progresso ficar visível.
         Button(onClick = { if (!applying) onApply() }, enabled = canSend && (applying || !anyApplying),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -326,9 +326,10 @@ private fun WatchFaceItem(
 }
 
 /** Último envio gravado (applyState existia e nenhuma tela mostrava). */
-private fun applyStateBadge(state: String): Pair<Tone, Int>? = when (state) {
+private fun applyStateBadge(state: String, toWatch: Boolean): Pair<Tone, Int>? = when (state) {
     "success" -> Tone.Success to R.string.wf_state_success
-    "needs_setup" -> Tone.Warning to R.string.wf_state_needs_setup
+    // Relógio: o "falta configurar" é o relógio conectado e o app GluView nele, não a Mi Band.
+    "needs_setup" -> Tone.Warning to (if (toWatch) R.string.wf_state_needs_setup_watch else R.string.wf_state_needs_setup)
     "failure" -> Tone.Danger to R.string.wf_state_failure
     "pending" -> Tone.Info to R.string.wf_sending
     else -> null

@@ -43,3 +43,32 @@ Cenários: escreva um comando por linha em `control.txt` (com o simulador rodand
 | `refuse` / `accept` | o sensor esquece e passa a recusar / volta a aceitar pareamento |
 | `restart` | sensor trocado: a contagem recomeça do minuto 0 |
 | `normal` | volta tudo ao normal |
+
+## Dexcom G6 (plano 14_, Fase V3b)
+
+```
+./.venv/Scripts/python.exe -u dexcomg6.py --novo --cycle 60 --window 20
+```
+
+Transmissor `8G1A2B` (anuncia como `Dexcom2B`, serviço 0xFEBC). No app: Sensor → Dexcom G6 → Transmitter
+ID `8G1A2B` (com outro ID que termine em `2B` o transmissor recusa: cenário do ID errado). O G6 real anuncia a
+cada 5 min (`--cycle 300`); `--cycle 60` só acelera o teste — as leituras continuam de 5 em 5 min. Sessão
+começa 72 h antes (`--session-hours`); relógio do transmissor, sessão e "pareado" ficam em
+`dexcom-<ID>-estado.json`. Outro transmissor ao mesmo tempo: `--id 8H3C4D --address F0:A1:B2:C3:D4:A7
+--control control-dexcom2.txt`.
+
+Limitação: o SMP do Bumble não funciona no netsim, então o pareamento do Android não termina. O
+`BondRequest` (0x07) faz o transmissor virtual se considerar pareado, e o app segue pelo status que ele
+informa — o mesmo que o xDrip faz. Um G6 real exige o pareamento de verdade para abrir a Control.
+
+Cenários em `control-dexcom.txt`:
+
+| Comando | Efeito |
+|---|---|
+| `away N` | some por N minutos; na volta o app tem furo e pede backfill |
+| `newsession` | sessão nova agora: 2 h de aquecimento (estado 0x02) |
+| `end` / `fail` | sessão encerrada (0x0F) / sensor com falha (0x0B) |
+| `nosession` | sem sessão (estado 0x01) |
+| `badcrc` | próxima glicemia com CRC errado |
+| `unbond` | o transmissor esquece o pareamento (o app refaz KeepAlive + BondRequest) |
+| `normal` | sessão em andamento de novo (3 dias) |

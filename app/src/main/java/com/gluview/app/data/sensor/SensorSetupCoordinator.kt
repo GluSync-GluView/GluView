@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import com.gluview.app.data.accuchek.AccuChekBleManager
 import com.gluview.app.data.accuchek.cgm.SmartGuidePackageParser
 import com.gluview.app.data.datastore.AppPreferences
+import com.gluview.app.data.dexcom.DexcomG6BleManager
+import com.gluview.app.data.dexcom.DexcomGatt
 import com.gluview.app.data.medlevensohn.MedLevensohnBleManager
 import com.gluview.app.data.medlevensohn.MedLevensohnGatt
 import com.gluview.app.data.repository.SensorHistoryRepository
@@ -19,6 +21,7 @@ import com.gluview.app.service.ServiceWatchdogWorker
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
@@ -83,8 +86,11 @@ sealed interface SetupState {
     /** Sensor encontrado; conectando e salvando a configuração. */
     data class Connecting(val type: DataSourceType, val code: SensorCode) : SetupState
 
-    /** Pronto — serviço reiniciado com o sensor novo. */
-    data class Ready(val type: DataSourceType, val warmupMinutes: Int) : SetupState
+    /**
+     * Pronto — serviço reiniciado com o sensor novo. [connectedOnly] = a sessão abriu mas nenhuma leitura
+     * chegou ainda (Smart 2.0 aquecendo, sem prazo conhecido): a tela não promete minutos.
+     */
+    data class Ready(val type: DataSourceType, val warmupMinutes: Int, val connectedOnly: Boolean = false) : SetupState
 
     /** Falhas, cada uma com sua saída. [code] = a caixa já lida (tentar de novo não pede outra leitura, L19). */
     data class Failed(val reason: FailureReason, val type: DataSourceType?, val code: SensorCode? = null) : SetupState
@@ -113,6 +119,9 @@ enum class FailureReason {
     /** Sem a permissão de procurar dispositivos por perto (L19: antes caía em "Bluetooth desligado"). */
     BLUETOOTH_PERMISSION,
 
+    /** Dexcom G6: o transmissor não aceitou o Transmitter ID digitado (a chave sai dele). */
+    WRONG_TRANSMITTER_ID,
+
     /** Qualquer outra falha inesperada. */
     UNKNOWN
 }
@@ -133,6 +142,7 @@ class SensorSetupCoordinator @Inject constructor(
     private val sensorHistory: SensorHistoryRepository,
     private val accuChekBle: AccuChekBleManager,
     private val medLevBle: MedLevensohnBleManager,
+    private val dexcomBle: DexcomG6BleManager,
     private val statusHolder: SibionicsStatusHolder,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
@@ -158,7 +168,8 @@ class SensorSetupCoordinator @Inject constructor(
     }
 
     fun chooseSensor(type: DataSourceType) {
-        _state.value = SetupState.Instructions(type)
+        // G6: não há código na caixa que o app leia — o Transmitter ID impresso é digitado.
+        _state.value = if (type == DataSourceType.DEXCOM_G6) SetupState.EnteringSerial(type) else SetupState.Instructions(type)
     }
 
     fun readyToScan() {
@@ -192,6 +203,16 @@ class SensorSetupCoordinator @Inject constructor(
 
     fun onSerialEntered(text: String) {
         val type = currentType() ?: return
+        if (type == DataSourceType.DEXCOM_G6) {
+            val id = text.trim().uppercase().filter { it.isLetterOrDigit() }
+            if (!DexcomGatt.isValidTransmitterId(id)) {
+                _state.value = SetupState.EnteringSerial(type, invalid = true)
+                return
+            }
+            appLogger.usage(LOG, "Transmitter ID do G6 digitado")
+            search(type, SensorCode(connectionCode = id, serial = id))
+            return
+        }
         if (type == DataSourceType.MEDLEVENSOHN_SMART2) {
             val serial = text.trim().uppercase().filter { it.isLetterOrDigit() }
             if (serial.length !in 6..MedLevensohnGatt.SERIAL_LENGTH) {
@@ -242,6 +263,8 @@ class SensorSetupCoordinator @Inject constructor(
         val code = s.code
         return when {
             type == null -> { _state.value = SetupState.ChoosingSensor; false }
+            // ID errado: volta para digitar (tentar de novo com o mesmo ID daria o mesmo erro).
+            s.reason == FailureReason.WRONG_TRANSMITTER_ID -> { _state.value = SetupState.EnteringSerial(type); false }
             code != null && type == DataSourceType.ACCU_CHEK_SMARTGUIDE && pendingPin == null ->
                 { _state.value = SetupState.EnteringPin(type, code); false }
             code != null -> { search(type, code); false }
@@ -310,6 +333,10 @@ class SensorSetupCoordinator @Inject constructor(
         }
         if (type == DataSourceType.MEDLEVENSOHN_SMART2) {
             runMedLevSearch(type, code)
+            return
+        }
+        if (type == DataSourceType.DEXCOM_G6) {
+            runDexcomSetup(type, code)
             return
         }
 
@@ -403,6 +430,56 @@ class SensorSetupCoordinator @Inject constructor(
         cont.invokeOnCancellation { accuChekBle.stopScan() }
     }
 
+    // ── Dexcom G6 ───────────────────────────────────────────────────────────────
+
+    /**
+     * Guarda o Transmitter ID (ID novo = esquece endereço e relógio do anterior), reinicia o serviço e
+     * espera o primeiro ciclo do transmissor: ele anuncia a cada ~5 min, então a espera vai até 6,5 min.
+     * Autenticou → pronto (já medindo, aquecendo com os minutos que faltam, ou só conectado);
+     * tokenHash errado → "confira o Transmitter ID"; nada → "não encontramos".
+     */
+    private suspend fun runDexcomSetup(type: DataSourceType, code: SensorCode) {
+        val setupStartedMs = System.currentTimeMillis()
+        preferences.setDexcomG6Transmitter(code.serial)
+        if (preferences.dataSource.first() != type.id) preferences.saveDataSource(type.id)
+        _state.value = SetupState.Pairing(type, code)
+        val outcome = coroutineScope {
+            // Assina ANTES de reiniciar o serviço: o primeiro ciclo pode ser imediato.
+            val waiter = async(start = CoroutineStart.UNDISPATCHED) {
+                withTimeoutOrNull(DEXCOM_FIRST_CYCLE_MS) {
+                    dexcomBle.events.first {
+                        it is DexcomG6BleManager.LinkEvent.Authenticated || it is DexcomG6BleManager.LinkEvent.WrongTransmitterId
+                    }
+                }
+            }
+            restartService()
+            waiter.await()
+        }
+        when (outcome) {
+            DexcomG6BleManager.LinkEvent.WrongTransmitterId -> {
+                appLogger.error(LOG, "G6 recusou o Transmitter ID")
+                _state.value = SetupState.Failed(FailureReason.WRONG_TRANSMITTER_ID, type, code)
+            }
+            null -> {
+                appLogger.error(LOG, "G6 não apareceu no primeiro ciclo")
+                _state.value = SetupState.Failed(FailureReason.SENSOR_NOT_FOUND, type, code)
+            }
+            else -> {
+                // A leitura do G6 é a do último ciclo (até 5 min antes): conta a de até 10 min antes do
+                // começo. O status foi zerado quando a fonte reiniciou, então não é a do transmissor anterior.
+                val measuring = withTimeoutOrNull(DEXCOM_FIRST_READING_MS) {
+                    while (statusHolder.status.value.lastReadingMs < setupStartedMs - DEXCOM_READING_AGE_MS) delay(250)
+                    true
+                } == true
+                val sessionStart = statusHolder.status.value.sensorStartMs
+                val warmupLeft = if (!measuring && sessionStart > 0L)
+                    ((sessionStart + DEXCOM_WARMUP_MS - System.currentTimeMillis()) / 60_000L).toInt().coerceIn(0, 120) else 0
+                appLogger.usage(LOG, "G6 autenticado", mapOf("jaMedindo" to measuring, "aquecimentoMin" to warmupLeft))
+                _state.value = SetupState.Ready(type, warmupLeft, connectedOnly = !measuring && warmupLeft == 0)
+            }
+        }
+    }
+
     // ── Smart 2.0 (MedLevensohn / AiDEX X) ─────────────────────────────────────
 
     /**
@@ -411,6 +488,7 @@ class SensorSetupCoordinator @Inject constructor(
      * sensor (o Juggluco não chama createBond).
      */
     private suspend fun runMedLevSearch(type: DataSourceType, code: SensorCode) {
+        val setupStartedMs = System.currentTimeMillis()
         _state.value = SetupState.Searching(type, code)
         val wanted = code.serial.ifBlank { null }
         val found = scanMedLev(wanted)
@@ -432,8 +510,17 @@ class SensorSetupCoordinator @Inject constructor(
             true
         } == true
         if (opened) {
-            appLogger.usage(LOG, "Smart 2.0 conectado e com sessão aberta")
-            _state.value = SetupState.Ready(type, 0)
+            // A sessão traz o histórico e a última leitura logo em seguida: se alguma chegar, o sensor
+            // já está medindo e a tela diz isso; senão ele ainda aquece (o assistente dizia "assim que
+            // terminar de aquecer" mesmo com o sensor no minuto 125 — plano 14_, V2).
+            val measuring = withTimeoutOrNull(MEDLEV_FIRST_READING_MS) {
+                // Leitura de até 10 min antes do começo (a última do sensor pode ser do minuto anterior); o
+                // status foi zerado quando a fonte reiniciou, então ela é deste sensor.
+                while (statusHolder.status.value.lastReadingMs < setupStartedMs - DEXCOM_READING_AGE_MS) delay(250)
+                true
+            } == true
+            appLogger.usage(LOG, "Smart 2.0 conectado e com sessão aberta", mapOf("jaMedindo" to measuring))
+            _state.value = SetupState.Ready(type, 0, connectedOnly = !measuring)
         } else {
             appLogger.error(LOG, "Smart 2.0 não abriu a sessão a tempo")
             _state.value = SetupState.Failed(FailureReason.PAIRING_TIMEOUT, type, foundCode)
@@ -555,6 +642,11 @@ class SensorSetupCoordinator @Inject constructor(
         /** Prazo do pareamento: reiniciar o serviço, conectar e o usuário responder à janela do sistema. */
         const val PAIRING_WINDOW_MS = 150_000L
         const val READY_SETTLE_MS = 800L
+        const val MEDLEV_FIRST_READING_MS = 8_000L
+        const val DEXCOM_FIRST_CYCLE_MS = 390_000L
+        const val DEXCOM_FIRST_READING_MS = 20_000L
+        const val DEXCOM_READING_AGE_MS = 10 * 60_000L
+        const val DEXCOM_WARMUP_MS = 2 * 60 * 60_000L
         const val MEDLEV_SCAN_WINDOW_MS = 30_000L
         const val MEDLEV_SETTLE_MS = 1_500L
         /** Código de "qualquer sensor da família" (busca sem serial). */

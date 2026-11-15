@@ -18,35 +18,40 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.security.SecureRandom
+import java.util.ArrayDeque
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * GATT BLE do Dexcom G6 — porta o driver nativo do xDrip (`com.eveningoutpost.dexdrip.g5model`,
- * GPLv3). Ver [DexcomGatt]/[DexcomG6Crypto]/[DexcomG6Tx]/[DexcomG6Rx] para UUIDs, cripto e pacotes.
+ * GATT BLE do Dexcom G6 — porte do `Ob1G5StateMachine` do xDrip (`com.eveningoutpost.dexdrip.g5model`,
+ * GPLv3), revisado contra ele em 15/11/2026 (plano 14_, V3a). Ver [DexcomGatt]/[DexcomG6Crypto]/
+ * [DexcomG6Tx]/[DexcomG6Rx] para UUIDs, cripto e pacotes.
  *
- * Fluxo (idêntico ao `Ob1G5StateMachine` do xDrip):
- *  1. Scan filtrado pelo serviço de anúncio 0xFEBC → connectGatt.
- *  2. discoverServices → habilita notify em Authentication/Control/Backfill/Communication.
- *  3. Escreve AuthRequest (opcode 0x01, token aleatório de 8 bytes) em Authentication.
- *  4. Transmissor responde AuthChallenge (0x03: tokenHash 8B + challenge 8B) — confere que o
- *     tokenHash bate com `challengeHash(meuToken, chave)` (prova que o transmissor conhece a
- *     MESMA chave, derivada do Transmitter ID — ver [DexcomG6Crypto.deriveKey]).
- *  5. Responde com `challengeHash(challenge, chave)` (0x04) — prova que O APP conhece a chave.
- *  6. Transmissor confirma com AuthStatus (0x05: authenticated + bonded).
- *  7. Se autenticado mas não pareado (`bonded=false`), pede bond ao sistema Android.
- *  8. Pronto: pede glicemia (0x4E) periodicamente; TransmitterTime (0x25) dá o início da sessão.
+ * O G6 não fica conectado: ele anuncia a cada ~5 min, aceita uma conexão curta, entrega a leitura e
+ * desconecta. Cada ciclo:
+ *  1. Conecta (a primeira vez por busca do nome "Dexcom"+2 últimos do ID; depois pelo endereço com
+ *     `autoConnect`, que espera o próximo anúncio sem gastar bateria com busca).
+ *  2. INDICAÇÃO em Authentication (o G6 usa indicação, não notificação) → AuthRequest (0x01).
+ *  3. 0x03 (tokenHash + desafio): o tokenHash prova que o transmissor tem a mesma chave do ID
+ *     digitado; responde 0x04. Não bate = ID errado ([LinkEvent.WrongTransmitterId]).
+ *  4. 0x05 (autenticado, pareado). Sem pareamento: KeepAlive(60) + createBond + BondRequest (0x07),
+ *     espera o Android parear (até 10 s) e relê o status (`doKeepAliveAndBondRequest`).
+ *  5. Pareado: INDICAÇÃO em Control → Glicemia (0x30) → 0x31. Se a fonte pedir: Hora (0x24 → 0x25)
+ *     e Backfill (0x50 → 0x51 em Control + dados por notificação em Backfill).
+ *  6. Disconnect (0x09) — o transmissor encerra e volta a anunciar no próximo ciclo.
  *
- * IMPORTANTE (sem hardware para validar ainda, 27/07/2026): a derivação de chave e o handshake
- * desafio-resposta são publicamente documentados (não é engenharia reversa de binário) e foram
- * portados fielmente do xDrip — alta confiança na CORREÇÃO da lógica. O que falta validar com o
- * transmissor real: o valor exato do `slot` no AuthRequest, e se o Android bonda automaticamente
- * ou precisa de `createBond()` explícito (o xDrip chama explicitamente — replicado aqui).
+ * Operações GATT vão numa fila (uma por vez, a próxima no callback da anterior).
  */
 @Singleton
 class DexcomG6BleManager @Inject constructor(
@@ -56,241 +61,312 @@ class DexcomG6BleManager @Inject constructor(
     interface Listener {
         fun onConnectionChanged(connected: Boolean)
         fun onAuthenticated()
-        fun onGlucose(reading: DexcomGlucose)
+        /** Leitura atual. Devolve o que pedir em seguida nesta conexão. */
+        fun onGlucose(reading: DexcomGlucose): FollowUp
         fun onTransmitterTime(time: TransmitterTime)
-        fun onRawPacket(uuid: java.util.UUID, value: ByteArray) {}
+        /** Janela de backfill (segundos do transmissor) agora que o relógio dele é conhecido, ou null. */
+        fun backfillWindow(): Pair<Int, Int>?
+        fun onBackfill(records: List<DexcomBackfillRecord>)
+        fun onWrongTransmitterId() {}
         fun onRssi(rssi: Int) {}
         fun onBluetoothTurnedOn() {}
     }
 
+    /** O que pedir depois da glicemia. */
+    data class FollowUp(val askTime: Boolean)
+
+    /** Eventos para quem espera o primeiro ciclo (o assistente). */
+    sealed interface LinkEvent {
+        data object Authenticated : LinkEvent
+        data object WrongTransmitterId : LinkEvent
+        data object GotGlucose : LinkEvent
+    }
+
     companion object {
         private const val LOG = "DEXCOM_G6_BLE"
+        private const val BOND_WAIT_MS = 10_000L
+        /** Sem nada útil nesse tempo depois de conectar, a conexão é encerrada (o transmissor volta em 5 min). */
+        private const val CYCLE_TIMEOUT_MS = 60_000L
+        /** Silêncio na characteristic Backfill que conta como "acabou o backfill". */
+        private const val BACKFILL_QUIET_MS = 1_500L
+        private const val BACKFILL_MAX_MS = 15_000L
+
+        /** Nome anunciado pelo transmissor: "Dexcom" + 2 últimos caracteres do Transmitter ID (`AdvMatcher`). */
+        fun advertisedName(transmitterId: String): String = "Dexcom" + transmitterId.takeLast(2).uppercase()
     }
 
     private val adapter: BluetoothAdapter? by lazy {
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
     }
+    private val handler = Handler(Looper.getMainLooper())
 
     private var gatt: BluetoothGatt? = null
-    private var charComm: BluetoothGattCharacteristic? = null
-    private var charControl: BluetoothGattCharacteristic? = null
-    private var charAuth: BluetoothGattCharacteristic? = null
-    private var charBackfill: BluetoothGattCharacteristic? = null
+    private var chars: Map<UUID, BluetoothGattCharacteristic> = emptyMap()
     private var listener: Listener? = null
 
     private var transmitterId: String = ""
     private var key: ByteArray = ByteArray(0)
     private var myToken: ByteArray = ByteArray(0)
     @Volatile private var targetMac: String? = null
-    @Volatile private var authenticated = false
+    @Volatile var isAuthenticated = false
+        private set
+    private var bondAttempted = false
+    private var backfill: DexcomBackfillStream? = null
+    private var backfillAccepted = false
+
+    private val _events = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 8)
+    val events: SharedFlow<LinkEvent> = _events.asSharedFlow()
 
     fun setListener(l: Listener?) { listener = l }
 
-    /** Deve ser chamado ANTES de [connect] — o Transmitter ID (6 caracteres, impresso no transmissor) deriva a chave AES. */
+    /** Deve ser chamado ANTES de [connect] — o Transmitter ID (6 caracteres) deriva a chave AES. */
     fun configure(transmitterId: String) {
-        this.transmitterId = transmitterId
-        this.key = DexcomG6Crypto.deriveKey(transmitterId)
+        this.transmitterId = transmitterId.uppercase()
+        this.key = DexcomG6Crypto.deriveKey(this.transmitterId)
     }
 
-    // ── Rádio do sistema ligado/desligado (mesmo padrão dos outros BLE managers) ──
+    // ── Rádio do sistema e pareamento do Android ─────────────────────────────────────────────
     init {
-        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
-                    BluetoothAdapter.STATE_OFF, BluetoothAdapter.STATE_TURNING_OFF -> {
-                        if (gatt != null) { appLogger.error(LOG, "Bluetooth do sistema desligado"); disconnect() }
+                when (intent.action) {
+                    BluetoothAdapter.ACTION_STATE_CHANGED -> when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
+                        BluetoothAdapter.STATE_OFF, BluetoothAdapter.STATE_TURNING_OFF -> {
+                            if (gatt != null) { appLogger.error(LOG, "Bluetooth do sistema desligado"); disconnect() }
+                        }
+                        BluetoothAdapter.STATE_ON -> {
+                            appLogger.usage(LOG, "Bluetooth do sistema religado")
+                            listener?.onBluetoothTurnedOn()
+                        }
                     }
-                    BluetoothAdapter.STATE_ON -> {
-                        appLogger.usage(LOG, "Bluetooth do sistema religado")
-                        listener?.onBluetoothTurnedOn()
+                    BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                        @Suppress("DEPRECATION")
+                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        if (device?.address != targetMac) return
+                        val bond = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)
+                        appLogger.usage(LOG, "Pareamento do Android mudou", mapOf("estado" to bond))
+                        if (bond == BluetoothDevice.BOND_BONDED && bondAttempted) handler.post { afterBondWait() }
                     }
                 }
             }
         }
         runCatching {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         }.onFailure { e -> appLogger.error(LOG, "Falha ao registrar receiver BT", mapOf("erro" to (e::class.simpleName ?: "?"))) }
     }
 
-    // ── Scan (filtra pelo serviço de anúncio 0xFEBC) ───────────────────────────────
+    // ── Busca (só na primeira vez: nome "DexcomXX" + serviço 0xFEBC) ──────────────────────────
     private var scanCallback: ScanCallback? = null
 
     @SuppressLint("MissingPermission")
     fun startScan(onFound: (name: String?, mac: String, rssi: Int) -> Unit) {
         val scanner = adapter?.bluetoothLeScanner ?: run { appLogger.error(LOG, "bluetoothLeScanner indisponível"); return }
         stopScan()
+        val wanted = advertisedName(transmitterId)
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         val filters = listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(DexcomGatt.ADVERTISEMENT_SERVICE)).build())
         val cb = object : ScanCallback() {
+            @SuppressLint("MissingPermission")
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val name = result.device.name ?: result.scanRecord?.deviceName
-                appLogger.usage(LOG, "Scan encontrou possível transmissor Dexcom", mapOf("name" to (name ?: "?"), "mac" to result.device.address))
+                val name = result.scanRecord?.deviceName ?: result.device.name
+                // Outro transmissor por perto (troca de transmissor, alguém da família) não serve.
+                if (name == null || !name.equals(wanted, ignoreCase = true)) return
+                appLogger.usage(LOG, "Transmissor encontrado na busca", mapOf("nome" to name, "mac" to result.device.address))
                 onFound(name, result.device.address, result.rssi)
             }
-            override fun onScanFailed(errorCode: Int) { appLogger.error(LOG, "Scan BLE falhou", mapOf("errorCode" to errorCode)) }
+            override fun onScanFailed(errorCode: Int) { appLogger.error(LOG, "Busca BLE falhou", mapOf("errorCode" to errorCode)) }
         }
         scanCallback = cb
         scanner.startScan(filters, settings, cb)
-        appLogger.usage(LOG, "Scan iniciado (filtro por serviço 0xFEBC)")
+        appLogger.usage(LOG, "Busca iniciada", mapOf("nome" to wanted))
     }
 
     @SuppressLint("MissingPermission")
     fun stopScan() {
-        scanCallback?.let { adapter?.bluetoothLeScanner?.stopScan(it) }
+        scanCallback?.let { runCatching { adapter?.bluetoothLeScanner?.stopScan(it) } }
         scanCallback = null
     }
 
-    // ── Conexão ──────────────────────────────────────────────────────────────────
+    // ── Conexão ──────────────────────────────────────────────────────────────────────────────
+    /**
+     * [waitForAdvert] = `autoConnect`: o Android espera o próximo anúncio do transmissor (ciclo de 5 min)
+     * sem prazo. A primeira conexão, logo depois da busca, é direta.
+     */
     @SuppressLint("MissingPermission")
-    fun connect(mac: String) {
+    fun connect(mac: String, waitForAdvert: Boolean) {
         val a = adapter ?: run { appLogger.error(LOG, "BluetoothAdapter==null"); return }
-        gatt?.let { runCatching { it.close() } }
-        resetCharacteristics()
+        closeGatt()
         targetMac = mac
         val device = runCatching { a.getRemoteDevice(mac) }.getOrNull() ?: run {
             appLogger.error(LOG, "MAC inválido", mapOf("mac" to mac)); return
         }
-        appLogger.usage(LOG, "Conectando", mapOf("mac" to mac))
-        gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        appLogger.usage(LOG, "Conectando", mapOf("mac" to mac, "esperaAnuncio" to waitForAdvert))
+        gatt = device.connectGatt(context, waitForAdvert, gattCallback, BluetoothDevice.TRANSPORT_LE)
+    }
+
+    /** Encerra tudo (parar a fonte). */
+    fun disconnect() {
+        appLogger.usage(LOG, "Desconectando (pedido interno)")
+        targetMac = null
+        val had = gatt != null
+        closeGatt()
+        if (had) listener?.onConnectionChanged(false)
     }
 
     @SuppressLint("MissingPermission")
-    fun disconnect() {
-        appLogger.usage(LOG, "Desconectando (solicitação interna)")
+    private fun closeGatt() {
+        handler.removeCallbacksAndMessages(null)
         gatt?.let { runCatching { it.disconnect(); it.close() } }
         gatt = null
-        resetCharacteristics()
-        listener?.onConnectionChanged(false)
+        resetCycle()
     }
 
-    private fun resetCharacteristics() {
-        charComm = null; charControl = null; charAuth = null; charBackfill = null
-        authenticated = false
+    private fun resetCycle() {
+        chars = emptyMap()
+        queue.clear(); busy = false
+        isAuthenticated = false
+        bondAttempted = false
+        bondReread = false
+        backfill = null; backfillAccepted = false
     }
 
-    // ── GATT callback ────────────────────────────────────────────────────────────
+    /** Fim do ciclo pedido pelo app: manda 0x09 e fecha se o transmissor não fechar em 2 s. */
+    private fun endCycle(reason: String) {
+        appLogger.usage(LOG, "Fim do ciclo", mapOf("motivo" to reason))
+        val control = chars[DexcomGatt.CONTROL]
+        if (control != null && isAuthenticated) enqueue(Op.Write(control, DexcomG6Tx.disconnect()))
+        handler.postDelayed({ gatt?.let { runCatching { it.disconnect() } } }, 2_000L)
+    }
+
+    // ── Fila GATT ────────────────────────────────────────────────────────────────────────────
+    private sealed interface Op {
+        val ch: BluetoothGattCharacteristic
+        data class Subscribe(override val ch: BluetoothGattCharacteristic, val indicate: Boolean) : Op
+        class Write(override val ch: BluetoothGattCharacteristic, val bytes: ByteArray) : Op
+        data class Read(override val ch: BluetoothGattCharacteristic) : Op
+    }
+
+    private val queue = ArrayDeque<Op>()
+    private var busy = false
+
+    private fun enqueue(op: Op) { queue.addLast(op); if (!busy) next() }
+
+    @SuppressLint("MissingPermission")
+    private fun next() {
+        val g = gatt ?: return
+        val op = queue.pollFirst() ?: run { busy = false; return }
+        busy = true
+        val ok = when (op) {
+            is Op.Subscribe -> {
+                g.setCharacteristicNotification(op.ch, true)
+                val cccd = op.ch.getDescriptor(DexcomGatt.CCCD)
+                val value = if (op.indicate) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                when {
+                    cccd == null -> false
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> g.writeDescriptor(cccd, value) == BluetoothGatt.GATT_SUCCESS
+                    else -> @Suppress("DEPRECATION") run { cccd.value = value; g.writeDescriptor(cccd) }
+                }
+            }
+            is Op.Write -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(op.ch, op.bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
+            } else @Suppress("DEPRECATION") run {
+                op.ch.value = op.bytes; op.ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT; g.writeCharacteristic(op.ch)
+            }
+            is Op.Read -> g.readCharacteristic(op.ch)
+        }
+        if (!ok) {
+            appLogger.error(LOG, "Operação GATT recusada", mapOf("op" to op::class.simpleName.orEmpty(), "uuid" to op.ch.uuid.toString()))
+            busy = false
+            next()
+        }
+    }
+
+    private fun opDone() = handler.post { busy = false; next() }
+
+    // ── GATT callback ────────────────────────────────────────────────────────────────────────
     private val gattCallback = object : BluetoothGattCallback() {
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            appLogger.usage(LOG, "Estado GATT mudou", mapOf("mac" to (targetMac ?: "?"), "newState" to newState, "gattStatus" to status))
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                if (!g.discoverServices()) { appLogger.error(LOG, "discoverServices() falhou"); disconnect() }
-            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                resetCharacteristics()
-                runCatching { g.close() }
-                gatt = null
-                listener?.onConnectionChanged(false)
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            if (status != BluetoothGatt.GATT_SUCCESS) { appLogger.error(LOG, "Descoberta de serviços falhou", mapOf("status" to status)); disconnect(); return }
-            val service = g.getService(DexcomGatt.CGM_SERVICE)
-            charComm = service?.getCharacteristic(DexcomGatt.COMMUNICATION)
-            charControl = service?.getCharacteristic(DexcomGatt.CONTROL)
-            charAuth = service?.getCharacteristic(DexcomGatt.AUTHENTICATION)
-            charBackfill = service?.getCharacteristic(DexcomGatt.BACKFILL)
-
-            if (charAuth == null || charControl == null) {
-                appLogger.error(LOG, "Serviço CGM ou characteristics essenciais ausentes")
-                disconnect(); return
-            }
-            appLogger.usage(LOG, "Serviços GATT descobertos — habilitando notificações")
-            enableNotification(g, charAuth!!)
-        }
-
-        @SuppressLint("MissingPermission")
-        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            val uuid = descriptor.characteristic.uuid
-            if (status != BluetoothGatt.GATT_SUCCESS) { appLogger.error(LOG, "onDescriptorWrite falhou", mapOf("uuid" to uuid, "status" to status)); return }
-            when (uuid) {
-                DexcomGatt.AUTHENTICATION -> {
-                    val control = charControl
-                    if (control != null) enableNotification(g, control) else startAuth(g)
+            handler.post {
+                if (g !== gatt) return@post
+                appLogger.usage(LOG, "Estado GATT mudou", mapOf("novoEstado" to newState, "status" to status))
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    resetCycle()
+                    handler.postDelayed({ if (g === gatt) endCycle("tempo do ciclo esgotado") }, CYCLE_TIMEOUT_MS)
+                    if (!g.discoverServices()) { appLogger.error(LOG, "discoverServices() falhou"); g.disconnect() }
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    handler.removeCallbacksAndMessages(null)
+                    resetCycle()
+                    runCatching { g.close() }
+                    gatt = null
+                    listener?.onConnectionChanged(false)
                 }
-                DexcomGatt.CONTROL -> startAuth(g)
-                DexcomGatt.COMMUNICATION -> { listener?.onConnectionChanged(true); g.readRemoteRssi() }
             }
         }
 
-        @SuppressLint("MissingPermission")
-        private fun startAuth(g: BluetoothGatt) {
-            val auth = charAuth ?: return
-            myToken = ByteArray(8).also { SecureRandom().nextBytes(it) }
-            val request = DexcomG6Tx.authRequest(myToken)
-            writeChar(g, auth, request)
-            appLogger.usage(LOG, "AuthRequest enviado", mapOf("token" to myToken.joinToString("") { "%02x".format(it) }))
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            handler.post {
+                if (g !== gatt) return@post
+                if (status != BluetoothGatt.GATT_SUCCESS) { appLogger.error(LOG, "Descoberta de serviços falhou", mapOf("status" to status)); g.disconnect(); return@post }
+                val service = g.getService(DexcomGatt.CGM_SERVICE)
+                chars = listOf(DexcomGatt.COMMUNICATION, DexcomGatt.CONTROL, DexcomGatt.AUTHENTICATION, DexcomGatt.BACKFILL)
+                    .mapNotNull { u -> service?.getCharacteristic(u)?.let { u to it } }.toMap()
+                val auth = chars[DexcomGatt.AUTHENTICATION]
+                if (auth == null || chars[DexcomGatt.CONTROL] == null) {
+                    appLogger.error(LOG, "Serviço CGM sem Authentication/Control — não é um G6")
+                    g.disconnect(); return@post
+                }
+                listener?.onConnectionChanged(true)
+                g.readRemoteRssi()
+                myToken = ByteArray(8).also { SecureRandom().nextBytes(it) }
+                enqueue(Op.Subscribe(auth, indicate = true))
+                enqueue(Op.Write(auth, DexcomG6Tx.authRequest(myToken)))
+                appLogger.usage(LOG, "AuthRequest na fila")
+            }
+        }
+
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) appLogger.error(LOG, "Assinatura falhou", mapOf("uuid" to descriptor.characteristic.uuid.toString(), "status" to status))
+            opDone()
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                appLogger.error(LOG, "Escrita falhou", mapOf("uuid" to characteristic.uuid.toString(), "status" to status))
+                // 8/5/15 = sem autorização/criptografia: o pareamento não está valendo (xDrip: authResult(false)).
+            }
+            opDone()
+        }
+
+        override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) handler.post { dispatch(characteristic.uuid, value) }
+            opDone()
+        }
+
+        @Deprecated("Deprecated in Java")
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicRead(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                val v = characteristic.value
+                if (status == BluetoothGatt.GATT_SUCCESS && v != null) handler.post { dispatch(characteristic.uuid, v) }
+                opDone()
+            }
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            dispatchNotification(g, characteristic.uuid, value)
+            handler.post { if (g === gatt) dispatch(characteristic.uuid, value) }
         }
 
         @Deprecated("Deprecated in Java")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                val value = characteristic.value ?: return
-                dispatchNotification(g, characteristic.uuid, value)
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun dispatchNotification(g: BluetoothGatt, uuid: java.util.UUID, value: ByteArray) {
-            listener?.onRawPacket(uuid, value)
-            when (uuid) {
-                DexcomGatt.AUTHENTICATION -> handleAuthNotify(g, value)
-                DexcomGatt.COMMUNICATION -> handleCommNotify(value)
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        private fun handleAuthNotify(g: BluetoothGatt, value: ByteArray) {
-            val opcode = value.getOrNull(0)?.toInt()?.and(0xFF) ?: return
-            when (opcode) {
-                0x03 -> { // AuthChallenge
-                    when (val result = DexcomG6Rx.parseAuthChallenge(value)) {
-                        is AuthChallengeResult.Parsed -> {
-                            val expectedTokenHash = DexcomG6Crypto.challengeHash(myToken, key)
-                            if (!expectedTokenHash.contentEquals(result.tokenHash)) {
-                                appLogger.error(LOG, "tokenHash não bateu — Transmitter ID errado ou chave incorreta")
-                                disconnect(); return
-                            }
-                            appLogger.usage(LOG, "tokenHash confirmado — respondendo ao challenge")
-                            val response = DexcomG6Tx.authChallengeResponse(DexcomG6Crypto.challengeHash(result.challenge, key))
-                            writeChar(g, charAuth ?: return, response)
-                        }
-                        AuthChallengeResult.Invalid -> appLogger.error(LOG, "AuthChallenge inválido", mapOf("hex" to value.toHexLog()))
-                    }
-                }
-                0x05 -> { // AuthStatus
-                    val authStatus = DexcomG6Rx.parseAuthStatus(value)
-                    if (authStatus == null) { appLogger.error(LOG, "AuthStatus inválido"); return }
-                    appLogger.usage(LOG, "AuthStatus recebido", mapOf("authenticated" to authStatus.authenticated, "bonded" to authStatus.bonded))
-                    if (!authStatus.authenticated) { appLogger.error(LOG, "Transmissor recusou autenticação"); disconnect(); return }
-                    authenticated = true
-                    if (!authStatus.bonded) {
-                        appLogger.usage(LOG, "Autenticado mas não pareado — solicitando bond ao sistema")
-                        runCatching { g.device.createBond() }
-                    }
-                    listener?.onAuthenticated()
-                    val control = charControl
-                    if (control != null) enableNotification(g, control) else enableNotification(g, charComm ?: return)
-                }
-            }
-        }
-
-        private fun handleCommNotify(value: ByteArray) {
-            val opcode = value.getOrNull(0)?.toInt()?.and(0xFF) ?: return
-            when (opcode) {
-                0x25 -> DexcomG6Rx.parseTransmitterTime(value)?.let { listener?.onTransmitterTime(it) }
-                    ?: appLogger.error(LOG, "TransmitterTime inválido")
-                0x31, 0x4F -> DexcomG6Rx.parseGlucose(value)?.let { listener?.onGlucose(it) }
-                    ?: appLogger.error(LOG, "Pacote de glicemia inválido (CRC?)", mapOf("hex" to value.toHexLog()))
-                else -> appLogger.usage(LOG, "Opcode Communication não tratado", mapOf("opcode" to "0x%02x".format(opcode)))
+                val v = characteristic.value?.copyOf() ?: return
+                handler.post { if (g === gatt) dispatch(characteristic.uuid, v) }
             }
         }
 
@@ -299,42 +375,137 @@ class DexcomG6BleManager @Inject constructor(
         }
     }
 
-    /** Pede uma leitura de glicemia — só funciona após [Listener.onAuthenticated]. */
-    @SuppressLint("MissingPermission")
-    fun requestGlucose() {
-        val g = gatt ?: return
-        val comm = charComm ?: return
-        if (!authenticated) { appLogger.error(LOG, "requestGlucose chamado antes de autenticar"); return }
-        writeChar(g, comm, DexcomG6Tx.askGlucose())
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun enableNotification(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        g.setCharacteristicNotification(characteristic, true)
-        val cccd = characteristic.getDescriptor(DexcomGatt.CCCD) ?: run {
-            appLogger.error(LOG, "CCCD ausente", mapOf("uuid" to characteristic.uuid)); return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-        } else {
-            @Suppress("DEPRECATION") run {
-                cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                g.writeDescriptor(cccd)
-            }
+    // ── Mensagens recebidas (sempre na thread principal) ─────────────────────────────────────
+    private fun dispatch(uuid: UUID, value: ByteArray) {
+        when (uuid) {
+            DexcomGatt.AUTHENTICATION -> onAuth(value)
+            DexcomGatt.CONTROL -> onControl(value)
+            DexcomGatt.BACKFILL -> onBackfillPacket(value)
         }
     }
 
     @SuppressLint("MissingPermission")
-    private fun writeChar(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, bytes: ByteArray): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(characteristic, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
-        } else {
-            @Suppress("DEPRECATION") run {
-                characteristic.value = bytes
-                characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                g.writeCharacteristic(characteristic)
+    private fun onAuth(value: ByteArray) {
+        val auth = chars[DexcomGatt.AUTHENTICATION] ?: return
+        when (value.getOrNull(0)?.toInt()?.and(0xFF)) {
+            0x03 -> when (val r = DexcomG6Rx.parseAuthChallenge(value)) {
+                is AuthChallengeResult.Parsed -> {
+                    if (!DexcomG6Crypto.challengeHash(myToken, key).contentEquals(r.tokenHash)) {
+                        appLogger.error(LOG, "tokenHash não bateu — Transmitter ID errado")
+                        listener?.onWrongTransmitterId()
+                        _events.tryEmit(LinkEvent.WrongTransmitterId)
+                        gatt?.disconnect()
+                        return
+                    }
+                    appLogger.usage(LOG, "tokenHash confere — respondendo ao desafio")
+                    enqueue(Op.Write(auth, DexcomG6Tx.authChallengeResponse(DexcomG6Crypto.challengeHash(r.challenge, key))))
+                }
+                AuthChallengeResult.Invalid -> appLogger.error(LOG, "AuthChallenge inválido", mapOf("hex" to value.toHexLog()))
+            }
+            0x05 -> {
+                val st = DexcomG6Rx.parseAuthStatus(value) ?: return
+                appLogger.usage(LOG, "AuthStatus", mapOf("autenticado" to st.authenticated, "pareado" to st.bonded))
+                if (!st.authenticated) {
+                    appLogger.error(LOG, "Transmissor recusou a autenticação")
+                    listener?.onWrongTransmitterId()
+                    _events.tryEmit(LinkEvent.WrongTransmitterId)
+                    gatt?.disconnect(); return
+                }
+                if (st.bonded) { startData(); return }
+                if (bondAttempted) {
+                    appLogger.error(LOG, "Continua sem pareamento — tenta no próximo ciclo")
+                    gatt?.disconnect(); return
+                }
+                bondAttempted = true
+                appLogger.usage(LOG, "Autenticado sem pareamento — KeepAlive + BondRequest + createBond")
+                enqueue(Op.Write(auth, DexcomG6Tx.keepAlive(60)))
+                runCatching { gatt?.device?.createBond() }
+                enqueue(Op.Write(auth, DexcomG6Tx.bondRequest()))
+                handler.postDelayed(bondWait, BOND_WAIT_MS)
             }
         }
+    }
+
+    /** Depois do pedido de pareamento (concluído ou não em 10 s): relê o status no transmissor, uma vez. */
+    private fun afterBondWait() {
+        handler.removeCallbacks(bondWait)
+        if (isAuthenticated || bondReread || !bondAttempted) return
+        val auth = chars[DexcomGatt.AUTHENTICATION] ?: return
+        bondReread = true
+        enqueue(Op.Read(auth))
+    }
+    private val bondWait = Runnable { afterBondWait() }
+    private var bondReread = false
+
+    private fun startData() {
+        if (isAuthenticated) return
+        isAuthenticated = true
+        listener?.onAuthenticated()
+        _events.tryEmit(LinkEvent.Authenticated)
+        val control = chars[DexcomGatt.CONTROL] ?: return
+        enqueue(Op.Subscribe(control, indicate = true))
+        enqueue(Op.Write(control, DexcomG6Tx.glucose()))
+    }
+
+    private fun onControl(value: ByteArray) {
+        val control = chars[DexcomGatt.CONTROL] ?: return
+        when (value.getOrNull(0)?.toInt()?.and(0xFF)) {
+            0x31, 0x4F -> {
+                val reading = DexcomG6Rx.parseGlucose(value)
+                if (reading == null) {
+                    appLogger.error(LOG, "Glicemia inválida (CRC)", mapOf("hex" to value.toHexLog()))
+                    endCycle("glicemia inválida"); return
+                }
+                _events.tryEmit(LinkEvent.GotGlucose)
+                val follow = listener?.onGlucose(reading) ?: FollowUp(askTime = false)
+                if (follow.askTime) enqueue(Op.Write(control, DexcomG6Tx.transmitterTime())) else afterTime()
+            }
+            0x25 -> {
+                DexcomG6Rx.parseTransmitterTime(value)?.let { listener?.onTransmitterTime(it) }
+                    ?: appLogger.error(LOG, "Hora do transmissor inválida")
+                afterTime()
+            }
+            DexcomG6Rx.OPCODE_BACKFILL_ACK -> {
+                backfillAccepted = DexcomG6Rx.isBackfillAccepted(value)
+                appLogger.usage(LOG, "Backfill aceito", mapOf("valido" to backfillAccepted))
+                if (!backfillAccepted) finishBackfill() else scheduleBackfillEnd()
+            }
+            else -> appLogger.usage(LOG, "Opcode de Control não tratado", mapOf("hex" to value.toHexLog()))
+        }
+    }
+
+    /** Depois da glicemia (e da hora, se pedida): backfill se houver furo, senão encerra o ciclo. */
+    private fun afterTime() {
+        val window = listener?.backfillWindow()
+        val control = chars[DexcomGatt.CONTROL]
+        val bf = chars[DexcomGatt.BACKFILL]
+        if (window == null || control == null || bf == null) { endCycle("leitura entregue"); return }
+        appLogger.usage(LOG, "Pedindo backfill", mapOf("de" to window.first, "ate" to window.second))
+        backfill = DexcomBackfillStream()
+        enqueue(Op.Subscribe(bf, indicate = false))
+        enqueue(Op.Write(control, DexcomG6Tx.backfill(window.first, window.second)))
+        handler.postDelayed({ finishBackfill() }, BACKFILL_MAX_MS)
+    }
+
+    private fun onBackfillPacket(value: ByteArray) {
+        backfill?.push(value) ?: return
+        scheduleBackfillEnd()
+    }
+
+    private val backfillEnd = Runnable { finishBackfill() }
+    private fun scheduleBackfillEnd() {
+        handler.removeCallbacks(backfillEnd)
+        handler.postDelayed(backfillEnd, BACKFILL_QUIET_MS)
+    }
+
+    private fun finishBackfill() {
+        val stream = backfill ?: return
+        backfill = null
+        handler.removeCallbacks(backfillEnd)
+        val records = stream.decode()
+        appLogger.usage(LOG, "Backfill recebido", mapOf("registros" to records.size))
+        if (records.isNotEmpty()) listener?.onBackfill(records)
+        endCycle("backfill entregue")
     }
 }
 

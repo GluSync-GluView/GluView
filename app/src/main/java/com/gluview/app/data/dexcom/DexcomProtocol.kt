@@ -106,14 +106,25 @@ object DexcomCrc {
     }
 }
 
-/** Mensagens que o APP envia ao transmissor G6 — cada uma já com o CRC16 embutido. */
+/**
+ * Mensagens que o APP envia ao transmissor G6 (xDrip `g5model`, classes `…TxMessage`). Autenticação e pareamento
+ * vão na characteristic Authentication; glicemia, hora, backfill e "desconecte" vão na Control.
+ */
 object DexcomG6Tx {
     private const val OPCODE_AUTH_REQUEST = 0x01
     private const val OPCODE_AUTH_CHALLENGE = 0x04
-    private const val OPCODE_ASK_GLUCOSE = 0x4E // pedido de leitura, fiel ao Juggluco (mesmo opcode no G7)
+    private const val OPCODE_KEEP_ALIVE = 0x06
+    private const val OPCODE_BOND_REQUEST = 0x07
+    private const val OPCODE_DISCONNECT = 0x09
+    private const val OPCODE_TIME = 0x24
+    private const val OPCODE_GLUCOSE = 0x30
+    private const val OPCODE_BACKFILL = 0x50
+
+    /** Slot padrão do celular (`endByteStd` = 0x02; 0x01 é o alternativo do relógio/receptor no xDrip). */
+    const val SLOT_PHONE = 0x02
 
     /** [singleUseToken] deve ter 8 bytes (nonce aleatório). */
-    fun authRequest(singleUseToken: ByteArray, slot: Int = 0x02): ByteArray {
+    fun authRequest(singleUseToken: ByteArray, slot: Int = SLOT_PHONE): ByteArray {
         require(singleUseToken.size == 8) { "singleUseToken deve ter 8 bytes" }
         return byteArrayOf(OPCODE_AUTH_REQUEST.toByte(), *singleUseToken.toTypedArray().toByteArray(), slot.toByte())
     }
@@ -123,7 +134,28 @@ object DexcomG6Tx {
         return byteArrayOf(OPCODE_AUTH_CHALLENGE.toByte()) + challengeHash
     }
 
-    fun askGlucose(): ByteArray = byteArrayOf(OPCODE_ASK_GLUCOSE.toByte())
+    /** `KeepAliveTxMessage(60)`: segura a conexão enquanto o Android pareia. */
+    fun keepAlive(seconds: Int = 60): ByteArray = byteArrayOf(OPCODE_KEEP_ALIVE.toByte(), seconds.toByte())
+
+    /** `BondRequestTxMessage`: o transmissor passa a aceitar o pareamento. */
+    fun bondRequest(): ByteArray = byteArrayOf(OPCODE_BOND_REQUEST.toByte())
+
+    /** `GlucoseTxMessage` (0x30 + CRC): glicemia calculada pelo próprio transmissor (algoritmo nativo). */
+    fun glucose(): ByteArray = DexcomCrc.append(byteArrayOf(OPCODE_GLUCOSE.toByte()))
+
+    /** `TimeTxMessage` (0x24 + CRC): relógio do transmissor e início da sessão. */
+    fun transmitterTime(): ByteArray = DexcomCrc.append(byteArrayOf(OPCODE_TIME.toByte()))
+
+    /** `BackFillTxMessage`: leituras guardadas entre dois instantes, em segundos do transmissor (20 bytes). */
+    fun backfill(startDexTime: Int, endDexTime: Int): ByteArray {
+        val b = java.nio.ByteBuffer.allocate(18).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        b.put(OPCODE_BACKFILL.toByte()); b.put(0x05); b.put(0x02); b.put(0x00)
+        b.putInt(startDexTime); b.putInt(endDexTime); b.put(ByteArray(6))
+        return DexcomCrc.append(b.array())
+    }
+
+    /** `DisconnectTxMessage`: pede ao transmissor para encerrar a conexão (até a próxima, em 5 min). */
+    fun disconnect(): ByteArray = byteArrayOf(OPCODE_DISCONNECT.toByte())
 }
 
 sealed class AuthChallengeResult {
@@ -134,7 +166,7 @@ sealed class AuthChallengeResult {
 data class AuthStatus(val authenticated: Boolean, val bonded: Boolean)
 
 /** `TransmitterTimeRxMessage` do xDrip — usado pra calcular o início real da sessão do sensor. */
-data class TransmitterTime(val currentTimeSec: Int, val sessionStartTimeSec: Int) {
+data class TransmitterTime(val currentTimeSec: Int, val sessionStartTimeSec: Int, val status: Int = 0) {
     val sessionInProgress: Boolean get() = sessionStartTimeSec != -1 && currentTimeSec != sessionStartTimeSec
 }
 
@@ -145,9 +177,14 @@ data class DexcomGlucose(
     val mgdl: Int,
     val displayOnly: Boolean,
     val state: Int,
-    val trend: Int,          // signed; unidade real ainda a confirmar com hardware
-    val predictedMgdl: Int?  // só presente no opcode 0x4F (EGlucoseRx)
-)
+    val trend: Int,          // signed, décimos de mg/dL por minuto; 127 = sem tendência (xDrip getTrend)
+    val predictedMgdl: Int?, // só presente no opcode 0x4F (EGlucoseRx)
+    val status: Int = 0      // byte de status do transmissor (bateria)
+) {
+    val calibrationState: DexcomCalibrationState get() = DexcomCalibrationState.parse(state)
+    /** mg/dL por minuto, ou null quando o transmissor não tem tendência (127). */
+    val trendPerMinute: Float? get() = if (trend == 127) null else trend / 10f
+}
 
 /** Parsers dos pacotes recebidos do transmissor G6 — todos exigem CRC16 válido (ver [DexcomCrc]). */
 object DexcomG6Rx {
@@ -156,6 +193,7 @@ object DexcomG6Rx {
     private const val OPCODE_TRANSMITTER_TIME = 0x25
     private const val OPCODE_GLUCOSE = 0x31
     private const val OPCODE_EGLUCOSE = 0x4F
+    const val OPCODE_BACKFILL_ACK = 0x51
 
     fun parseAuthChallenge(packet: ByteArray): AuthChallengeResult {
         if (packet.size < 17 || (packet[0].toInt() and 0xFF) != OPCODE_AUTH_CHALLENGE) return AuthChallengeResult.Invalid
@@ -175,7 +213,8 @@ object DexcomG6Rx {
         if (packet.size < 10 || (packet[0].toInt() and 0xFF) != OPCODE_TRANSMITTER_TIME || !DexcomCrc.isValid(packet)) return null
         return TransmitterTime(
             currentTimeSec = readS32LE(packet, 2),
-            sessionStartTimeSec = readS32LE(packet, 6)
+            sessionStartTimeSec = readS32LE(packet, 6),
+            status = packet[1].toInt() and 0xFF
         )
     }
 
@@ -195,8 +234,12 @@ object DexcomG6Rx {
         val predicted = if (opcode == OPCODE_EGLUCOSE && packet.size >= 17)
             readU16LE(packet, 14) and 0x03FF else null
 
-        return DexcomGlucose(sequence, timestamp, mgdl, displayOnly, state, trend, predicted)
+        return DexcomGlucose(sequence, timestamp, mgdl, displayOnly, state and 0xFF, trend, predicted, packet[1].toInt() and 0xFF)
     }
+
+    /** `BackFillRxMessage` (0x51, 20 bytes com CRC): o transmissor aceitou o pedido de backfill. */
+    fun isBackfillAccepted(packet: ByteArray): Boolean =
+        packet.size == 20 && (packet[0].toInt() and 0xFF) == OPCODE_BACKFILL_ACK && DexcomCrc.isValid(packet)
 
     private fun readU16LE(bytes: ByteArray, offset: Int): Int =
         ((bytes[offset + 1].toInt() and 0xFF) shl 8) or (bytes[offset].toInt() and 0xFF)
@@ -206,6 +249,110 @@ object DexcomG6Rx {
             ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
             ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
             ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+}
+
+/** `CalibrationState` do xDrip — o byte "state" de cada leitura. */
+enum class DexcomCalibrationState(val code: Int) {
+    UNKNOWN(0x00), STOPPED(0x01), WARMING_UP(0x02), EXCESS_NOISE(0x03), NEEDS_FIRST_CALIBRATION(0x04),
+    NEEDS_SECOND_CALIBRATION(0x05), OK(0x06), NEEDS_CALIBRATION(0x07), CONFUSED_1(0x08), CONFUSED_2(0x09),
+    NEEDS_DIFFERENT_CALIBRATION(0x0A), FAILED(0x0B), FAILED_2(0x0C), UNUSUAL_CALIBRATION(0x0D),
+    INSUFFICIENT_CALIBRATION(0x0E), ENDED(0x0F), FAILED_3(0x10), TRANSMITTER_PROBLEM(0x11), ERRORS(0x12),
+    FAILED_4(0x13), FAILED_5(0x14), FAILED_6(0x15), FAILED_START(0x16), FAILED_START_2(0x17), EXPIRED(0x18),
+    FAILED_7(0x19), STOPPED_2(0x1A), FAILED_8(0x1B), FAILED_9(0x1C), FAILED_10(0x1D), FAILED_11(0x1E);
+
+    /** `usableGlucose()`: só OK e "precisa calibrar" (o G6 calibrado de fábrica segue valendo). */
+    val usable: Boolean get() = this == OK || this == NEEDS_CALIBRATION
+    val warmingUp: Boolean get() = this == WARMING_UP
+    /** Sessão acabou (vencida, encerrada ou parada) — o `stopped` do xDrip sem as falhas. */
+    val ended: Boolean get() = this == STOPPED || this == ENDED || this == EXPIRED || this == STOPPED_2
+    /** `failed` do xDrip: o sensor falhou e a sessão não volta. */
+    val failed: Boolean get() = this in FAILED_SET
+
+    companion object {
+        private val FAILED_SET by lazy {
+            setOf(FAILED, FAILED_2, FAILED_3, FAILED_4, FAILED_5, FAILED_6, FAILED_7,
+                FAILED_8, FAILED_9, FAILED_10, FAILED_11, FAILED_START, FAILED_START_2)
+        }
+        fun parse(code: Int): DexcomCalibrationState = entries.firstOrNull { it.code == (code and 0xFF) } ?: UNKNOWN
+    }
+}
+
+/** Uma leitura guardada no transmissor (backfill): segundos do transmissor, mg/dL, estado e tendência. */
+data class DexcomBackfillRecord(val dexTimeSec: Int, val mgdl: Int, val state: DexcomCalibrationState, val trend: Int)
+
+/**
+ * Remonta o fluxo de backfill que chega pela characteristic Backfill (`BackFillStream` do xDrip): cada
+ * notificação = [seq, id, dados…] com seq 1, 2, 3…; os dados juntos = comprimento (4) + registros de 8
+ * bytes (tempo 4, glicemia 2 com máscara 0xFFF, estado 1, tendência 1). Pacote fora de ordem é ignorado.
+ */
+class DexcomBackfillStream {
+    private val data = java.io.ByteArrayOutputStream()
+    private var lastSeq = 0
+
+    val isEmpty: Boolean get() = data.size() == 0
+
+    fun push(packet: ByteArray) {
+        if (packet.size < 3) return
+        val seq = packet[0].toInt() and 0xFF
+        if (seq != lastSeq + 1) return
+        lastSeq = seq
+        data.write(packet, 2, packet.size - 2)
+    }
+
+    /** Só os registros utilizáveis (OK / precisa calibrar), como o xDrip insere. */
+    fun decode(): List<DexcomBackfillRecord> {
+        val bytes = data.toByteArray()
+        if (bytes.size < 4) return emptyList()
+        val b = java.nio.ByteBuffer.wrap(bytes, 4, bytes.size - 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val out = mutableListOf<DexcomBackfillRecord>()
+        while (b.remaining() >= 8) {
+            val time = b.int
+            val glucose = b.short.toInt() and 0x0FFF
+            val state = DexcomCalibrationState.parse(b.get().toInt())
+            val trend = b.get().toInt()
+            if (state.usable) out += DexcomBackfillRecord(time, glucose, state, trend)
+        }
+        return out
+    }
+}
+
+/**
+ * Relógio do transmissor (`DexTimeKeeper` do xDrip): ele conta segundos desde que foi ativado. O pedido
+ * de hora (0x25) dá esse contador; daí sai o instante do "segundo zero" e o horário real de cada leitura.
+ */
+object DexcomG6Clock {
+    /** Instante (ms) em que o contador do transmissor era zero. */
+    fun transmitterStartMs(nowMs: Long, currentTimeSec: Int): Long = nowMs - currentTimeSec * 1000L
+
+    /** Hora real de uma leitura: início do transmissor + segundos, nunca no futuro. */
+    fun readingTimeMs(txStartMs: Long, dexTimeSec: Int, nowMs: Long): Long =
+        minOf(txStartMs + dexTimeSec * 1000L, nowMs)
+
+    fun dexTime(txStartMs: Long, atMs: Long): Int = ((atMs - txStartMs) / 1000L).toInt()
+
+    /** Início da sessão do sensor (ms), ou null sem sessão. */
+    fun sessionStartMs(txStartMs: Long, time: TransmitterTime): Long? =
+        if (time.sessionInProgress) txStartMs + time.sessionStartTimeSec * 1000L else null
+}
+
+/**
+ * Quando pedir backfill (`backFillIfNeeded` do xDrip, no que o GluView guarda): se a última leitura
+ * gravada antes desta tem mais de 7 min (furo de pelo menos uma leitura de 5 min), pede do furo até
+ * agora, no máximo 3 h para trás; sem nenhuma leitura gravada, pede as últimas 3 h.
+ */
+object DexcomG6Backfill {
+    const val MAX_PERIOD_MS = 3 * 60 * 60_000L
+    const val GAP_MS = 7 * 60_000L
+
+    /** Janela em segundos do transmissor, ou null quando não há furo ou o relógio dele é desconhecido. */
+    fun window(lastStoredMs: Long, nowMs: Long, txStartMs: Long): Pair<Int, Int>? {
+        if (txStartMs <= 0L) return null
+        if (lastStoredMs > 0L && nowMs - lastStoredMs <= GAP_MS) return null
+        val from = maxOf(if (lastStoredMs > 0L) lastStoredMs else 0L, nowMs - MAX_PERIOD_MS, txStartMs)
+        val start = DexcomG6Clock.dexTime(txStartMs, from)
+        val end = DexcomG6Clock.dexTime(txStartMs, nowMs)
+        return if (end > start) start to end else null
+    }
 }
 
 /**

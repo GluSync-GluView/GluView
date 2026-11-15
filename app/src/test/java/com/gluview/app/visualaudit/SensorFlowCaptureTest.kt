@@ -106,7 +106,8 @@ class SensorFlowCaptureTest {
         shoot("ml-procurar", setup(SetupState.Instructions(ml)))
         shoot("ml-serial-invalido", setup(SetupState.EnteringSerial(ml, invalid = true)))
         shoot("ml-pareando", setup(SetupState.Pairing(ml, mlCode)))
-        shoot("ml-pronto", setup(SetupState.Ready(ml, 0)))
+        shoot("ml-pronto", setup(SetupState.Ready(ml, 0, connectedOnly = true)))
+        shoot("ml-pronto-ja-medindo", setup(SetupState.Ready(ml, 0)))
 
         val history = listOf(
             SensorHistoryEntity(1, "C8:2A:7F:10:44:9B", "2509461A2B3C4DEF12", "1A2B3C4D", "SIBIONICS_CHINES", now - 9 * day),

@@ -1219,7 +1219,7 @@
     <string name="wfc_unknown">Componente</string>
     <string name="wf_component_style">%1$s · Estilo %2$d</string>
     <string name="wfp_classic_name">Clássico (WatchDrip)</string>
-    <string name="wfp_classic_desc">O visual original que já funciona na sua Mi Band: gráfico no topo, glicemia grande e variação embaixo.</string>
+    <string name="wfp_classic_desc">O visual original do GluView na Mi Band: gráfico no topo, glicemia grande e variação embaixo.</string>
     <string name="wfp_focus_name">Glicemia em destaque</string>
     <string name="wfp_focus_desc">Glicemia grande ao centro, hora no topo e minigráfico embaixo.</string>
     <string name="wfp_complete_name">Completo</string>
@@ -1304,7 +1304,7 @@
     <string name="wf_template_replaces">Aplicar um modelo troca todos os componentes do visor (dá para desfazer).</string>
     <string name="wf_done">Concluído</string>
     <string name="wf_opacity">Opacidade</string>
-    <string name="wf_chart_color_note">A pulseira desenha o gráfico com as cores de cada faixa de glicemia, então ele não usa uma cor própria.</string>
+    <string name="wf_chart_color_note">O gráfico é desenhado com as cores de cada faixa de glicemia, então ele não usa uma cor própria.</string>
     <string name="wf_fact_wearable">Wearable</string>
     <string name="wf_fact_created">Criado em</string>
     <string name="wf_fact_components">Componentes</string>
@@ -1314,7 +1314,7 @@
     <string name="wf_store_row_desc">Visores publicados por outras pessoas</string>
     <string name="wf_your_faces">Seus visores</string>
     <string name="wf_your_faces_count">Seus visores (%1$d)</string>
-    <string name="wf_empty_body">Crie um visor a partir de um modelo pronto e envie para a sua Mi Band.</string>
+    <string name="wf_empty_body">Crie um visor a partir de um modelo pronto e envie para a sua pulseira ou relógio.</string>
     <string name="wf_publish_title">Publicar “%1$s” na loja?</string>
     <string name="wf_publish_body">Ele passa por revisão antes de aparecer para outras pessoas.</string>
     <string name="wf_preview_of">Prévia do visor %1$s, %2$s</string>
@@ -1322,6 +1322,7 @@
     <string name="wf_more_actions">Mais ações de %1$s</string>
     <string name="wf_state_success">Último envio: deu certo</string>
     <string name="wf_state_needs_setup">Precisa configurar a Mi Band</string>
+    <string name="wf_state_needs_setup_watch">Precisa do relógio com o GluView instalado</string>
     <string name="wf_state_failure">O último envio falhou</string>
     <string name="wf_sending">Enviando…</string>
     <string name="wf_no_auto_send">Este wearable ainda não tem envio automático; o visor fica salvo para quando tiver.</string>
@@ -1499,6 +1500,7 @@
     <string name="setup_nearby_cta">Procurar o sensor</string>
     <string name="setup_serial_body_medlev">Digite o número de série do sensor: 10 letras e números, como aparece na embalagem ou no nome do sensor no Bluetooth (depois de \"Smart-\").</string>
     <string name="setup_serial_invalid_medlev">Use só letras e números, de 6 a 10 caracteres.</string>
+    <string name="setup_ready_body_measuring">O sensor já está medindo e as leituras já estão chegando.</string>
     <string name="setup_ready_body_connected">O GluView já está conversando com o sensor. As leituras aparecem assim que ele terminar de aquecer.</string>
     <string name="settings_medlev_setup">Configurar o Smart 2.0</string>
     <string name="settings_medlev_unpair">Desparear este sensor</string>
@@ -1514,4 +1516,17 @@
     <string name="settings_stop_sensor_title">Parar de usar este sensor?</string>
     <string name="settings_stop_sensor_body">Este celular deixa de ler o sensor e as leituras passam a vir só do GluSync. Para voltar, use Configurar sensor.</string>
     <string name="settings_stop_sensor_confirm">Parar de usar</string>
+    <string name="setup_serial_title_g6">Transmitter ID do G6</string>
+    <string name="setup_serial_body_g6">São os 6 caracteres (letras e números) impressos embaixo do transmissor e na caixa dele. Exemplo: 8G1A2B.</string>
+    <string name="setup_serial_label_g6">Transmitter ID</string>
+    <string name="setup_serial_invalid_g6">O Transmitter ID tem exatamente 6 letras e números.</string>
+    <string name="setup_pairing_body_g6">Esperando o transmissor. Ele se comunica a cada 5 minutos, então isso pode levar até 5 minutos. Deixe o celular perto dele.</string>
+    <string name="setup_error_g6_id_title">O transmissor não aceitou este Transmitter ID</string>
+    <string name="setup_error_g6_id_body">Confira os 6 caracteres impressos no transmissor e digite de novo. Cada transmissor só conversa com o próprio ID.</string>
+    <string name="dexcom_warn_wrong_id_title">Transmitter ID não confere</string>
+    <string name="dexcom_warn_wrong_id_body">O transmissor Dexcom por perto não aceitou o Transmitter ID salvo. Confira o ID no assistente de sensor.</string>
+    <string name="dexcom_warn_ended_title">Sessão do Dexcom G6 encerrada</string>
+    <string name="dexcom_warn_ended_body">O transmissor informou que a sessão do sensor acabou. Troque o sensor para voltar a receber leituras.</string>
+    <string name="dexcom_warn_failed_title">Sensor Dexcom G6 com falha</string>
+    <string name="dexcom_warn_failed_body">O transmissor informou falha no sensor e parou de mandar leituras. Troque o sensor.</string>
 </resources>

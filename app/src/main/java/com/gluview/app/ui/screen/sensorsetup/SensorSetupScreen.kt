@@ -269,16 +269,17 @@ internal fun SensorSetupContent(
             is SetupState.ReadingPackage -> WaitingStep(Icons.Default.QrCodeScanner,
                 stringResource(R.string.setup_scanning_title), stringResource(R.string.setup_scanning_body), onCancel)
             is SetupState.EnteringSerial -> SerialStep(state.invalid, onSerialEntered, onCancel,
-                medLev = state.type == DataSourceType.MEDLEVENSOHN_SMART2)
+                medLev = state.type == DataSourceType.MEDLEVENSOHN_SMART2, dexcom = state.type == DataSourceType.DEXCOM_G6)
             is SetupState.EnteringPin -> PinStep(state, onPinEntered, onCancel)
             is SetupState.Searching -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_searching_title), stringResource(R.string.setup_searching_body), onCancel)
             is SetupState.Pairing -> WaitingStep(Icons.Default.BluetoothConnected,
-                stringResource(R.string.setup_pairing_title), stringResource(R.string.setup_pairing_body), onCancel)
+                stringResource(R.string.setup_pairing_title),
+                stringResource(if (state.type == DataSourceType.DEXCOM_G6) R.string.setup_pairing_body_g6 else R.string.setup_pairing_body), onCancel)
             is SetupState.Connecting -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_connecting_title), stringResource(R.string.setup_connecting_body), null)
-            is SetupState.Ready -> ReadyStep(state.warmupMinutes, onDone,
-                connectedOnly = state.type == DataSourceType.MEDLEVENSOHN_SMART2)
+            is SetupState.Ready -> ReadyStep(state.warmupMinutes, onDone, connectedOnly = state.connectedOnly,
+                measuringNoInterval = state.type == DataSourceType.MEDLEVENSOHN_SMART2)
             is SetupState.Failed -> FailedStep(state.reason, onRetry, onAdvanced, onBluetoothSettings)
         }
     }
@@ -443,18 +444,23 @@ private fun ColumnScope.NearbyStep(onSearchNearby: () -> Unit, onEnterSerial: ()
 }
 
 @Composable
-private fun ColumnScope.SerialStep(invalid: Boolean, onSerialEntered: (String) -> Unit, onCancel: () -> Unit, medLev: Boolean = false) {
+private fun ColumnScope.SerialStep(
+    invalid: Boolean, onSerialEntered: (String) -> Unit, onCancel: () -> Unit,
+    medLev: Boolean = false, dexcom: Boolean = false,
+) {
     var text by rememberSaveable { mutableStateOf("") }
     StepIcon(Icons.Default.Keyboard)
-    StepHeader(stringResource(R.string.setup_serial_title),
-        stringResource(if (medLev) R.string.setup_serial_body_medlev else R.string.setup_serial_body))
+    StepHeader(stringResource(if (dexcom) R.string.setup_serial_title_g6 else R.string.setup_serial_title),
+        stringResource(when { dexcom -> R.string.setup_serial_body_g6; medLev -> R.string.setup_serial_body_medlev; else -> R.string.setup_serial_body }))
     OutlinedTextField(
         value = text,
-        onValueChange = { v -> text = v.uppercase().filter { it.isLetterOrDigit() || it == '-' }.take(23) },
-        label = { Text(stringResource(R.string.setup_serial_label)) },
+        onValueChange = { v -> text = v.uppercase().filter { it.isLetterOrDigit() || (!dexcom && it == '-') }.take(if (dexcom) 6 else 23) },
+        label = { Text(stringResource(if (dexcom) R.string.setup_serial_label_g6 else R.string.setup_serial_label)) },
         singleLine = true,
         isError = invalid,
-        supportingText = if (invalid) { { Text(stringResource(if (medLev) R.string.setup_serial_invalid_medlev else R.string.setup_serial_invalid)) } } else null,
+        supportingText = if (invalid) { { Text(stringResource(when {
+            dexcom -> R.string.setup_serial_invalid_g6; medLev -> R.string.setup_serial_invalid_medlev; else -> R.string.setup_serial_invalid
+        })) } } else null,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
         modifier = Modifier.fillMaxWidth()
     )
@@ -504,12 +510,17 @@ private fun ColumnScope.WaitingStep(icon: ImageVector, title: String, body: Stri
 }
 
 @Composable
-private fun ColumnScope.ReadyStep(warmupMinutes: Int, onDone: () -> Unit, connectedOnly: Boolean = false) {
+private fun ColumnScope.ReadyStep(
+    warmupMinutes: Int, onDone: () -> Unit, connectedOnly: Boolean = false,
+    /** Sensor cujo intervalo não é de 5 min (Smart 2.0): "já medindo" sem prometer o ritmo. */
+    measuringNoInterval: Boolean = false,
+) {
     StepIcon(Icons.Default.CheckCircle, tone = Tone.Success)
     StepHeader(stringResource(R.string.setup_ready_title),
         when {
             connectedOnly -> stringResource(R.string.setup_ready_body_connected)
             warmupMinutes > 0 -> stringResource(R.string.setup_ready_body, warmupMinutes)
+            measuringNoInterval -> stringResource(R.string.setup_ready_body_measuring)
             else -> stringResource(R.string.setup_ready_body_now)
         })
     Button(onClick = onDone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -528,6 +539,7 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.BLUETOOTH_PERMISSION  -> R.string.setup_error_permission_title
             FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_title
             FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_title
+            FailureReason.WRONG_TRANSMITTER_ID  -> R.string.setup_error_g6_id_title
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_title
         }),
         body = stringResource(when (reason) {
@@ -537,6 +549,7 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.BLUETOOTH_PERMISSION  -> R.string.setup_error_permission_body
             FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_body
             FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_body
+            FailureReason.WRONG_TRANSMITTER_ID  -> R.string.setup_error_g6_id_body
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_body
         })
     )
