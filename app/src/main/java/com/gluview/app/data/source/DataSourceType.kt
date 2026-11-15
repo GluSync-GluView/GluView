@@ -18,9 +18,9 @@ import com.gluview.app.R
  *                         plano 12_sprint_accuchek_smartguide.md).
  * - MEDLEVENSOHN_SMART2:  BLE direto, sensor Microtech MD (AiDEX X/LinX/Lumi rebrand) — cripto
  *                         própria (MD5 deriva IV+chave do serial, AES-128-CFB128, CRC8/16/32).
- *                         [comingSoon] — implementado (MedLevensohnSource; handshake+glicemia
- *                         atual+lote de histórico), cripto validada com vetor real do Juggluco,
- *                         mas a máquina de estados do GATT nunca rodou num sensor real.
+ *                         Liberado a todos em 15/11/2026 (decisão do Felipe) depois da bateria do
+ *                         sensor virtual (plano 14_, V2: 9/12 ponta a ponta). Ainda sem sensor real:
+ *                         o caminho pareado (f003 ao vivo, fim do sensor) só foi coberto por teste.
  * - DEXCOM_G6:            BLE direto — handshake desafio-resposta AES-128 (chave derivada do
  *                         Transmitter ID digitado pelo usuário, sem troca de chave). [comingSoon]
  *                         — implementado (DexcomG6Source, porte do driver nativo do xDrip),
@@ -48,7 +48,7 @@ enum class DataSourceType(
     SIBIONICS_CHINES("SIBIONICS_CHINES", "Sibionics China", R.string.data_source_sibionics_china),
     LIBRE2_PLUS("LIBRE2_PLUS", "FreeStyle Libre 2 Plus", R.string.data_source_libre2_plus),
     ACCU_CHEK_SMARTGUIDE("ACCU_CHEK_SMARTGUIDE", "Accu-Chek SmartGuide", R.string.data_source_accu_chek_smartguide, comingSoon = true),
-    MEDLEVENSOHN_SMART2("MEDLEVENSOHN_SMART2", "Smart 2.0 Medlevensohn", R.string.data_source_medlevensohn_smart2, comingSoon = true),
+    MEDLEVENSOHN_SMART2("MEDLEVENSOHN_SMART2", "Smart 2.0 Medlevensohn", R.string.data_source_medlevensohn_smart2),
     DEXCOM_G6("DEXCOM_G6", "Dexcom G6", R.string.data_source_dexcom_g6, comingSoon = true),
     DEXCOM_G7("DEXCOM_G7", "Dexcom G7", R.string.data_source_dexcom_g7, comingSoon = true);
 

@@ -38,7 +38,7 @@ class AccessRequestRepository @Inject constructor(
     suspend fun createFeatureAccessRequest(featureKey: String, note: String? = null): Result<AccessRequestDto> =
         runCatching { api.createFeatureAccessRequest(CreateFeatureAccessRequestDto(featureKey, note)) }
 
-    // Estado consolidado em lote (aba Bomba + os 5 sensores comingSoon numa chamada só).
+    // Estado consolidado em lote (aba Bomba + os sensores comingSoon numa chamada só).
     // Map<featureKey, state> — chave ausente = "none" (nunca candidatou).
     suspend fun getStatus(): Result<Map<String, String>> = runCatching {
         api.getAccessRequestStatus().associate { it.featureKey to it.state }
