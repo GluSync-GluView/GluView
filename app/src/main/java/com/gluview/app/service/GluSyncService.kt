@@ -104,6 +104,7 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var sensorStatusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
     @Inject lateinit var widgetUpdater: com.gluview.app.widget.WidgetUpdater
     @Inject lateinit var floatingWindow: com.gluview.app.overlay.FloatingGlucoseWindow
+    @Inject lateinit var mirrorManager: com.gluview.app.mirror.MirrorManager
     // Plano 17 (F2.4) — aviso "subindo rápido sem refeição registrada" (desligado por padrão).
     @Inject lateinit var smartMealPrompt: com.gluview.app.data.reminder.SmartMealPrompt
     private var smartMealJob: kotlinx.coroutines.Job? = null
@@ -147,6 +148,8 @@ class GluSyncService : LifecycleService() {
         serviceMonitor.recordStarted()
         // Limites atuais para classificar as leituras que chegam pelo SignalR (callback síncrono).
         lifecycleScope.launch { preferences.glucoseThresholds.collect { thresholds = it } }
+        // Plano 21, F2: espelhamento sem servidor e servidor web local (vivem com o serviço).
+        mirrorManager.start(lifecycleScope)
         // Plano 21, F1: janela flutuante segue os ajustes dela, a unidade, o limiar de "sem sinal"
         // e o idioma do app.
         lifecycleScope.launch {
@@ -529,6 +532,8 @@ class GluSyncService : LifecycleService() {
         mgr.notify(NOTIF_ID_PERSISTENT, notif)
         updateWidget(reading, unit, dark)
         floatingWindow.update(reading, floatingLabel())
+        // Espelho: só a glicemia deste celular (nunca repassa a de quem se segue pelo GluSync).
+        if (!preferences.isFollowerOnly.first()) mirrorManager.publish(reading)
     }
 
     /** No modo seguidor a janela flutuante mostra de quem é a glicemia. */
@@ -1049,6 +1054,7 @@ class GluSyncService : LifecycleService() {
     override fun onDestroy() {
         appLogger.usage("SERVICE", "Serviço encerrado")
         floatingWindow.shutdown()
+        mirrorManager.stop()
         sourceSetupJob?.cancel()
         localReadingJob?.cancel()
         pollingJob?.cancel()

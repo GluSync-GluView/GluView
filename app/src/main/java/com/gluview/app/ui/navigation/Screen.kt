@@ -44,6 +44,8 @@ sealed class Screen(val route: String) {
     data object SettingsHome  : Screen("settings_home")
     // Plano 21, F1 — janela flutuante de glicemia
     data object SettingsFloating : Screen("settings_floating")
+    // Plano 21, F2 — espelhamento sem servidor e servidor web local
+    data object Mirror : Screen("mirror")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6

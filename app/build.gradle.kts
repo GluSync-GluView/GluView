@@ -313,6 +313,11 @@ dependencies {
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     // Testes unitários (JVM puro) — cobre a cripto determinística do Libre 2.
+    // Plano 21, F2: espelhamento sem servidor e servidor web local (Kotlin puro, testado à parte).
+    implementation(project(":mirror-core"))
+    // Plano 21, F2: desenhar o QR code do pareamento do espelho (ZXing core, Apache-2.0, Java puro).
+    implementation("com.google.zxing:core:3.5.3")
+
     testImplementation("junit:junit:4.13.2")
     // org.json real (não o stub do android.jar, que lança RuntimeException em teste JVM puro sem
     // Robolectric) — necessário pra testar WatchFaceJson.encode/decodeComponents (Fase 5 do plano

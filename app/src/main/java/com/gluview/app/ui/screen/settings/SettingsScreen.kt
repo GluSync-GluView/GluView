@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.SystemUpdate
 import com.gluview.app.ui.screen.updates.UpdatesViewModel
@@ -67,6 +68,7 @@ fun SettingsScreen(
     onHealthConnect: () -> Unit = {},
     onHomeSettings: () -> Unit = {},
     onFloatingSettings: () -> Unit = {},
+    onMirror: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updatesViewModel: UpdatesViewModel = hiltViewModel(),
     donationEntryViewModel: DonationEntryViewModel = hiltViewModel()
@@ -136,7 +138,7 @@ fun SettingsScreen(
         debugSeedEnabled = debugSeedEnabled, debugBusy = debugBusy,
         nav = SettingsNav(onAccountSettings, onGeneralSettings, onSyncSettings, onAlertSettings, onWatchFaces,
             onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate, onDiary, onReminders, onHealthConnect,
-            onHomeSettings, onFloatingSettings),
+            onHomeSettings, onFloatingSettings, onMirror),
         updateAvailableName = updatesUi.available?.versionName,
         showDonate = donationsEnabled,
         onDebugSeedToggle = viewModel::onDebugSeedToggle,
@@ -178,7 +180,9 @@ internal data class SettingsNav(
     // Ajustes › Home (com padrão, mesmo motivo).
     val home: () -> Unit = {},
     // Plano 21, F1 — janela flutuante (com padrão, mesmo motivo).
-    val floating: () -> Unit = {}
+    val floating: () -> Unit = {},
+    // Plano 21, F2 — espelhamento (com padrão, mesmo motivo).
+    val mirror: () -> Unit = {}
 )
 
 /**
@@ -223,6 +227,8 @@ internal fun SettingsContent(
                         subtitle = stringResource(R.string.settings_home_subtitle)) }
                     add { NavRow(stringResource(R.string.floating_title), nav.floating, icon = Icons.Default.PictureInPicture,
                         subtitle = stringResource(R.string.floating_subtitle)) }
+                    add { NavRow(stringResource(R.string.mirror_title), nav.mirror, icon = Icons.Default.Share,
+                        subtitle = stringResource(R.string.mirror_subtitle)) }
                     add { NavRow(stringResource(R.string.settings_configure_alerts), nav.alerts, icon = Icons.Default.NotificationsActive,
                         subtitle = stringResource(R.string.settings_alerts_section_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.diary_title), nav.diary, icon = Icons.Default.EventNote,
