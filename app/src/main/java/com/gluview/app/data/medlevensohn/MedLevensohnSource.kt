@@ -1,6 +1,7 @@
 package com.gluview.app.data.medlevensohn
 
 import android.content.Context
+import android.content.Intent
 import com.gluview.app.R
 import com.gluview.app.data.accuchek.cgm.SmartGuideRules
 import com.gluview.app.data.datastore.AppPreferences
@@ -10,6 +11,8 @@ import com.gluview.app.data.sibionics.SibionicsStatusHolder
 import com.gluview.app.data.source.DataSourceType
 import com.gluview.app.data.source.GlucoseSource
 import com.gluview.app.notification.NotificationHelper
+import com.gluview.app.service.GluSyncService
+import com.gluview.app.service.ServiceWatchdogWorker
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +56,8 @@ class MedLevensohnSource @Inject constructor(
 
     private companion object {
         const val LOG = "MEDLEV_SRC"
+        private const val RELEASE_SETTLE_MS = 500L
+        private const val SERVICE_RESTART_DELAY_MS = 800L
         const val MMOL_TO_MGDL = 18.0182
         val LIVE_MAX_AGE_MS = TimeUnit.MINUTES.toMillis(6)
         /** Primeira tentativa rápida: a sessão desconecta de propósito (ex.: para voltar já pareada). */
@@ -72,11 +77,14 @@ class MedLevensohnSource @Inject constructor(
     @Volatile private var mac = ""
     @Volatile private var lastSgv = -1
     @Volatile private var knownStartSec = 0L
+    /** O sensor confirmou o desparear/limpar: o aviso "liberado" fica na tela mesmo com a fonte parando. */
+    @Volatile private var released = false
     private val mutex = Mutex()
 
     override fun start(type: DataSourceType) {
         if (scope != null) return
         stopped = false
+        released = false
         val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = s
         s.launch {
@@ -129,7 +137,7 @@ class MedLevensohnSource @Inject constructor(
         ble.setListener(null)
         ble.disconnect()
         statusHolder.onConnectionChanged(false)
-        notificationHelper.cancelSensorWarning()
+        if (!released) notificationHelper.cancelSensorWarning()
         scope?.cancel(); scope = null
         lastSgv = -1
     }
@@ -158,7 +166,7 @@ class MedLevensohnSource @Inject constructor(
             if (state.startSec > 0 && state.startSec != knownStartSec) {
                 appLogger.usage(LOG, "Início do sensor definido pelo sensor", mapOf("inicioSec" to state.startSec, "anterior" to knownStartSec))
                 knownStartSec = state.startSec
-                statusHolder.restoreAnchor(serial, state.startSec * 1000)
+                statusHolder.moveAnchor(state.startSec * 1000)
             }
         }
     }
@@ -170,8 +178,11 @@ class MedLevensohnSource @Inject constructor(
                 notificationHelper.showSensorWarning(
                     context.getString(R.string.medlev_warn_ended_title), context.getString(R.string.medlev_warn_ended_body))
             }
-            MedLevNotice.UNPAIRED, MedLevNotice.CLEARED -> notificationHelper.showSensorWarning(
-                context.getString(R.string.medlev_warn_unpaired_title), context.getString(R.string.medlev_warn_unpaired_body))
+            MedLevNotice.UNPAIRED, MedLevNotice.CLEARED -> {
+                notificationHelper.showSensorWarning(
+                    context.getString(R.string.medlev_warn_unpaired_title), context.getString(R.string.medlev_warn_unpaired_body))
+                releaseSensor()
+            }
             MedLevNotice.UNPAIR_FAILED, MedLevNotice.CLEAR_FAILED -> notificationHelper.showSensorWarning(
                 context.getString(R.string.medlev_warn_unpair_failed_title), context.getString(R.string.medlev_warn_unpair_failed_body))
             MedLevNotice.START_TIME_CHANGED -> Unit
@@ -252,6 +263,39 @@ class MedLevensohnSource @Inject constructor(
             }
             if (!stopped) notificationHelper.showSensorWarning(
                 context.getString(R.string.medlev_warn_disconnected_title), context.getString(R.string.medlev_warn_disconnected_body))
+        }
+    }
+
+    /**
+     * Desparear/limpar confirmado pelo sensor: ele esqueceu este celular, então o GluView para de usá-lo
+     * (Juggluco: `finishSensor()` + `sensorEnded()`). Sem isto a fonte reconectava em 5 s e seguia
+     * lendo — o contrário do que a confirmação promete (achado no sensor virtual, plano 14_, V2,
+     * 15/11/2026). Esquece o sensor salvo, volta a fonte para o GluSync e reinicia o serviço.
+     * Escopo próprio: parar o serviço cancela o escopo desta fonte no meio do reinício.
+     */
+    private fun releaseSensor() {
+        appLogger.usage(LOG, "Sensor liberado — deixando de usar e voltando ao GluSync", mapOf("serial" to serial))
+        stopped = true
+        released = true
+        reconnectJob?.cancel(); reconnectJob = null
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+            delay(RELEASE_SETTLE_MS) // deixa gravar o estado da última mensagem antes de apagar o sensor
+            preferences.clearMedLevensohnSensor()
+            if (preferences.dataSource.first() == DataSourceType.MEDLEVENSOHN_SMART2.id) {
+                preferences.saveDataSource(DataSourceType.GLUSYNC.id)
+            }
+            runCatching {
+                ServiceWatchdogWorker.cancel(context)
+                context.stopService(Intent(context, GluSyncService::class.java))
+                delay(SERVICE_RESTART_DELAY_MS)
+                context.startForegroundService(Intent(context, GluSyncService::class.java))
+                ServiceWatchdogWorker.schedule(context)
+            }.onFailure { e ->
+                // O vigia (WorkManager) sobe o serviço de novo depois, já com o GluSync.
+                ServiceWatchdogWorker.schedule(context)
+                appLogger.error(LOG, "Falha ao reiniciar o serviço depois de liberar o sensor",
+                    mapOf("erro" to (e.message ?: e::class.simpleName.orEmpty())))
+            }
         }
     }
 

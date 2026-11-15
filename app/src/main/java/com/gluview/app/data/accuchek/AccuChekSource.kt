@@ -271,7 +271,7 @@ class AccuChekSource @Inject constructor(
                     ))
                     startMs = chosen
                     preferences.saveAccuChekStartMs(chosen)
-                    statusHolder.restoreAnchor(serial, chosen)
+                    statusHolder.moveAnchor(chosen)
                 }
                 anchorClock()
                 // Minutos do sensor mesmo sem glicemia: é o que faz a contagem do aquecimento andar.
@@ -463,7 +463,7 @@ class AccuChekSource @Inject constructor(
         ))
         startMs = newStart
         preferences.saveAccuChekStartMs(newStart)
-        statusHolder.restoreAnchor(serial, newStart)
+        statusHolder.moveAnchor(newStart)
         anchorClock()
         if (jump < 0) {
             val moved = repository.shiftFutureSensorReadings(address, System.currentTimeMillis(), jump)

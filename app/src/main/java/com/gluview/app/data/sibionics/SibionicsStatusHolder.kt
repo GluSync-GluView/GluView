@@ -81,6 +81,15 @@ class SibionicsStatusHolder @Inject constructor() {
         _status.value = SibionicsSensorStatus(serial = serial, sensorStartMs = sensorStartMs)
     }
 
+    /**
+     * O MESMO sensor, no meio da sessão, passou a ter outro início (o Medlevensohn recontou os IDs, o
+     * SmartGuide reconciliou o início, a hora do celular pulou). Troca só a âncora: conexão, última
+     * leitura, bateria, vida útil e fim de sessão continuam valendo. [restoreAnchor] recria o status do
+     * zero e é só para o processo que acabou de subir — usado aqui, mostrava "Desconectado" com a sessão
+     * aberta (achado no sensor virtual do Medlevensohn, plano 14_, V2, 15/11/2026).
+     */
+    fun moveAnchor(sensorStartMs: Long) = _status.update { it.copy(sensorStartMs = sensorStartMs) }
+
     /** Registra a última glicemia bruta do algoritmo (para a tela de calibração). */
     fun onRawMmol(mmol: Double) = _status.update { it.copy(lastRawMmol = mmol) }
 }
