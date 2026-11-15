@@ -151,8 +151,20 @@ class AlertManager @Inject constructor(
         var fired = false
         var highestType = AlertType.NOTIFICATION
 
+        // PT-5 — Não Perturbe: a escolha da faixa (furar ou respeitar; vibrar ou não) decide; o
+        // Android decide se o canal de furar pode mesmo ignorar o DND (sem acesso, não finge).
+        val dndState = notificationHelper.currentDndState()
+        val wantsBypass = preferences.isAlertEnabled(zone, AlertType.DND)
+        val decision = DndPolicy.decide(
+            dnd              = dndState,
+            wantsBypass      = wantsBypass,
+            vibrateWhenQuiet = preferences.isAlertEnabled(zone, AlertType.DND_VIBRATE),
+            bypassReady      = dndState.active && wantsBypass && notificationHelper.dndBypassReady(),
+            alarmsAllowed    = dndState == DndState.PRIORITY && notificationHelper.dndAllowsAlarms()
+        )
+
         // Cada tipo é independente — todos os habilitados disparam
-        if (!silenced && preferences.isAlertEnabled(zone, AlertType.DND)) {
+        if (!silenced && decision.postBypassChannel) {
             notificationHelper.showAlertNotification(title, message, NotificationHelper.CHANNEL_DND, NotificationHelper.NOTIF_ID_ALERT_DND)
             fired = true; highestType = AlertType.DND
         }
@@ -164,19 +176,26 @@ class AlertManager @Inject constructor(
             notificationHelper.showAlertNotification(title, message, NotificationHelper.CHANNEL_ALERT, NotificationHelper.NOTIF_ID_ALERT_NOTIFICATION)
             fired = true
         }
+        if (!silenced && fired && decision.vibrate) notificationHelper.vibrateAlert()
 
         if (!fired) return
+
+        if (decision.outcome != DndOutcome.NORMAL) {
+            appLogger.usage("ALERT", "Alerta com Não Perturbe ligado",
+                mapOf("zona" to zone.name, "dnd" to dndState.name, "resultado" to decision.outcome.name))
+        }
 
         // S15 — TTS
         if (preferences.ttsEnabled.first()) {
             speak("Glicemia ${reading.sgvMgDl.toInt()}, ${zoneName(zone)}")
         }
 
-        // S18 — log no Room
+        // S18 — log no Room. Com o Não Perturbe ligado, o histórico diz o que aconteceu de fato
+        // (tocou furando, só vibrou, ficou mudo por escolha, ou não conseguiu furar).
         alertLogDao.insert(AlertLogEntity(
             sgvMgDl   = reading.sgvMgDl,
             zone      = zone.name,
-            alertType = highestType.name.lowercase()
+            alertType = decision.outcome.logType ?: highestType.name.lowercase()
         ))
 
         // IFTTT — best-effort, nunca bloqueia alerta local

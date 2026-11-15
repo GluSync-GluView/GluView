@@ -3,7 +3,9 @@
 App Android de monitoramento de glicemia para quem tem diabetes (paciente) e para quem acompanha
 alguém com diabetes (seguidor). Projeto **sem fins lucrativos**, feito para a comunidade.
 
-- Leitura direta de sensores via Bluetooth/NFC: FreeStyle Libre 2 Plus e Sibionics
+- Leitura direta de sensores via Bluetooth/NFC: FreeStyle Libre 2 Plus e Sibionics (funcionam),
+  Accu-Chek SmartGuide e Smart 2.0 Medlevensohn (sem teste com sensor real) — todos livres, sem
+  pedido de liberação; veja [docs/sensor.md](docs/sensor.md)
 - Funciona **no aparelho**: alertas, gráficos, tempo no alvo, relatório, widgets, notificação
   persistente, Android Auto e visor para Mi Band 6 — sem enviar nada para a internet
 - Nuvem e acompanhamento (seguidor vendo a glicemia em tempo real) pelo servidor GluSync, liberados

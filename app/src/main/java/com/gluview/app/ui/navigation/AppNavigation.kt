@@ -380,7 +380,10 @@ fun AppNavigation(
             DiagnosticScreen(onBack = { nav.popBackStack() })
         }
         composable(Screen.Report.route) {
-            ReportScreen(onBack = { nav.popBackStack() })
+            ReportScreen(onBack = { nav.popBackStack() }, onAgp = { nav.navigate(Screen.Agp.route) })
+        }
+        composable(Screen.Agp.route) {
+            com.gluview.app.ui.screen.agp.AgpScreen(onBack = { nav.popBackStack() })
         }
         // Sprint 6
         composable(Screen.Onboarding.route) {

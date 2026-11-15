@@ -100,6 +100,8 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
     @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
+    @Inject lateinit var xdripBroadcaster: com.gluview.app.data.broadcast.XdripBroadcaster
+    @Inject lateinit var sensorStatusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
     @Inject lateinit var widgetUpdater: com.gluview.app.widget.WidgetUpdater
     // Plano 17 (F2.4) — aviso "subindo rápido sem refeição registrada" (desligado por padrão).
     @Inject lateinit var smartMealPrompt: com.gluview.app.data.reminder.SmartMealPrompt
@@ -113,6 +115,7 @@ class GluSyncService : LifecycleService() {
 
     private var pollingJob: Job? = null
     private var miBandAutoSendJob: Job? = null
+    private var xdripSendJob: Job? = null
     private var wearSendJob: Job? = null
     private var mobileUploadCatchupJob: Job? = null
     private var wifiUploadCatchupJob: Job? = null
@@ -271,6 +274,16 @@ class GluSyncService : LifecycleService() {
         wearSendJob?.cancel()
         wearSendJob = lifecycleScope.launch {
             repository.currentReading.filterNotNull().collect { wearBridge.onNewReading(it) }
+        }
+        // PT-7 Fase A: envio local no formato do xDrip (AndroidAPS etc.), só para os apps escolhidos.
+        xdripSendJob?.cancel()
+        xdripSendJob = lifecycleScope.launch {
+            repository.currentReading.filterNotNull().collect { reading ->
+                runCatching {
+                    xdripBroadcaster.onNewReading(reading, sensorStatusHolder.status.value.sensorStartMs,
+                        com.gluview.app.data.source.DataSourceType.fromId(preferences.dataSource.first()).label)
+                }
+            }
         }
         smartMealJob?.cancel()
         smartMealJob = lifecycleScope.launch {
@@ -476,10 +489,24 @@ class GluSyncService : LifecycleService() {
             hipo = limits.low, hiper = limits.high, hours = notifHours,
             urgentLow = limits.urgentLow, urgentHigh = limits.urgentHigh
         )
-        val notif = notificationHelper.buildPersistentNotification(
+        val localized = withAppLanguage(preferences.appLanguage.first())
+        val quickAddLabel = if (preferences.notifQuickAdd.first())
+            localized.getString(com.gluview.app.R.string.notif_quick_add_action) else null
+        // PT-6: Android 16 com Live Update ligado → notificação promovida (chip na barra de status,
+        // barra Now da Samsung). Qualquer falha, ou Android < 16, cai na notificação de sempre.
+        val live = if (preferences.notifLiveUpdate.first() && notificationHelper.liveUpdatesSupported()) {
+            val time = if (reading.epochMs > 0) com.gluview.app.util.epochMsToTimeOfDay(reading.epochMs, timeFormat) else null
+            notificationHelper.buildLiveUpdateNotification(
+                com.gluview.app.notification.LiveUpdateFormat.format(
+                    reading.sgvMgDl, reading.arrow, reading.delta, reading.isStale, time, unit, limits.low, limits.high,
+                    localized.getString(com.gluview.app.R.string.zone_stale)
+                ) { localized.getString(com.gluview.app.R.string.notif_last_reading, it) },
+                quickAddLabel
+            )
+        } else null
+        val notif = live ?: notificationHelper.buildPersistentNotification(
             content.text, content.sgvArrowText, content.detailText, content.graph, content.dots,
-            quickAddLabel = if (preferences.notifQuickAdd.first())
-                withAppLanguage(preferences.appLanguage.first()).getString(com.gluview.app.R.string.notif_quick_add_action) else null
+            quickAddLabel = quickAddLabel
         )
         val mgr = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         mgr.notify(NOTIF_ID_PERSISTENT, notif)

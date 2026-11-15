@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 /** ADR-0029 — candidatura/interesse. Cobre tanto o pedido de acesso ao app inteiro (público,
  *  usado quando registrationMode=approval no lugar de AuthRepository.register) quanto a
- *  candidatura a uma funcionalidade em beta (autenticado — aba Bomba, sensores comingSoon). */
+ *  candidatura a uma funcionalidade em beta (autenticado — aba Bomba; a beta de sensor saiu no PT-1, ficam só as candidaturas antigas no histórico). */
 @Singleton
 class AccessRequestRepository @Inject constructor(
     private val api: GluSyncApi,
@@ -34,11 +34,11 @@ class AccessRequestRepository @Inject constructor(
         Unit
     }
 
-    // Autenticado — candidatura a bomba de insulina ou sensor comingSoon.
+    // Autenticado — candidatura a bomba de insulina (sensor_beta só no histórico).
     suspend fun createFeatureAccessRequest(featureKey: String, note: String? = null): Result<AccessRequestDto> =
         runCatching { api.createFeatureAccessRequest(CreateFeatureAccessRequestDto(featureKey, note)) }
 
-    // Estado consolidado em lote (aba Bomba + os sensores comingSoon numa chamada só).
+    // Estado consolidado em lote (aba Bomba + candidaturas antigas de sensor numa chamada só).
     // Map<featureKey, state> — chave ausente = "none" (nunca candidatou).
     suspend fun getStatus(): Result<Map<String, String>> = runCatching {
         api.getAccessRequestStatus().associate { it.featureKey to it.state }
@@ -46,7 +46,7 @@ class AccessRequestRepository @Inject constructor(
 
     // Histórico completo pra tela "Minhas candidaturas" (Config > Acesso) — inclui o pedido de
     // acesso ao app em si, nota do usuário e comentário do admin (getStatus acima descarta tudo
-    // isso, só serve pros badges comingSoon).
+    // isso, só serve pros selos de estado).
     suspend fun getMyRequests(): Result<List<MyAccessRequestDto>> = runCatching { api.getMyAccessRequests() }
 
     // Público — status por ID, pra quem ainda não tem conta (ver AppPreferences.

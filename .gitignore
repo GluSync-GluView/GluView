@@ -17,6 +17,7 @@ local.properties
 # Build outputs
 app/build/
 compiler-cli/build/
+keks/build/
 build_log*.txt
 
 

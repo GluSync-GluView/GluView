@@ -18,6 +18,9 @@ Com a conta criada, o GluView funciona **inteiro no aparelho**: leitura do senso
 alertas, relatórios, notificação, widgets, Android Auto e wearables. Nesse modo as suas leituras
 ficam **só no seu celular**.
 
+**Todos os sensores são livres**: qualquer conta escolhe e pareia qualquer sensor da lista, sem
+pedido nem aprovação. A leitura do sensor nunca depende da nuvem.
+
 ## Nuvem e acompanhamento (por pedido)
 
 Guardar a glicemia na nuvem e deixar alguém acompanhar você têm custo de servidor, então são
@@ -40,7 +43,7 @@ continuam funcionando normalmente nesse meio-tempo.
 
 ## Depois de entrar
 
-- **Se você é paciente:** vá em **Sensor › Fonte de dados** e escolha seu sensor pelo modelo e
-  pela região de compra — veja [Configurar o sensor](sensor.md).
+- **Se você é paciente:** vá na aba **Sensor › Configurar sensor** e escolha seu sensor pelo
+  modelo e pela região de compra — veja [Configurar o sensor](sensor.md).
 - **Se você é seguidor:** a Home mostra um seletor para escolher qual paciente acompanhar — veja
   [Acompanhamento](acompanhamento.md).

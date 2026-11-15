@@ -5,6 +5,10 @@
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.freestylelibre.app.br" />
+        <!-- PT-7: apps que recebem o broadcast do xDrip+ (para a lista de destinos). -->
+        <intent>
+            <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
+        </intent>
     </queries>
 
     <!-- Rede -->
@@ -19,6 +23,12 @@
 
     <!-- Notificações (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- PT-5: "furar o Não Perturbe" só vale com acesso ao Não Perturbe concedido pela pessoa
+         (Ajustes do Android); vibrar no Não Perturbe usa o vibrador direto. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- PT-6: Live Updates (Android 16). Exigida a partir da API 36.1; inofensiva antes. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 
     <!-- Alertas avançados (Sprint 3) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />

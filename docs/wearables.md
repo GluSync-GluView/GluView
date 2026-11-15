@@ -73,8 +73,19 @@ O Wear OS 6 guarda um visor por app: enviar outro visor substitui o anterior. Ho
 desenhadas pelo próprio relógio; glicemia, variação, hora da medição e minigráfico vêm da
 complication do GluView.
 
+## Outros apps no celular (sem nuvem)
+
+Em **Ajustes › Integrações › Enviar para outros apps do celular**, o GluView pode mandar cada
+leitura para apps deste celular que entendem o formato do **xDrip+** (o broadcast
+`com.eveningoutpost.dexdrip.BgEstimate`), por exemplo o **AndroidAPS** (fonte "xDrip+"). Nada passa
+pela internet. Só recebem os apps que você marcar na lista — a glicemia não vai para qualquer app.
+Leitura velha ("sem sinal") e leitura repetida não são enviadas.
+
+O **WatchDrip+** (Mi Band 2–6, Amazfit GTR/GTS/Bip e Zepp OS) não usa esse broadcast: ele conversa
+com o xDrip+ por outra interface (a "Broadcast Service API"), que o GluView ainda não tem. Por
+enquanto, para esses relógios, use o visor direto da Mi Band 6 ou a nuvem (Nightscout/GluSync).
+
 ## Outros wearables
 
-Outros relógios e pulseiras (Garmin, Amazfit/Zepp, Huawei, Mi Bands mais novas) ainda não têm envio
-automático. Apps compatíveis com Nightscout apontados para o GluSync podem mostrar a glicemia
-neles.
+Garmin, Huawei e Mi Bands/Amazfit mais novos ainda não têm envio automático. Apps compatíveis com
+Nightscout apontados para o GluSync podem mostrar a glicemia neles.

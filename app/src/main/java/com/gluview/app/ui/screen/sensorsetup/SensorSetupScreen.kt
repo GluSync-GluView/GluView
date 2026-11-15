@@ -6,12 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.SnackbarHostState
-import com.gluview.app.ui.components.SensorBetaDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,6 +72,8 @@ import com.gluview.app.data.sensor.FailureReason
 import com.gluview.app.data.sensor.ScanNotice
 import com.gluview.app.data.sensor.SetupState
 import com.gluview.app.data.source.DataSourceType
+import com.gluview.app.data.source.SensorMaturity
+import com.gluview.app.data.source.SensorVariantCatalog
 import com.gluview.app.ui.components.label
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -182,28 +179,11 @@ fun SensorSetupScreen(
 
     LaunchedEffect(Unit) { viewModel.start() }
 
-    // ADR-0029 — candidatura de beta pelo "Em breve" (antes só pelo dropdown da aba Sensor).
-    val betaSubmitting by viewModel.betaSubmitting.collectAsState()
-    val betaMessage by viewModel.betaMessage.collectAsState()
-    var betaOption by remember { mutableStateOf<SensorOption?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(betaMessage) {
-        betaMessage?.let { snackbarHostState.showSnackbar(context.getString(it)); viewModel.clearBetaMessage() }
-    }
-    betaOption?.let { option ->
-        SensorBetaDialog(
-            source = option.type,
-            betaState = option.betaState,
-            submitting = betaSubmitting,
-            onApply = { viewModel.applyBeta(option.type); betaOption = null },
-            onDismiss = { betaOption = null }
-        )
-    }
 
     SensorSetupContent(
         state = state,
         options = options,
-        onComingSoon = { betaOption = it },
         snackbarHostState = snackbarHostState,
         onBack = { viewModel.cancel(); onDone() },
         // L19: Libre 2 Plus se ativa por NFC — antes o assistente pedia a caixa e a lia como
@@ -256,20 +236,21 @@ internal fun SensorSetupContent(
     onSerialEntered: (String) -> Unit = {},
     onPinEntered: (String) -> Unit = {},
     onSearchNearby: () -> Unit = {},
-    onComingSoon: (SensorOption) -> Unit = {},
     snackbarHostState: SnackbarHostState? = null
 ) {
     Page(title = stringResource(R.string.setup_title), onBack = onBack, snackbarHostState = snackbarHostState) {
         stepOf(state)?.let { StepIndicator(it) }
         when (state) {
-            is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose, onComingSoon)
+            is SetupState.Idle, is SetupState.ChoosingSensor -> ChooseSensorStep(options, onChoose)
             is SetupState.Instructions ->
                 if (state.type == DataSourceType.MEDLEVENSOHN_SMART2) NearbyStep(onSearchNearby, onEnterSerial)
                 else InstructionsStep(state.type, state.notice, onContinue, onEnterSerial)
             is SetupState.ReadingPackage -> WaitingStep(Icons.Default.QrCodeScanner,
                 stringResource(R.string.setup_scanning_title), stringResource(R.string.setup_scanning_body), onCancel)
-            is SetupState.EnteringSerial -> SerialStep(state.invalid, onSerialEntered, onCancel,
-                medLev = state.type == DataSourceType.MEDLEVENSOHN_SMART2, dexcom = state.type == DataSourceType.DEXCOM_G6)
+            is SetupState.EnteringSerial ->
+                if (state.type == DataSourceType.DEXCOM_G7) DexcomCodeStep(state.type, state.invalid, onSerialEntered, onCancel)
+                else SerialStep(state.invalid, onSerialEntered, onCancel,
+                    medLev = state.type == DataSourceType.MEDLEVENSOHN_SMART2, dexcom = state.type == DataSourceType.DEXCOM_G6)
             is SetupState.EnteringPin -> PinStep(state, onPinEntered, onCancel)
             is SetupState.Searching -> WaitingStep(Icons.Default.BluetoothSearching,
                 stringResource(R.string.setup_searching_title), stringResource(R.string.setup_searching_body), onCancel)
@@ -322,8 +303,7 @@ private fun ColumnScope.StepHeader(title: String, body: String) {
 @Composable
 private fun ColumnScope.ChooseSensorStep(
     options: List<SensorOption>,
-    onChoose: (SensorOption) -> Unit,
-    onComingSoon: (SensorOption) -> Unit = {}
+    onChoose: (SensorOption) -> Unit
 ) {
     StepHeader(stringResource(R.string.setup_choose_title), stringResource(R.string.setup_choose_body))
     // Boa-fé: o GluView complementa, não substitui, o app oficial do fabricante.
@@ -346,7 +326,10 @@ private fun ColumnScope.ChooseSensorStep(
                                 Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if (option.isCurrent) StatusBadge(stringResource(R.string.setup_in_use), tone = Tone.Info)
+                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                                MaturityBadge(option.maturity)
+                                if (option.isCurrent) StatusBadge(stringResource(R.string.setup_in_use), tone = Tone.Info)
+                            }
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -355,44 +338,41 @@ private fun ColumnScope.ChooseSensorStep(
         }
     }
     if (later.isNotEmpty()) {
-        // Lista compacta. Com a beta ligada, a linha abre a candidatura (seta + selo do estado);
-        // sem ela, fica só o nome, sem cara de clicável. Plano 15: o dropdown da aba Sensor saiu e
-        // a candidatura mora aqui.
-        val anyApply = later.any { it.canApplyBeta }
+        // Lista compacta, sem cara de clicável: só o que ainda não dá para escolher (protocolo ou
+        // passo do assistente não implementado, ou biblioteca nativa que este aparelho não roda).
+        // Nenhum sensor depende de liberação/beta (plano de sensores, PT-1).
         GluSection(stringResource(R.string.setup_coming_soon),
-            description = stringResource(if (anyApply) R.string.setup_coming_soon_beta_desc else R.string.setup_coming_soon_desc)) {
+            description = stringResource(R.string.setup_coming_soon_desc)) {
             GluCard {
-                later.forEach { option -> ComingSoonRow(option, onComingSoon) }
+                later.forEach { option -> ComingSoonRow(option) }
             }
         }
     }
 }
 
+/** Rótulo honesto de validação (regra 6): "Funciona", "Em teste" ou "Sem teste com sensor real". */
 @Composable
-private fun ComingSoonRow(option: SensorOption, onComingSoon: (SensorOption) -> Unit) {
+internal fun MaturityBadge(maturity: SensorMaturity) {
+    StatusBadge(stringResource(maturity.labelRes), tone = when (maturity) {
+        SensorMaturity.WORKS    -> Tone.Success
+        SensorMaturity.TESTING  -> Tone.Warning
+        SensorMaturity.UNTESTED -> Tone.Warning
+    })
+}
+
+@Composable
+private fun ComingSoonRow(option: SensorOption) {
     val name = if (option.unavailableOnDevice)
         stringResource(R.string.setup_label_with_note, option.variant.label(), stringResource(R.string.setup_unavailable_on_device))
     else option.variant.label()
-    val rowModifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
-        .let { if (option.canApplyBeta) it.clickable { onComingSoon(option) } else it }
-    Row(rowModifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
             Text(name, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             option.variant.region?.let {
                 Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            when (option.betaState) {
-                "pending", "waitlisted" -> StatusBadge(stringResource(R.string.settings_beta_pending), tone = Tone.Warning,
-                    icon = Icons.Default.HourglassEmpty)
-                "approved" -> StatusBadge(stringResource(R.string.access_requests_status_approved), tone = Tone.Success,
-                    icon = Icons.Default.Verified)
-                "rejected" -> StatusBadge(stringResource(R.string.access_requests_status_rejected), tone = Tone.Danger,
-                    icon = Icons.Default.Block)
-            }
-        }
-        if (option.canApplyBeta) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -410,6 +390,10 @@ private fun ColumnScope.InstructionsStep(
         stringResource(if (smartGuide) R.string.setup_package_title_smartguide else R.string.setup_package_title),
         stringResource(if (smartGuide) R.string.setup_package_body_smartguide else R.string.setup_package_body)
     )
+    // Sensor ainda não validado em sensor real: dizer antes de parear, não depois (regra 6).
+    if (SensorVariantCatalog.defaultFor(type).maturity != SensorMaturity.WORKS) {
+        GluCallout(stringResource(R.string.setup_unvalidated_warning), tone = Tone.Warning)
+    }
     notice?.let {
         GluCallout(stringResource(when (it) {
             ScanNotice.PERMISSION_DENIED -> R.string.setup_notice_permission
@@ -466,6 +450,33 @@ private fun ColumnScope.SerialStep(
     )
     Button(onClick = { onSerialEntered(text) }, enabled = text.isNotBlank(),
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.setup_continue))
+    }
+    OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_cancel)) }
+}
+
+/**
+ * PT-3 — Dexcom G7: código de pareamento de 4 dígitos, com o aviso de que o G7 precisa estar
+ * pareado pelo app oficial neste celular. (O G6 usa o [SerialStep] com o Transmitter ID.)
+ */
+@Composable
+private fun ColumnScope.DexcomCodeStep(type: DataSourceType, invalid: Boolean, onCode: (String) -> Unit, onCancel: () -> Unit) {
+    var text by rememberSaveable(type) { mutableStateOf("") }
+    StepIcon(Icons.Default.Keyboard)
+    StepHeader(stringResource(R.string.setup_g7_title), stringResource(R.string.setup_g7_body))
+    GluCallout(stringResource(R.string.setup_unvalidated_warning), tone = Tone.Warning)
+    GluCallout(stringResource(R.string.setup_g7_official_app), tone = Tone.Info)
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v -> text = v.filter(Char::isDigit).take(4) },
+        label = { Text(stringResource(R.string.setup_g7_label)) },
+        singleLine = true,
+        isError = invalid,
+        supportingText = if (invalid) { { Text(stringResource(R.string.setup_g7_invalid)) } } else null,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = Modifier.fillMaxWidth()
+    )
+    Button(onClick = { onCode(text) }, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(stringResource(R.string.setup_continue))
     }
     OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_cancel)) }
@@ -540,6 +551,7 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_title
             FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_title
             FailureReason.WRONG_TRANSMITTER_ID  -> R.string.setup_error_g6_id_title
+            FailureReason.G7_NOT_PAIRED         -> R.string.setup_g7_not_paired_title
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_title
         }),
         body = stringResource(when (reason) {
@@ -550,6 +562,7 @@ private fun ColumnScope.FailedStep(reason: FailureReason, onRetry: () -> Unit, o
             FailureReason.PAIRING_FAILED        -> R.string.setup_error_pairing_body
             FailureReason.PAIRING_TIMEOUT       -> R.string.setup_error_pairing_timeout_body
             FailureReason.WRONG_TRANSMITTER_ID  -> R.string.setup_error_g6_id_body
+            FailureReason.G7_NOT_PAIRED         -> R.string.setup_g7_not_paired_body
             FailureReason.UNKNOWN               -> R.string.setup_error_unknown_body
         })
     )

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.gluview.app.R
 import com.gluview.app.alert.ALERT_ZONES
 import com.gluview.app.alert.AlertType
@@ -89,7 +90,9 @@ internal data class AlertActions(
     val onCall: (Boolean, String, Int) -> Unit,
     val onSms: (Boolean, String, String) -> Unit,
     val onNotifyFollowers: (Boolean) -> Unit,
-    val onToggleFollower: (String) -> Unit
+    val onToggleFollower: (String) -> Unit,
+    /** PT-5: abre "Acesso ao Não Perturbe" do Android. */
+    val onOpenDndAccess: () -> Unit = {}
 )
 
 /** O que muda de cara conforme a conta (seguidor-apenas não tem faixas; Pushover/seguidores exigem GluSync). */
@@ -99,7 +102,9 @@ internal data class AlertContext(
     val isFollowerOnly: Boolean,
     val isGluSyncConnected: Boolean,
     /** Nuvem liberada (ADR-0030): sem ela, Pushover e "avisar seguidores" não disparam. */
-    val cloudAlertsAllowed: Boolean = true
+    val cloudAlertsAllowed: Boolean = true,
+    /** PT-5: o canal de furar o Não Perturbe pode mesmo ignorar o DND (o Android decide). */
+    val dndBypassReady: Boolean = true
 )
 
 /** Erro de sincronia com o GluSync numa snackbar (antes só aparecia dentro da seção Pushover). */
@@ -127,14 +132,28 @@ fun AlertSettingsScreen(
     val timeFormat = rememberChartAppearance().timeFormat
     val snackbar = remember { SnackbarHostState() }
     SyncErrorSnackbar(syncError, snackbar)
+    val context = LocalContext.current
+
+    // PT-5: voltando dos Ajustes do Android, confere de novo se "furar o Não Perturbe" vale.
+    var dndBypassReady by remember { mutableStateOf(true) }
+    LifecycleResumeEffect(Unit) {
+        dndBypassReady = viewModel.dndBypassReady()
+        onPauseOrDispose {}
+    }
 
     AlertsContent(
         state = state,
-        ctx = AlertContext(unit, timeFormat, isFollowerOnly, isGluSyncConnected, cloudAlertsAllowed),
+        ctx = AlertContext(unit, timeFormat, isFollowerOnly, isGluSyncConnected, cloudAlertsAllowed, dndBypassReady),
         actions = AlertActions(viewModel::onUrgentLowChange, viewModel::onLowChange, viewModel::onHighChange,
             viewModel::onUrgentHighChange, viewModel::onToggle, viewModel::savePredictive, viewModel::saveReAlarm,
             viewModel::saveTts, viewModel::saveQuiet, viewModel::saveCall, viewModel::saveSms,
-            viewModel::saveNotifyFollowers, viewModel::toggleFollowerSelection),
+            viewModel::saveNotifyFollowers, viewModel::toggleFollowerSelection,
+            onOpenDndAccess = {
+                runCatching {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }),
         onIfttt = onIfttt,
         onPushover = onPushover,
         onBack = onBack,
@@ -180,7 +199,20 @@ internal fun AlertsContent(
             }
         }
 
-        // S13 — 7 zonas × 3 tipos
+        // PT-5 — Não Perturbe. Nunca fingir: se alguma faixa pede para furar e o Android não deixa,
+        // dizer na tela; se a hipo urgente respeita o DND, dizer que ela não vai tocar.
+        if (!ctx.isFollowerOnly) {
+            val wantsBypass = ALERT_ZONES.any { state.toggles[it to AlertType.DND] == true }
+            if (wantsBypass && !ctx.dndBypassReady) {
+                GluCallout(stringResource(R.string.alertsettings_dnd_access_missing), tone = Tone.Danger,
+                    actionLabel = stringResource(R.string.alertsettings_dnd_access_cta), onAction = actions.onOpenDndAccess)
+            }
+            if (state.toggles.isNotEmpty() && state.toggles[GlucoseZone.URGENT_LOW to AlertType.DND] != true) {
+                GluCallout(stringResource(R.string.alertsettings_dnd_urgent_low_off), tone = Tone.Warning)
+            }
+        }
+
+        // S13 — 7 zonas × 3 tipos (+ PT-5: vibrar no Não Perturbe quando a faixa respeita o DND)
         GluSection(stringResource(R.string.alertsettings_glucose_zones), description = stringResource(R.string.alertsettings_zones_desc),
             onHelp = { showZoneTypesHelp = true }) {
             GluCard {
@@ -189,7 +221,9 @@ internal fun AlertsContent(
                         Column(Modifier.fillMaxWidth().padding(vertical = Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
                             Text(zoneLabel(zone, state, unit), style = MaterialTheme.typography.bodyLarge)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                                listOf(AlertType.NOTIFICATION, AlertType.ALARM, AlertType.DND).forEach { type ->
+                                val bypass = state.toggles[zone to AlertType.DND] ?: false
+                                listOfNotNull(AlertType.NOTIFICATION, AlertType.ALARM, AlertType.DND,
+                                    AlertType.DND_VIBRATE.takeIf { !bypass }).forEach { type ->
                                     val on = state.toggles[zone to type] ?: false
                                     FilterChip(selected = on, onClick = { actions.onToggle(zone, type, !on) }, label = { Text(typeLabel(type)) })
                                 }
@@ -431,6 +465,7 @@ private fun typeLabel(type: AlertType): String = stringResource(when (type) {
     AlertType.ALARM        -> R.string.alerthistory_type_alarm
     AlertType.DND          -> R.string.alertsettings_type_overrides_dnd
     AlertType.PUSHOVER     -> R.string.alertsettings_pushover_title
+    AlertType.DND_VIBRATE  -> R.string.alertsettings_type_dnd_vibrate
 })
 
 private val noTicks @Composable get() = SliderDefaults.colors(

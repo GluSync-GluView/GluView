@@ -92,7 +92,8 @@ fun ExternalIntegrationScreen(
         onApiKeysEnabled = settingsVm::onApiKeysEnabledChange,
         onApiKeys = onApiKeys,
         onBack = onBack,
-        snackbarHostState = snackbar
+        snackbarHostState = snackbar,
+        extra = { LocalBroadcastSetting() }
     )
 
     connectingProvider?.let { provider ->
@@ -137,7 +138,9 @@ internal fun IntegrationsContent(
     onApiKeys: () -> Unit,
     onBack: () -> Unit,
     snackbarHostState: SnackbarHostState? = null,
-    nowMs: Long = System.currentTimeMillis()
+    nowMs: Long = System.currentTimeMillis(),
+    /** PT-7: envio local para outros apps (com ViewModel próprio; o harness não precisa). */
+    extra: @Composable () -> Unit = {}
 ) {
     Page(title = stringResource(R.string.settings_integrations_title), onBack = onBack, snackbarHostState = snackbarHostState) {
         GluSection(stringResource(R.string.integrations_import_section), description = stringResource(R.string.integrations_intro)) {
@@ -164,6 +167,7 @@ internal fun IntegrationsContent(
                 })
             }
         }
+        extra()
     }
 }
 

@@ -62,6 +62,16 @@ class ExportHelper @Inject constructor(
         share(file, "application/pdf", text.chooserTitle)
     }
 
+    /** PT-4 — PDF do AGP (uma página A4 com o gráfico de percentis). Funciona sem conta e sem internet. */
+    suspend fun exportAgpPdf(report: com.gluview.app.domain.agp.AgpReport) = withContext(Dispatchers.IO) {
+        val lang = preferences.appLanguage.first()
+        val localized = context.withAppLanguage(lang)
+        val unit = GlucoseUnit.fromString(preferences.glucoseUnit.first())
+        val file = File(exportDir, localized.getString(com.gluview.app.R.string.agp_pdf_file) + ".pdf")
+        AgpPdf.write(report, localized, Locale.forLanguageTag(lang), unit, file)
+        share(file, "application/pdf", localized.getString(com.gluview.app.R.string.export_chooser))
+    }
+
     /** PDF só do diário (plano 17, F1.7) — funciona sem conta e sem internet. */
     suspend fun exportDiaryPdf(entries: List<com.gluview.app.data.local.entity.EventLogEntity>,
                                first: java.time.LocalDate, last: java.time.LocalDate,

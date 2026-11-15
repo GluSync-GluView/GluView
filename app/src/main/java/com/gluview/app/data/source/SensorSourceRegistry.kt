@@ -14,9 +14,8 @@ import javax.inject.Singleton
  *
  * As fontes são `@Singleton` (injetadas), então o registro só as seleciona — não as cria.
  *
- * [DataSourceType.DEXCOM_G7] não aparece aqui de propósito: só o parser do registro de glicemia
- * está pronto (ver [com.gluview.app.data.dexcom.DexcomG7Parser]), o handshake EC-JPAKE ainda não
- * foi portado — não há [GlucoseSource] funcional pra registrar ainda.
+ * PT-3: [DataSourceType.DEXCOM_G7] entrou com o pareamento EC-JPAKE da libkeks do xDrip (módulo
+ * `:keks`), para o G7 já pareado pelo app oficial no mesmo celular.
  */
 @Singleton
 class SensorSourceRegistry @Inject constructor(
@@ -24,7 +23,8 @@ class SensorSourceRegistry @Inject constructor(
     private val libre2: Libre2Source,
     private val accuChek: AccuChekSource,
     private val medLevensohn: MedLevensohnSource,
-    private val dexcomG6: DexcomG6Source
+    private val dexcomG6: DexcomG6Source,
+    private val dexcomG7: com.gluview.app.data.dexcom.DexcomG7Source
 ) {
     /**
      * A fonte para [type], ou null se a fonte não é um sensor local (ex.: [DataSourceType.GLUSYNC]),
@@ -38,6 +38,7 @@ class SensorSourceRegistry @Inject constructor(
         type == DataSourceType.ACCU_CHEK_SMARTGUIDE -> accuChek
         type == DataSourceType.MEDLEVENSOHN_SMART2  -> medLevensohn
         type == DataSourceType.DEXCOM_G6            -> dexcomG6
+        type == DataSourceType.DEXCOM_G7            -> dexcomG7
         else                                -> null
     }
 }

@@ -46,7 +46,7 @@ data class VerifyAccessRequestDto(
 )
 
 /** POST /access-requests/feature (autenticado) — candidatura a uma feature em beta (bomba,
- *  sensor comingSoon). featureKey: "insulin_pump_beta" ou "sensor_beta:<DataSourceType.id>". */
+ *  sensor — histórico, a beta de sensor saiu no PT-1). featureKey: "insulin_pump_beta" ou "sensor_beta:<DataSourceType.id>". */
 data class CreateFeatureAccessRequestDto(
     @SerializedName("featureKey") val featureKey: String,
     @SerializedName("note")       val note: String? = null

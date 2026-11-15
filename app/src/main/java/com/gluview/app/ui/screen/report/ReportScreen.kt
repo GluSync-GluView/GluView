@@ -69,6 +69,7 @@ import java.util.Locale
 @Composable
 fun ReportScreen(
     onBack: () -> Unit,
+    onAgp: () -> Unit = {},
     vm: ReportViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsState()
@@ -98,7 +99,8 @@ fun ReportScreen(
                 onMonthChanged = vm::onMonthChanged,
                 onRetry = vm::retry,
                 onExportPdf = { pdfOptions = true },
-                onExportCsv = vm::exportCsv
+                onExportCsv = vm::exportCsv,
+                onAgp = onAgp
             )
         }
     }
@@ -140,7 +142,9 @@ internal fun ReportContent(
     onMonthChanged: (Int, Int) -> Unit,
     onRetry: (() -> Unit)?,
     onExportPdf: () -> Unit,
-    onExportCsv: () -> Unit
+    onExportCsv: () -> Unit,
+    /** PT-4: abre o AGP (dados do aparelho; não no modo seguidor). */
+    onAgp: (() -> Unit)? = null
 ) {
     Column(Modifier.fillMaxSize()) {
         subjectName?.let { FollowedSubjectBanner(it) }
@@ -175,6 +179,14 @@ internal fun ReportContent(
                             onClick = { onMonthChanged(m.monthValue, m.year); expanded = false }
                         )
                     }
+                }
+            }
+
+            if (onAgp != null && subjectName == null) {
+                GluCard(onClick = onAgp) {
+                    Text(stringResource(R.string.agp_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.agp_entry_desc), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 

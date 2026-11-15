@@ -13,7 +13,8 @@ PROPÓSITO ESPECÍFICO. Veja o arquivo [`LICENSE`](LICENSE).
 | Projeto | O que veio dele | Onde está no GluView |
 |---|---|---|
 | [Juggluco](https://github.com/j-kaltes/Juggluco) — Jaap Korthals Altes | Ponte nativa para a biblioteca da Abbott (Libre 2 Plus), subenv JNI, processamento do streaming, montagem da biblioteca assinada | `app/src/main/cpp/` (`jnisub.cpp`, `libre2_stream.cpp`, `libre2_bridge.cpp`, `libre2_hooks.cpp`), `tools/extract_native_libs.py` |
-| [xDrip+](https://github.com/NightscoutFoundation/xDrip) — Nightscout Foundation e colaboradores | Protocolo e handshake do Dexcom G6 | `app/src/main/java/com/gluview/app/data/dexcom/` |
+| [xDrip+](https://github.com/NightscoutFoundation/xDrip) — Nightscout Foundation e colaboradores | Protocolo e handshake do Dexcom G6; fluxo do Dexcom G7 (autenticação, registro 0x4E, histórico 0x59, estados do sensor) portado de `g5model/Ob1G5StateMachine`, `EGlucoseRxMessage2`, `BackFillTxMessage2`, `BackFillStream`, `CalibrationState` (commit `7c14016d5f1c05e4b1687e955c644431a496e9a2`) | `app/src/main/java/com/gluview/app/data/dexcom/` |
+| [libkeks do xDrip+](https://github.com/NightscoutFoundation/xDrip/tree/master/libkeks) — JamOrHam | Autenticação EC-JPAKE do Dexcom G7 (cópia sem alterações de lógica; tirados só o `Umbilical` e o `@Keep`), mesmo commit acima; interface `IPluginDA` do módulo `ipluginda` | `keks/` |
 | [WatchDrip](https://github.com/bigdigital/watchdrip) — bigdigital | Gerador e codificador de visor da Mi Band 5/6 | `app/src/main/java/com/gluview/app/watchface/miband/`, `compiler-cli/` |
 
 Projetos usados como referência de protocolo, sem cópia de código: Gadgetbridge (Mi Band),

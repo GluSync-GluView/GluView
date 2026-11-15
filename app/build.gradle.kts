@@ -23,7 +23,7 @@ val localProps = Properties().also { props ->
 // minuto e invalidaria o cache dos testes Robolectric/Roborazzi. -Pgluview.versionCode=N fixa o valor
 // (só para testes locais — a publicação usa a fórmula). versionName segue a série v1.0.x das releases
 // e precisa crescer junto (o Obtainium compara a string); sobrescrevível com -Pgluview.versionName.
-val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.3.0"
+val gluviewVersionName = (findProperty("gluview.versionName") as String?) ?: "1.4.0"
 val gluviewVersionCode: Int = (findProperty("gluview.versionCode") as String?)?.toInt() ?: run {
     val buildsApk = gradle.startParameter.taskNames.any {
         it.contains("assemble", ignoreCase = true) || it.contains("install", ignoreCase = true) ||
@@ -200,6 +200,11 @@ android {
             // ANEXADO após o ELF (anti-tamper do processStream, ver libre2_hooks.cpp). O strip
             // reescreveria o ELF e apagaria esse trailer. Idem SecureKeyBox/MathRuntimeChecks.
         }
+        // PT-3: o BouncyCastle (pareamento do Dexcom G7) e o jspecify trazem o mesmo manifesto OSGi;
+        // é metadado de JVM, inútil no Android.
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
     }
 }
 
@@ -212,6 +217,8 @@ ksp {
 dependencies {
     // Fase 4 do plano 14 (Wear OS): contrato celular↔relógio (WatchFaceSnapshot + caminhos do Data Layer).
     implementation(project(":wear-contract"))
+    // PT-3: pareamento EC-JPAKE do Dexcom G7 (libkeks do xDrip, GPLv3).
+    implementation(project(":keks"))
     // Fase 5: envio ao relógio pelo Data Layer (falha em silêncio em aparelho sem Play Services).
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)

@@ -31,7 +31,12 @@ class NotificationHelper @Inject constructor(
         const val CHANNEL_PERSISTENT = "gluview_persistent_v2"
         const val CHANNEL_ALERT      = "gluview_alert"
         const val CHANNEL_ALARM      = "gluview_alarm"
-        const val CHANNEL_DND        = "gluview_dnd"
+        // PT-5: canal novo para furar o Não Perturbe. O antigo ("gluview_dnd") tocava com som de
+        // NOTIFICAÇÃO (mudo no modo "só alarmes") e o app nem declarava o acesso ao Não Perturbe,
+        // então o setBypassDnd nunca valia sem a pessoa mexer no canal. Som e vibração de um canal
+        // não mudam depois de criado: por isso um id novo, com som de ALARME.
+        const val CHANNEL_DND        = "gluview_dnd_v2"
+        private const val CHANNEL_DND_LEGACY = "gluview_dnd"
         const val CHANNEL_ERROR      = "gluview_error"
         const val CHANNEL_SENSOR     = "gluview_sensor"
         const val CHANNEL_CAREGIVER  = "gluview_caregiver"
@@ -41,6 +46,9 @@ class NotificationHelper @Inject constructor(
         // Doação via Pix: agradecimento quando o Pix é confirmado. Sem som nem vibração, para nunca
         // ser confundido com alarme de glicemia (importância de canal não muda depois de criado).
         const val CHANNEL_DONATION   = "gluview_donation"
+
+        /** Pedido de promoção (Live Update): valor de Notification.EXTRA_REQUEST_PROMOTED_ONGOING (API 36.1). */
+        private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
 
         const val NOTIF_ID_PERSISTENT           = 1
         const val NOTIF_ID_ALERT_NOTIFICATION   = 2
@@ -102,7 +110,15 @@ class NotificationHelper @Inject constructor(
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = context.getString(R.string.notif_channel_dnd_desc)
-                enableVibration(true); setBypassDnd(true)
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
+                )
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                // O Android só aceita isto de um app com acesso ao Não Perturbe (ACCESS_NOTIFICATION_POLICY);
+                // recriar o canal depois de a pessoa conceder o acesso atualiza o canal existente.
+                setBypassDnd(true)
             },
             NotificationChannel(
                 CHANNEL_ERROR,
@@ -140,6 +156,56 @@ class NotificationHelper @Inject constructor(
             }
         )
         channels.forEach { manager.createNotificationChannel(it) }
+        runCatching { manager.deleteNotificationChannel(CHANNEL_DND_LEGACY) }
+    }
+
+    // ── PT-5: Não Perturbe ────────────────────────────────────────────────────
+
+    /** Estado atual do Não Perturbe do aparelho. */
+    fun currentDndState(): com.gluview.app.alert.DndState =
+        runCatching { com.gluview.app.alert.DndState.fromInterruptionFilter(manager.currentInterruptionFilter) }
+            .getOrDefault(com.gluview.app.alert.DndState.OFF)
+
+    /** A política do Não Perturbe deixa alarmes passarem no modo prioridade (padrão do Android). */
+    fun dndAllowsAlarms(): Boolean = runCatching {
+        (manager.notificationPolicy.priorityCategories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0
+    }.getOrDefault(false)
+
+    /** O GluView tem acesso ao Não Perturbe (Ajustes do Android › Acesso ao Não Perturbe). */
+    fun hasDndAccess(): Boolean = runCatching { manager.isNotificationPolicyAccessGranted }.getOrDefault(false)
+
+    /**
+     * O canal de furar o Não Perturbe pode, de fato, ignorar o DND agora. É a verdade que importa
+     * (o Android decide): sem isso, "furar o Não Perturbe" não toca e o app avisa em vez de fingir.
+     * Recria os canais antes de olhar, para o acesso concedido há pouco já valer.
+     */
+    fun dndBypassReady(): Boolean = runCatching {
+        if (hasDndAccess()) createChannels()
+        manager.getNotificationChannel(CHANNEL_DND)?.canBypassDnd() == true
+    }.getOrDefault(false)
+
+    /**
+     * Vibração direta, com atributos de alarme — para o alerta que respeita o Não Perturbe com
+     * "vibrar", e como tentativa quando "furar" não está disponível. Padrão longo e repetido 3x.
+     */
+    fun vibrateAlert() {
+        runCatching {
+            val pattern = longArrayOf(0, 800, 400, 800, 400, 800)
+            val effect = android.os.VibrationEffect.createWaveform(pattern, -1)
+            val vibrator: android.os.Vibrator? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(android.os.Vibrator::class.java)
+            }
+            if (vibrator?.hasVibrator() != true) return
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(effect, android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_ALARM))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
+            }
+        }
     }
 
     /** Doação via Pix confirmada. Toque abre a tela de doação (deep link que só navega). */
@@ -292,6 +358,71 @@ class NotificationHelper @Inject constructor(
         return builder.build()
     }
 
+    // ── PT-6: Live Update (Android 16) ────────────────────────────────────────
+
+    /** O aparelho tem Live Updates (Android 16, API 36). */
+    fun liveUpdatesSupported(): Boolean = android.os.Build.VERSION.SDK_INT >= 36
+
+    /** A pessoa deixa o GluView mostrar notificação promovida (Ajustes do Android). */
+    fun canPostPromoted(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 36 && runCatching { manager.canPostPromotedNotifications() }.getOrDefault(false)
+
+    /**
+     * Notificação persistente como Live Update (Android 16): estilo padrão do sistema com barra de
+     * progresso (posição da glicemia nas faixas) e texto curto no chip da barra de status. Pede a
+     * promoção pelo extra "android.requestPromotedOngoing" — o mesmo que o setRequestPromotedOngoing
+     * da API 36.1 grava; o método não existe na 36.0, o extra funciona nas duas. Sem layout próprio
+     * (RemoteViews impede a promoção), então aqui não vai o gráfico. Em Android < 16 (ou se algo
+     * falhar) devolve null e o serviço usa a notificação de sempre ([buildPersistentNotification]).
+     */
+    fun buildLiveUpdateNotification(live: LiveUpdateText, quickAddLabel: String?): Notification? {
+        if (android.os.Build.VERSION.SDK_INT < 36) return null
+        return runCatching {
+            val pending = PendingIntent.getActivity(
+                context, 0,
+                Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val builder = Notification.Builder(context, CHANNEL_PERSISTENT)
+                .setSmallIcon(R.drawable.ic_glucose)
+                .setContentTitle(live.title)
+                .setContentText(live.text)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setContentIntent(pending)
+                .setShortCriticalText(live.chip)
+                .addExtras(android.os.Bundle().apply { putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true) })
+            if (live.progress != null) {
+                val style = Notification.ProgressStyle()
+                    .setStyledByProgress(false)
+                    .setProgressSegments(live.segments.map { seg ->
+                        Notification.ProgressStyle.Segment(seg.length).setColor(when (seg.zone) {
+                            LiveSegment.Zone.LOW     -> com.gluview.app.util.graph.AgpPalette.LOW
+                            LiveSegment.Zone.TARGET  -> com.gluview.app.util.graph.AgpPalette.TARGET
+                            LiveSegment.Zone.HIGH    -> com.gluview.app.util.graph.AgpPalette.HIGH
+                        })
+                    })
+                    .setProgress(live.progress)
+                // Marca onde está a glicemia agora (sem isso a barra só mostra as faixas).
+                style.setProgressPoints(listOf(Notification.ProgressStyle.Point(live.progress)
+                    .setColor(android.graphics.Color.WHITE)))
+                builder.setStyle(style)
+            }
+            if (quickAddLabel != null) {
+                val quick = PendingIntent.getActivity(
+                    context, REQUEST_CODE_QUICK_ADD,
+                    Intent(context, com.gluview.app.QuickAddActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(Notification.Action.Builder(
+                    android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_diary_edit), quickAddLabel, quick).build())
+            }
+            builder.build()
+        }.getOrNull()
+    }
+
     /** [sp] em px com a escala de fonte do sistema limitada a [maxScale]. */
     private fun cappedPx(sp: Float, maxScale: Float): Float {
         val res = context.resources
@@ -317,6 +448,8 @@ class NotificationHelper @Inject constructor(
             .setContentText(message)
             .setAutoCancel(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // Canal de furar o DND: categoria alarme, para passar também no modo "só alarmes".
+            .apply { if (channel == CHANNEL_DND) setCategory(NotificationCompat.CATEGORY_ALARM) }
             .extend(
                 CarAppExtender.Builder()
                     .setContentTitle(title)

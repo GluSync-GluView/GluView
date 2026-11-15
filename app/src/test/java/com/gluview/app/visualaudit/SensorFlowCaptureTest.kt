@@ -19,6 +19,7 @@ import com.gluview.app.ui.screen.sensorscan.SensorScanActions
 import com.gluview.app.ui.screen.sensorscan.SensorScanUiState
 import com.gluview.app.ui.screen.sensorscan.SensorScannerContent
 import com.gluview.app.ui.screen.sensorsetup.SensorOption
+import com.gluview.app.ui.screen.sensorsetup.buildSensorOptions
 import com.gluview.app.ui.screen.sensorsetup.SensorSetupContent
 import com.gluview.app.util.TimeFormat
 import org.junit.After
@@ -67,16 +68,8 @@ class SensorFlowCaptureTest {
     private val day = 86_400_000L
 
     @Test fun sensor() {
-        val options = DataSourceType.entries.filter { it != DataSourceType.GLUSYNC }.map {
-            SensorOption(it, isCurrent = it == DataSourceType.SIBIONICS_CHINES, isSupported = !it.comingSoon,
-                // Plano 15: "Em breve" com a beta ligada — selos de candidatura e linha clicável.
-                betaState = when (it) {
-                    DataSourceType.MEDLEVENSOHN_SMART2 -> "pending"
-                    DataSourceType.DEXCOM_G6 -> "rejected"
-                    else -> null
-                },
-                canApplyBeta = it.comingSoon)
-        }.sortedByDescending { it.isCurrent }
+        // PT-1: lista sem beta, com o rótulo de validação de cada variante.
+        val options = buildSensorOptions(DataSourceType.SIBIONICS_CHINES.id, null) { true }
         val type = DataSourceType.SIBIONICS_CHINES
         fun setup(state: SetupState) = @Composable { _: Variant ->
             SensorSetupContent(state, options, {}, {}, {}, {}, {}, {}, {})

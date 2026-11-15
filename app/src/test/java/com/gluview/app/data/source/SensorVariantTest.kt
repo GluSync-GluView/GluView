@@ -52,7 +52,7 @@ class SensorVariantTest {
         assertEquals("SIBIONICS_GS1_CN", SensorVariantCatalog.resolve("LIBRE2PLUS_NA", "SIBIONICS_CHINES").id)
 
     @Test fun `toda fonte tem uma variante implementada e os ids sao unicos`() {
-        DataSourceType.entries.forEach { assertTrue(SensorVariantCatalog.defaultFor(it).implemented) }
+        DataSourceType.entries.forEach { assertTrue(it.name, SensorVariantCatalog.defaultFor(it).implemented) }
         assertEquals(SensorVariantCatalog.all.size, SensorVariantCatalog.all.map { it.id }.toSet().size)
     }
 

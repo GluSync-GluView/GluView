@@ -172,6 +172,11 @@ internal fun AlertHistoryContent(
 private fun typeLabel(type: String): String = stringResource(when (type) {
     "alarm" -> R.string.alerthistory_type_alarm
     "dnd"   -> R.string.alertsettings_type_overrides_dnd
+    // PT-5: o que o Não Perturbe fez com o alerta.
+    "dnd_vibrou"        -> R.string.alerthistory_type_dnd_vibrated
+    "dnd_suprimido"     -> R.string.alerthistory_type_dnd_suppressed
+    "dnd_sem_permissao" -> R.string.alerthistory_type_dnd_no_access
+    "dnd_silencio_total" -> R.string.alerthistory_type_dnd_total_silence
     else    -> R.string.alertsettings_type_notification
 })
 

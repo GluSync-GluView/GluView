@@ -116,6 +116,9 @@ enum class FailureReason {
     /** O pareamento não terminou a tempo (janela do sistema sem resposta, sensor longe). */
     PAIRING_TIMEOUT,
 
+    /** PT-3: Dexcom G7 sem pareamento neste celular — o primeiro pareamento é pelo app oficial. */
+    G7_NOT_PAIRED,
+
     /** Sem a permissão de procurar dispositivos por perto (L19: antes caía em "Bluetooth desligado"). */
     BLUETOOTH_PERMISSION,
 
@@ -143,6 +146,7 @@ class SensorSetupCoordinator @Inject constructor(
     private val accuChekBle: AccuChekBleManager,
     private val medLevBle: MedLevensohnBleManager,
     private val dexcomBle: DexcomG6BleManager,
+    private val dexcomG7Ble: com.gluview.app.data.dexcom.DexcomG7BleManager,
     private val statusHolder: SibionicsStatusHolder,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
@@ -168,8 +172,9 @@ class SensorSetupCoordinator @Inject constructor(
     }
 
     fun chooseSensor(type: DataSourceType) {
-        // G6: não há código na caixa que o app leia — o Transmitter ID impresso é digitado.
-        _state.value = if (type == DataSourceType.DEXCOM_G6) SetupState.EnteringSerial(type) else SetupState.Instructions(type)
+        // Dexcom não tem caixa para ler: vai direto ao código (G6: Transmitter ID; G7: código de
+        // pareamento de 4 dígitos, PT-3).
+        _state.value = if (type.isDexcom) SetupState.EnteringSerial(type) else SetupState.Instructions(type)
     }
 
     fun readyToScan() {
@@ -203,6 +208,10 @@ class SensorSetupCoordinator @Inject constructor(
 
     fun onSerialEntered(text: String) {
         val type = currentType() ?: return
+        if (type == DataSourceType.DEXCOM_G7) {
+            onDexcomG7Code(text)
+            return
+        }
         if (type == DataSourceType.DEXCOM_G6) {
             val id = text.trim().uppercase().filter { it.isLetterOrDigit() }
             if (!DexcomGatt.isValidTransmitterId(id)) {
@@ -229,6 +238,33 @@ class SensorSetupCoordinator @Inject constructor(
         }
         appLogger.usage(LOG, "Serial digitado à mão")
         _state.value = SetupState.EnteringPin(type, SensorCode(connectionCode = serial, serial = serial))
+    }
+
+    /**
+     * PT-3 — Dexcom G7: valida o código de pareamento (4 dígitos), grava e reinicia o serviço, que
+     * conecta e autentica sozinho. Só segue se houver um G7 pareado neste celular: o primeiro
+     * pareamento é pelo app oficial (exige credenciais dele que o GluView não tem).
+     */
+    private fun onDexcomG7Code(text: String) {
+        val type = DataSourceType.DEXCOM_G7
+        val code = text.trim().filter { it.isDigit() }
+        if (!com.gluview.app.data.dexcom.DexcomG7Auth.isValidPairingCode(code)) {
+            _state.value = SetupState.EnteringSerial(type, invalid = true)
+            return
+        }
+        if (runningJob?.isActive == true) return
+        runningJob = scope.launch {
+            if (dexcomG7Ble.bondedG7s().isEmpty()) {
+                appLogger.error(LOG, "Dexcom G7 sem pareamento neste celular")
+                _state.value = SetupState.Failed(FailureReason.G7_NOT_PAIRED, type)
+                return@launch
+            }
+            preferences.saveDexcomG7Code(code)
+            if (preferences.dataSource.first() != type.id) preferences.saveDataSource(type.id)
+            appLogger.usage(LOG, "Dexcom G7 configurado")
+            restartService()
+            _state.value = SetupState.Ready(type, 30)
+        }
     }
 
     /**
@@ -265,6 +301,7 @@ class SensorSetupCoordinator @Inject constructor(
             type == null -> { _state.value = SetupState.ChoosingSensor; false }
             // ID errado: volta para digitar (tentar de novo com o mesmo ID daria o mesmo erro).
             s.reason == FailureReason.WRONG_TRANSMITTER_ID -> { _state.value = SetupState.EnteringSerial(type); false }
+            type == DataSourceType.DEXCOM_G7 -> { _state.value = SetupState.EnteringSerial(type); false }
             code != null && type == DataSourceType.ACCU_CHEK_SMARTGUIDE && pendingPin == null ->
                 { _state.value = SetupState.EnteringPin(type, code); false }
             code != null -> { search(type, code); false }

@@ -40,6 +40,8 @@ sealed class Screen(val route: String) {
     data object Patterns      : Screen("patterns")
     data object Diagnostic    : Screen("diagnostic")
     data object Report        : Screen("report")
+    // PT-4 — Perfil Ambulatorial de Glicose (AGP)
+    data object Agp           : Screen("agp")
     // Sprint 6
     data object Onboarding    : Screen("onboarding")
     // Fluxo guiado de configuração/troca de sensor (caminho principal)

@@ -90,7 +90,14 @@ class AppPreferences @Inject constructor(
         fun alertKey(zone: GlucoseZone, type: AlertType) =
             booleanPreferencesKey("alert_${type.name.lowercase()}_${zone.name.lowercase()}")
 
-        fun defaultAlertEnabled(zone: GlucoseZone, type: AlertType): Boolean = when (zone) {
+        fun defaultAlertEnabled(zone: GlucoseZone, type: AlertType): Boolean = when {
+            // PT-5: "vibrar no Não Perturbe" nasce desligado — sem mudar o que já acontecia (a
+            // faixa que respeita o DND fica muda) até a pessoa escolher.
+            type == AlertType.DND_VIBRATE -> false
+            else -> defaultZoneAlertEnabled(zone, type)
+        }
+
+        private fun defaultZoneAlertEnabled(zone: GlucoseZone, type: AlertType): Boolean = when (zone) {
             GlucoseZone.URGENT_LOW  -> true
             GlucoseZone.LOW         -> type == AlertType.NOTIFICATION
             GlucoseZone.HIGH        -> type == AlertType.NOTIFICATION
@@ -174,6 +181,12 @@ class AppPreferences @Inject constructor(
         val KEY_SMART_MEAL_PROMPT           = booleanPreferencesKey("smart_meal_prompt")
         val KEY_SMART_MEAL_PROMPT_LAST_AT   = longPreferencesKey("smart_meal_prompt_last_at")
         val KEY_NOTIF_QUICK_ADD             = booleanPreferencesKey("notif_quick_add")
+        // PT-6: notificação fixa como Live Update (Android 16). Desligado por padrão: promovida, ela
+        // perde o gráfico (o Android não promove notificação com layout próprio).
+        val KEY_NOTIF_LIVE_UPDATE           = booleanPreferencesKey("notif_live_update")
+        // PT-7 Fase A: envio local no formato do xDrip, só para os apps escolhidos.
+        val KEY_LOCAL_BROADCAST_ENABLED     = booleanPreferencesKey("local_broadcast_enabled")
+        val KEY_LOCAL_BROADCAST_PACKAGES    = stringSetPreferencesKey("local_broadcast_packages")
         // Plano 17, Fase 3 — Health Connect (tudo desligado por padrão; cada tipo liga separado).
         val KEY_HC_WRITE_GLUCOSE            = booleanPreferencesKey("hc_write_glucose")
         val KEY_HC_READ_GLUCOSE             = booleanPreferencesKey("hc_read_glucose")
@@ -269,6 +282,11 @@ class AppPreferences @Inject constructor(
         val KEY_DEXCOM_G6_MAC            = stringPreferencesKey("dexcom_g6_mac")
         val KEY_DEXCOM_G6_TX_START       = longPreferencesKey("dexcom_g6_tx_start_ms")
         val KEY_DEXCOM_G6_LAST_READING   = longPreferencesKey("dexcom_g6_last_reading_ms")
+        // PT-3 — Dexcom G7: código de pareamento (4 dígitos), MAC e a chave da última autenticação
+        // (hex, 16 bytes; pula as rodadas do EC-JPAKE na reconexão).
+        val KEY_DEXCOM_G7_CODE           = stringPreferencesKey("dexcom_g7_code")
+        val KEY_DEXCOM_G7_MAC            = stringPreferencesKey("dexcom_g7_mac")
+        val KEY_DEXCOM_G7_KEY            = stringPreferencesKey("dexcom_g7_key")
         // F8 — pareamento da Mi Band para envio do visor (auth key Huami + MAC)
         val KEY_MIBAND_MAC            = stringPreferencesKey("miband_mac")
         val KEY_MIBAND_AUTH_KEY       = stringPreferencesKey("miband_auth_key")
@@ -417,6 +435,12 @@ class AppPreferences @Inject constructor(
     /** Botão "Registrar no diário" na notificação fixa (pedido do Felipe, 10/11/2026) — ligado por padrão. */
     val notifQuickAdd: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_NOTIF_QUICK_ADD] ?: true }
     suspend fun saveNotifQuickAdd(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_QUICK_ADD] = enabled }
+    val localBroadcastEnabled: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_LOCAL_BROADCAST_ENABLED] ?: false }
+    val localBroadcastPackages: Flow<Set<String>> = dataStore.data.safeMap(emptySet()) { it[KEY_LOCAL_BROADCAST_PACKAGES] ?: emptySet() }
+    suspend fun saveLocalBroadcastEnabled(enabled: Boolean) = dataStore.edit { it[KEY_LOCAL_BROADCAST_ENABLED] = enabled }
+    suspend fun saveLocalBroadcastPackages(pkgs: Set<String>) = dataStore.edit { it[KEY_LOCAL_BROADCAST_PACKAGES] = pkgs }
+    val notifLiveUpdate: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_NOTIF_LIVE_UPDATE] ?: false }
+    suspend fun saveNotifLiveUpdate(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_LIVE_UPDATE] = enabled }
 
     // ── Health Connect (plano 17, Fase 3) ─────────────────────────────────────
     val healthConnectToggles: Flow<HealthConnectToggles> = dataStore.data.safeMap(HealthConnectToggles()) {
@@ -602,6 +626,16 @@ class AppPreferences @Inject constructor(
     val dexcomG6TxStartMs: Flow<Long>       = dataStore.data.safeMap(0L) { it[KEY_DEXCOM_G6_TX_START] ?: 0L }
     /** Hora da última leitura do G6 gravada (para decidir o backfill). */
     val dexcomG6LastReadingMs: Flow<Long>   = dataStore.data.safeMap(0L) { it[KEY_DEXCOM_G6_LAST_READING] ?: 0L }
+    val dexcomG7Code: Flow<String>          = dataStore.data.safeMap("") { it[KEY_DEXCOM_G7_CODE]           ?: "" }
+    val dexcomG7Mac: Flow<String>           = dataStore.data.safeMap("") { it[KEY_DEXCOM_G7_MAC]            ?: "" }
+    val dexcomG7Key: Flow<String>           = dataStore.data.safeMap("") { it[KEY_DEXCOM_G7_KEY]            ?: "" }
+    /** Sensor G7 novo (código mudou): apaga MAC e chave do anterior. */
+    suspend fun saveDexcomG7Code(code: String) = dataStore.edit {
+        if (it[KEY_DEXCOM_G7_CODE] != code) { it.remove(KEY_DEXCOM_G7_MAC); it.remove(KEY_DEXCOM_G7_KEY) }
+        it[KEY_DEXCOM_G7_CODE] = code
+    }
+    suspend fun saveDexcomG7Mac(mac: String) = dataStore.edit { it[KEY_DEXCOM_G7_MAC] = mac }
+    suspend fun saveDexcomG7Key(hex: String) = dataStore.edit { if (hex.isBlank()) it.remove(KEY_DEXCOM_G7_KEY) else it[KEY_DEXCOM_G7_KEY] = hex }
     // F8 — Mi Band: MAC e auth key (hex de 32 chars) para o envio do visor via BLE Huami
     val miBandMac: Flow<String>             = dataStore.data.safeMap("") { it[KEY_MIBAND_MAC]      ?: "" }
     val miBandAuthKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_MIBAND_AUTH_KEY] ?: "" }
@@ -1146,6 +1180,7 @@ class AppPreferences @Inject constructor(
         o.put("auto_graph_theme",          p[KEY_AUTO_GRAPH_THEME]      ?: "AUTO")
         o.put("smart_meal_prompt",         p[KEY_SMART_MEAL_PROMPT]     ?: false)
         o.put("notif_quick_add",           p[KEY_NOTIF_QUICK_ADD]       ?: true)
+        o.put("notif_live_update",         p[KEY_NOTIF_LIVE_UPDATE]     ?: false)
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1198,6 +1233,7 @@ class AppPreferences @Inject constructor(
             if (o.has("auto_graph_theme"))          p[KEY_AUTO_GRAPH_THEME]      = o.getString("auto_graph_theme")
             if (o.has("smart_meal_prompt"))         p[KEY_SMART_MEAL_PROMPT]     = o.getBoolean("smart_meal_prompt")
             if (o.has("notif_quick_add"))           p[KEY_NOTIF_QUICK_ADD]       = o.getBoolean("notif_quick_add")
+            if (o.has("notif_live_update"))         p[KEY_NOTIF_LIVE_UPDATE]     = o.getBoolean("notif_live_update")
             // Toggles de alerta
             if (o.has("alert_toggles")) {
                 val at = o.getJSONObject("alert_toggles")

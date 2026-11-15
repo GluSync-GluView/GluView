@@ -82,8 +82,12 @@ class AlertSettingsViewModel @Inject constructor(
     private val iftttClient: IftttWebhookClient,
     private val alertPrefsRepo: AlertPreferencesRepository,
     private val caregiverRepo: CaregiverRepository,
-    private val cloudAccess: CloudAccessRepository
+    private val cloudAccess: CloudAccessRepository,
+    private val notificationHelper: com.gluview.app.notification.NotificationHelper
 ) : ViewModel() {
+
+    /** PT-5: o canal de furar o Não Perturbe pode mesmo ignorar o DND agora. */
+    fun dndBypassReady(): Boolean = notificationHelper.dndBypassReady()
 
     /** Resultado do teste (some depois de alguns segundos): a tela traduz o texto pelo [TestResult.ok]. */
     private val _iftttTestResult = MutableStateFlow<TestResult?>(null)
