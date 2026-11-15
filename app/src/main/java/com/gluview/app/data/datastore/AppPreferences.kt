@@ -187,6 +187,8 @@ class AppPreferences @Inject constructor(
         // Ajustes › Home (15/11/2026): o que aparece na tela inicial além da glicemia e do gráfico.
         val KEY_HOME_SHOW_STATS             = booleanPreferencesKey("home_show_stats")
         val KEY_HOME_SHOW_DIARY             = booleanPreferencesKey("home_show_diary")
+        // Plano 21, F1: ajustes da janela flutuante de glicemia (FloatingConfig.encode()).
+        val KEY_FLOATING_CONFIG             = stringPreferencesKey("floating_config")
         // PT-7 Fase A: envio local no formato do xDrip, só para os apps escolhidos.
         val KEY_LOCAL_BROADCAST_ENABLED     = booleanPreferencesKey("local_broadcast_enabled")
         val KEY_LOCAL_BROADCAST_PACKAGES    = stringSetPreferencesKey("local_broadcast_packages")
@@ -448,6 +450,11 @@ class AppPreferences @Inject constructor(
     /** Home: linha do diário de hoje (carboidrato e insulina). */
     val homeShowDiary: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_HOME_SHOW_DIARY] ?: true }
     suspend fun saveHomeShowDiary(show: Boolean) = dataStore.edit { it[KEY_HOME_SHOW_DIARY] = show }
+    /** Plano 21, F1: janela flutuante de glicemia (desligada por padrão). */
+    val floatingConfig: Flow<com.gluview.app.overlay.FloatingConfig> = dataStore.data
+        .safeMap(com.gluview.app.overlay.FloatingConfig()) { com.gluview.app.overlay.FloatingConfig.decode(it[KEY_FLOATING_CONFIG]) }
+    suspend fun saveFloatingConfig(config: com.gluview.app.overlay.FloatingConfig) =
+        dataStore.edit { it[KEY_FLOATING_CONFIG] = config.encode() }
     val notifLiveUpdate: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_NOTIF_LIVE_UPDATE] ?: false }
     suspend fun saveNotifLiveUpdate(enabled: Boolean) = dataStore.edit { it[KEY_NOTIF_LIVE_UPDATE] = enabled }
 
@@ -1192,6 +1199,7 @@ class AppPreferences @Inject constructor(
         o.put("notif_live_update",         p[KEY_NOTIF_LIVE_UPDATE]     ?: false)
         o.put("home_show_stats",           p[KEY_HOME_SHOW_STATS]       ?: true)
         o.put("home_show_diary",           p[KEY_HOME_SHOW_DIARY]       ?: true)
+        p[KEY_FLOATING_CONFIG]?.let { o.put("floating_config", it) }
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1247,6 +1255,10 @@ class AppPreferences @Inject constructor(
             if (o.has("notif_live_update"))         p[KEY_NOTIF_LIVE_UPDATE]     = o.getBoolean("notif_live_update")
             if (o.has("home_show_stats"))           p[KEY_HOME_SHOW_STATS]       = o.getBoolean("home_show_stats")
             if (o.has("home_show_diary"))           p[KEY_HOME_SHOW_DIARY]       = o.getBoolean("home_show_diary")
+            // Janela flutuante: volta DESLIGADA no outro celular (a permissão de sobrepor não vem
+            // junto no backup; quem quiser liga de novo e concede ali).
+            if (o.has("floating_config")) p[KEY_FLOATING_CONFIG] =
+                com.gluview.app.overlay.FloatingConfig.decode(o.getString("floating_config")).copy(enabled = false).encode()
             // Toggles de alerta
             if (o.has("alert_toggles")) {
                 val at = o.getJSONObject("alert_toggles")

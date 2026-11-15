@@ -1600,4 +1600,35 @@
     <string name="home_hide_diary_title">Ocultar o diário de hoje?</string>
     <string name="home_hide_body">O gráfico fica maior. Para mostrar de novo, vá em Ajustes › Home.</string>
     <string name="home_hide_confirm">Ocultar</string>
+    <!-- Plano 21, F1: janela flutuante -->
+    <string name="floating_title">Janela flutuante</string>
+    <string name="floating_subtitle">Glicemia por cima dos outros apps</string>
+    <string name="floating_intro">Mostra a glicemia numa janela pequena por cima de qualquer app. Ela usa a mesma leitura da notificação e, no modo seguidor, mostra a pessoa que você acompanha.</string>
+    <string name="floating_permission_title">Falta a permissão do Android</string>
+    <string name="floating_permission_body">Para desenhar por cima dos outros apps, o Android pede a permissão "Sobrepor a outros apps". O GluView só usa essa permissão para esta janela.</string>
+    <string name="floating_permission_action">Permitir</string>
+    <string name="floating_enable">Mostrar janela flutuante</string>
+    <string name="floating_enable_desc">Fica visível enquanto o GluView estiver rodando.</string>
+    <string name="floating_section_look">Aparência</string>
+    <string name="floating_size">Tamanho</string>
+    <string name="floating_opacity">Opacidade</string>
+    <string name="floating_show_arrow">Mostrar seta</string>
+    <string name="floating_show_delta">Mostrar variação</string>
+    <string name="floating_show_age">Mostrar há quanto tempo</string>
+    <string name="floating_show_age_desc">Sem sinal, o tempo aparece sempre.</string>
+    <string name="floating_zone_bg">Fundo na cor da faixa</string>
+    <string name="floating_highlight">Destacar alerta</string>
+    <string name="floating_highlight_desc">Borda branca em glicemia urgente ou queda rápida.</string>
+    <string name="floating_section_behavior">Comportamento</string>
+    <string name="floating_locked">Travar posição</string>
+    <string name="floating_locked_desc">Impede arrastar sem querer.</string>
+    <string name="floating_hide_locked">Esconder com a tela bloqueada</string>
+    <string name="floating_hide_minutes">Toque longo esconde por</string>
+    <string name="floating_reset_position">Voltar à posição inicial</string>
+    <string name="floating_how_to">Toque na janela para abrir o GluView. Arraste para mudar de lugar. Toque longo esconde a janela pelo tempo escolhido. Quando a leitura fica velha, o valor some e aparece "Sem sinal".</string>
+    <string name="floating_trend_up_fast">subindo rápido</string>
+    <string name="floating_trend_up">subindo</string>
+    <string name="floating_trend_flat">estável</string>
+    <string name="floating_trend_down">caindo</string>
+    <string name="floating_trend_down_fast">caindo rápido</string>
 </resources>

@@ -42,6 +42,8 @@ sealed class Screen(val route: String) {
     data object Report        : Screen("report")
     // Ajustes › Home: linhas da tela inicial (15/11/2026)
     data object SettingsHome  : Screen("settings_home")
+    // Plano 21, F1 — janela flutuante de glicemia
+    data object SettingsFloating : Screen("settings_floating")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6

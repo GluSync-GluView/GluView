@@ -27,6 +27,9 @@
          (Ajustes do Android); vibrar no Não Perturbe usa o vibrador direto. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Plano 21, F1: janela flutuante de glicemia sobre outros apps (desligada por padrão; a
+         pessoa liga em Ajustes › Janela flutuante e concede na tela do sistema). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- PT-6: Live Updates (Android 16). Exigida a partir da API 36.1; inofensiva antes. -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
 

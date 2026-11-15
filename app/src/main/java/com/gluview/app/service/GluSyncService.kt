@@ -103,6 +103,7 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var xdripBroadcaster: com.gluview.app.data.broadcast.XdripBroadcaster
     @Inject lateinit var sensorStatusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
     @Inject lateinit var widgetUpdater: com.gluview.app.widget.WidgetUpdater
+    @Inject lateinit var floatingWindow: com.gluview.app.overlay.FloatingGlucoseWindow
     // Plano 17 (F2.4) — aviso "subindo rápido sem refeição registrada" (desligado por padrão).
     @Inject lateinit var smartMealPrompt: com.gluview.app.data.reminder.SmartMealPrompt
     private var smartMealJob: kotlinx.coroutines.Job? = null
@@ -146,6 +147,22 @@ class GluSyncService : LifecycleService() {
         serviceMonitor.recordStarted()
         // Limites atuais para classificar as leituras que chegam pelo SignalR (callback síncrono).
         lifecycleScope.launch { preferences.glucoseThresholds.collect { thresholds = it } }
+        // Plano 21, F1: janela flutuante segue os ajustes dela, a unidade, o limiar de "sem sinal"
+        // e o idioma do app.
+        lifecycleScope.launch {
+            kotlinx.coroutines.flow.combine(
+                preferences.floatingConfig, preferences.glucoseUnit,
+                preferences.sensorNoSignalMin, preferences.appLanguage
+            ) { cfg, u, ns, lang -> listOf(cfg, u, ns, lang) }.collect { (cfg, u, ns, lang) ->
+                floatingWindow.applySettings(
+                    cfg as com.gluview.app.overlay.FloatingConfig, GlucoseUnit.fromString(u as String),
+                    ns as Int, lang as String
+                )
+                if ((cfg as com.gluview.app.overlay.FloatingConfig).enabled) floatingWindow.update(
+                    repository.currentReading.value?.let { withDynamicStaleness(it) }, floatingLabel()
+                )
+            }
+        }
         // Isolamento de glicemia por conta (migration 12→13): reclama o histórico legado pra
         // conta atualmente logada. Fica aqui (não só nos 4 pontos de login em AuthRepository)
         // porque uma sessão já autenticada antes desta atualização nunca passa por um login
@@ -511,7 +528,12 @@ class GluSyncService : LifecycleService() {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         mgr.notify(NOTIF_ID_PERSISTENT, notif)
         updateWidget(reading, unit, dark)
+        floatingWindow.update(reading, floatingLabel())
     }
+
+    /** No modo seguidor a janela flutuante mostra de quem é a glicemia. */
+    private suspend fun floatingLabel(): String? =
+        if (preferences.isFollowerOnly.first()) preferences.activeFollowedPatientName.first() else null
 
     private suspend fun updateWidget(reading: GlucoseReading, unit: GlucoseUnit, dark: Boolean) =
         widgetUpdater.update(reading, unit, dark)
@@ -1026,6 +1048,7 @@ class GluSyncService : LifecycleService() {
 
     override fun onDestroy() {
         appLogger.usage("SERVICE", "Serviço encerrado")
+        floatingWindow.shutdown()
         sourceSetupJob?.cancel()
         localReadingJob?.cancel()
         pollingJob?.cancel()

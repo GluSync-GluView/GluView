@@ -1593,4 +1593,35 @@
     <string name="home_hide_diary_title">Hide today\'s diary?</string>
     <string name="home_hide_body">The chart gets bigger. To show it again, go to Settings › Home.</string>
     <string name="home_hide_confirm">Hide</string>
+    <!-- Plan 21, F1: floating window -->
+    <string name="floating_title">Floating window</string>
+    <string name="floating_subtitle">Glucose on top of other apps</string>
+    <string name="floating_intro">Shows your glucose in a small window on top of any app. It uses the same reading as the notification and, in follower mode, shows the person you follow.</string>
+    <string name="floating_permission_title">Android permission needed</string>
+    <string name="floating_permission_body">To draw on top of other apps, Android asks for the "Display over other apps" permission. GluView only uses it for this window.</string>
+    <string name="floating_permission_action">Allow</string>
+    <string name="floating_enable">Show floating window</string>
+    <string name="floating_enable_desc">Visible while GluView is running.</string>
+    <string name="floating_section_look">Appearance</string>
+    <string name="floating_size">Size</string>
+    <string name="floating_opacity">Opacity</string>
+    <string name="floating_show_arrow">Show arrow</string>
+    <string name="floating_show_delta">Show change</string>
+    <string name="floating_show_age">Show how long ago</string>
+    <string name="floating_show_age_desc">With no signal, the time is always shown.</string>
+    <string name="floating_zone_bg">Background in range color</string>
+    <string name="floating_highlight">Highlight alerts</string>
+    <string name="floating_highlight_desc">White border on urgent glucose or fast drop.</string>
+    <string name="floating_section_behavior">Behavior</string>
+    <string name="floating_locked">Lock position</string>
+    <string name="floating_locked_desc">Prevents dragging by accident.</string>
+    <string name="floating_hide_locked">Hide when the screen is locked</string>
+    <string name="floating_hide_minutes">Long press hides for</string>
+    <string name="floating_reset_position">Reset position</string>
+    <string name="floating_how_to">Tap the window to open GluView. Drag to move it. Long press hides it for the chosen time. When the reading gets old, the value disappears and "No signal" is shown.</string>
+    <string name="floating_trend_up_fast">rising fast</string>
+    <string name="floating_trend_up">rising</string>
+    <string name="floating_trend_flat">steady</string>
+    <string name="floating_trend_down">falling</string>
+    <string name="floating_trend_down_fast">falling fast</string>
 </resources>
