@@ -10,8 +10,11 @@ data class BolusInput(
     val glucose: CurrentGlucose?,
     val useBgCorrection: Boolean = true,
     val useIob: Boolean = true,
-    /** Padrão ligado (como no AAPS): sem isso, logo depois de comer a conta pediria carbo à toa. */
-    val useCob: Boolean = true,
+    /**
+     * Padrão DESLIGADO, como no AAPS (`WizardIncludeCob = false`, conferido no código 4.0.0): ligado,
+     * a refeição já anotada no diário e digitada de novo aqui contaria duas vezes (dose dobrada).
+     */
+    val useCob: Boolean = false,
     val useTrend: Boolean = false,
     /** Sensor em aquecimento (as primeiras horas): a correção pela glicemia fica de fora. */
     val sensorWarmup: Boolean = false
@@ -96,7 +99,11 @@ object BolusCalculator {
         if (units > max) { units = max; w += BolusWarning.CAPPED_AT_MAX }
         val rounded = floor(units / profile.penStep + 1e-9) * profile.penStep
         if (rounded < units - 1e-9) w += BolusWarning.ROUNDED_DOWN
-        val carbsNeeded = if (raw < 0.0) -raw * ic else 0.0
+        // Carbo que falta: desconta o carbo ainda ativo mesmo com o COB fora da dose — logo depois
+        // de comer e aplicar, a insulina ativa é "coberta" pela refeição e não falta nada (antes a
+        // tela pedia "faltam 45 g" à toa). Isso só mexe no aviso, nunca soma insulina.
+        val rawWithCob = if (input.useCob) raw else raw + cob / ic
+        val carbsNeeded = if (rawWithCob < 0.0) -rawWithCob * ic else 0.0
         if (carbsNeeded >= 1.0) w += BolusWarning.MORE_CARBS_SUGGESTED
         if (iob > profile.effectiveMaxBolus) w += BolusWarning.HIGH_IOB
 

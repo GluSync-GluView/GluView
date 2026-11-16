@@ -145,7 +145,7 @@ private fun Calculator(p: TherapyProfile, s: TherapySnapshot, unit: GlucoseUnit,
     var carbsText by remember { mutableStateOf("") }
     var useBg by remember { mutableStateOf(true) }
     var useIob by remember { mutableStateOf(true) }
-    var useCob by remember { mutableStateOf(true) }
+    var useCob by remember { mutableStateOf(false) }
     var useTrend by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<BolusResult?>(null) }
     val carbs = carbsText.replace(',', '.').toDoubleOrNull()?.coerceIn(0.0, 500.0) ?: 0.0

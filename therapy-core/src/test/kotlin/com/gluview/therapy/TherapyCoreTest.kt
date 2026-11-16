@@ -174,6 +174,13 @@ class PredictionTest {
         val r = BolusCalculator.calculate(BolusInput(0.0, CurrentGlucose(120.0, 1)), p,
             listOf(Dose(now, 4.5)), listOf(Carbs(now, 45.0)), now + 60_000L, 600)
         assertTrue(r.carbsNeededG < 1.0)
+        assertEquals(0.0, r.fromCob, 0.0) // COB fora da dose por padrão (como no AAPS)
+    }
+
+    @Test fun mesmaRefeicaoDigitadaDeNovoNaoDobraPorPadrao() {
+        // A refeição de 45 g já está no diário e a pessoa digita 45 g de novo na calculadora.
+        val r = BolusCalculator.calculate(BolusInput(45.0, CurrentGlucose(110.0, 1)), p, emptyList(), listOf(Carbs(now, 45.0)), now, 600)
+        assertEquals(4.5, r.suggestedUnits, 0.0)
     }
 
     @Test fun limitesEAlertaPreditivo() {
