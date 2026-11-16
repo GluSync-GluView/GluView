@@ -75,6 +75,10 @@ interface GluSyncApi {
     suspend fun getWearData(): WearDataDto
 
     // S19 — Gráfico histórico
+    // Plano 21, F5.2: status da bomba/alça enviado pelo AndroidAPS (API Nightscout do GluSync, aceita o JWT).
+    @GET("api/v1/devicestatus")
+    suspend fun getDeviceStatus(@Query("count") count: Int = 1): Response<ResponseBody>
+
     @GET("glucose/range")
     suspend fun getRange(
         @Query("from")     from:     String? = null,

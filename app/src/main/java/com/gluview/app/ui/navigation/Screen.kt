@@ -51,6 +51,9 @@ sealed class Screen(val route: String) {
     data object TherapyProfile : Screen("therapy_profile")
     // Plano 21, F3 — calibração com ponta de dedo e suavização
     data object Calibration : Screen("calibration")
+    // Plano 21, F5 — painel Nightscout (idades, bomba/alça) e relatórios
+    data object NightscoutHub : Screen("nightscout_hub")
+    data object NightscoutReports : Screen("nightscout_reports")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6

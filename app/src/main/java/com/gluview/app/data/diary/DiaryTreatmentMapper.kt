@@ -33,7 +33,10 @@ object DiaryTreatmentMapper {
             DiaryType.FINGERSTICK -> o.put("eventType", "BG Check").put("glucose", e.value)
                 .put("glucoseType", "Finger").put("units", "mg/dl")
             DiaryType.EXERCISE -> o.put("eventType", "Exercise").put("duration", e.value)
-            DiaryType.KETONE, DiaryType.MEDICATION, DiaryType.NOTE -> o.put("eventType", "Note")
+            DiaryType.KETONE, DiaryType.MEDICATION -> o.put("eventType", "Note")
+            // Plano 21, F5.1: trocas (cânula, insulina, bateria da bomba) são notas com subtipo e
+            // viram os eventos do Nightscout que alimentam CAGE/IAGE/BAGE em qualquer cliente.
+            DiaryType.NOTE -> o.put("eventType", CareEvent.of(e.subtype)?.nightscoutEvent ?: "Note")
         }
         if (readableNote.isNotBlank()) o.put("notes", readableNote)
         o.put(GLUVIEW_KEY, JSONObject()
@@ -83,4 +86,13 @@ object DiaryTreatmentMapper {
             dirty = false
         ).takeIf { it.occurredAt > 0 }
     }
+}
+
+/** Plano 21, F5.1 — trocas registradas no diário como nota com subtipo. */
+enum class CareEvent(val subtype: String, val nightscoutEvent: String) {
+    SITE_CHANGE("site_change", "Site Change"),
+    INSULIN_CHANGE("insulin_change", "Insulin Change"),
+    PUMP_BATTERY("pump_battery", "Pump Battery Change");
+
+    companion object { fun of(subtype: String?): CareEvent? = entries.firstOrNull { it.subtype == subtype } }
 }

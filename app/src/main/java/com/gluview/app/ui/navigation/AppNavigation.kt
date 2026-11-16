@@ -180,6 +180,7 @@ fun AppNavigation(
                 onMirror          = { nav.navigate(Screen.Mirror.route) },
                 onBolus           = { nav.navigate(Screen.Bolus.route) },
                 onCalibration     = { nav.navigate(Screen.Calibration.route) },
+                onNightscout      = { nav.navigate(Screen.NightscoutHub.route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -195,6 +196,13 @@ fun AppNavigation(
         }
         composable(Screen.SettingsHome.route) {
             com.gluview.app.ui.screen.settings.HomeSettingsScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Screen.NightscoutHub.route) {
+            com.gluview.app.ui.screen.nightscout.NightscoutHubScreen(onBack = { nav.popBackStack() },
+                onReports = { nav.navigate(Screen.NightscoutReports.route) })
+        }
+        composable(Screen.NightscoutReports.route) {
+            com.gluview.app.ui.screen.nightscout.NightscoutReportsScreen(onBack = { nav.popBackStack() })
         }
         composable(Screen.Calibration.route) {
             com.gluview.app.ui.screen.therapy.CalibrationScreen(onBack = { nav.popBackStack() })
