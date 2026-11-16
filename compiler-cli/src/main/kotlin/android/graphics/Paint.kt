@@ -63,6 +63,9 @@ class Paint(@Suppress("UNUSED_PARAMETER") flags: Int = 0) {
             return FontMetrics(ascent = -fm.ascent.toFloat(), descent = fm.descent.toFloat())
         }
 
+    fun measureText(text: String): Float =
+        MEASURE_GRAPHICS.getFontMetrics(typeface.awtFont(textSize, bold = false)).stringWidth(text).toFloat()
+
     companion object {
         const val ANTI_ALIAS_FLAG = 1
 

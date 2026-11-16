@@ -22,6 +22,8 @@ data class WatchFaceRuntimeData(
     val sensorStatus: SibionicsSensorStatus,
     val hipo: Float = 70f,
     val hiper: Float = 180f,
+    val urgentLow: Float = 55f,
+    val urgentHigh: Float = 250f,
     val timeFormat: TimeFormat = TimeFormat.H24,
     val batteryPercent: Int = 0,
     val unit: GlucoseUnit = GlucoseUnit.MG_DL

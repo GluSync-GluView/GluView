@@ -65,7 +65,7 @@ object WearableDefinitionCatalog {
         val capabilities = when (spec.id) {
             "mi_band_6" -> miBand6Capabilities
             "mi_band_5" -> miBand5Capabilities
-            else -> if (com.gluview.app.watchface.apply.WearOsWatchFaceApplier.isWearOs(spec.id)) wearOsCapabilities
+            else -> if (isWearOs(spec.id)) wearOsCapabilities
                     else unknownCapabilities
         }
         WearableDefinition(spec = spec, capabilities = capabilities)
@@ -80,4 +80,8 @@ object WearableDefinitionCatalog {
     /** Instalável a partir da LOJA: hoje a loja só baixa o artefato .bin e envia pela Mi Band (BLE Huami). */
     fun isStoreInstallable(wearableId: String): Boolean =
         definitionFor(wearableId)?.capabilities?.let { it.compilerAvailable && it.transport == TransportKind.BLE_HUAMI } == true
+
+    /** Mantido aqui para o catálogo não depender do transporte Android (e do :compiler-cli). */
+    private fun isWearOs(wearableId: String): Boolean =
+        wearableId.startsWith("galaxy_watch_") || wearableId.startsWith("pixel_watch_") || wearableId == "xiaomi_watch_2"
 }
