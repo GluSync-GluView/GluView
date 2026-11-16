@@ -1795,7 +1795,7 @@
     <string name="cal_subtitle">Ponta de dedo e curva mais lisa</string>
     <string name="cal_warning_title">Atenção</string>
     <string name="cal_warning">Calibrar errado deixa TODAS as leituras erradas, inclusive os alertas. Só calibre com a glicemia estável, mãos limpas e glicosímetro confiável. Não calibre o mesmo sensor em dois apps ao mesmo tempo. Na dúvida, não calibre.</string>
-    <string name="cal_how">Como funciona: cada ponta de dedo forma um par com o valor do sensor naquele minuto. Com 2 ou mais pares, o GluView ajusta uma reta (inclinação 0,55 a 1,6) e passa a corrigir as leituras novas DESTE sensor. Se a correção em 100 mg/dL passar de 30, ela não é aplicada. Trocou o sensor, recomeça do zero. Leituras antigas não mudam.</string>
+    <string name="cal_how">Como funciona: cada ponta de dedo forma um par com o valor do sensor naquele minuto. Com 2 ou mais pares, o GluView ajusta uma reta (inclinação 0,55 a 1,6; pares mais antigos pesam menos; com o sensor pouco espalhado, só desloca) e passa a corrigir as leituras novas DESTE sensor. Se a correção em 100 mg/dL passar de 30, ela não é aplicada. Trocou o sensor, recomeça do zero. Leituras antigas não mudam.</string>
     <string name="cal_enable">Calibrar com ponta de dedo</string>
     <string name="cal_enable_desc">Só para sensores lidos por este celular.</string>
     <string name="cal_enable_confirm">Você leu os avisos e entende que uma calibração errada muda todas as leituras e alertas deste sensor?</string>
@@ -1882,4 +1882,5 @@
     <string name="integrations_region_ae">Emirados Árabes</string>
     <string name="integrations_region_eu2">Europa 2</string>
     <string name="integrations_transient_error">Última tentativa falhou, o GluSync tenta de novo sozinho: %1$s</string>
+    <string name="cal_rej_nosession">Recusado: o GluView não sabe quando este sensor começou (configure o sensor pelo assistente).</string>
 </resources>

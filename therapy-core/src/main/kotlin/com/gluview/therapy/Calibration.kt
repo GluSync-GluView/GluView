@@ -1,6 +1,7 @@
 package com.gluview.therapy
 
 import kotlin.math.abs
+import kotlin.math.exp
 
 /** Uma ponta de dedo e o valor do sensor no mesmo momento (mg/dL). */
 data class CalPair(val atMs: Long, val fingerstickMgDl: Double, val sensorMgDl: Double)
@@ -12,17 +13,20 @@ data class LinearCalibration(val slope: Double, val offset: Double, val pairs: I
     val correctionAt100: Double get() = slope * 100 + offset - 100
 }
 
-enum class CalRejection { WARMUP, FAST_CHANGE, NO_RECENT_SENSOR, OUT_OF_RANGE }
+enum class CalRejection { NO_SESSION, WARMUP, FAST_CHANGE, NO_RECENT_SENSOR, OUT_OF_RANGE }
 enum class CalFitProblem { TOO_FEW_PAIRS, SLOPE_LIMIT, TOO_LARGE }
 
 /**
- * Plano 21, F3.1 — calibração com glicemia capilar, com as travas do plugin de calibração do
- * AndroidAPS 4.0 (estudo 22, §2), implementadas a partir da descrição (sem código AAPS):
- *  - pelo menos 2 pares; inclinação limitada a 0,55–1,6;
- *  - se a correção em 100 mg/dL passar de ±30, NÃO aplica;
- *  - recusa o par nas 2 h depois da troca de sensor, com glicemia mudando rápido, ou sem leitura do
- *    sensor nos últimos 10 min.
- * Ajuste por mínimos quadrados; com a inclinação fora do limite, refaz com ela presa no limite.
+ * Plano 21, F3.1 — calibração com glicemia capilar. Regras CONFERIDAS no código do AndroidAPS 4.0.0
+ * (`plugins/calibration/.../LinearCalibrationPlugin.kt` e `CalibrationMath.kt`, 16/11/2026),
+ * reimplementadas (sem copiar código AGPL):
+ *  - sem início de sensor conhecido: recusa; nas 2 h depois da troca: recusa;
+ *  - glicemia variando mais de 5 mg/dL a cada 5 min (média curta): recusa;
+ *  - par = leitura do sensor mais recente ANTES da ponta de dedo, até 10 min antes;
+ *  - mínimos quadrados PONDERADOS pela idade do par (peso = e^(−idade/2 dias));
+ *  - valores do sensor espalhados por menos de 54 mg/dL: só deslocamento (inclinação 1);
+ *  - inclinação fora de 0,55–1,6: presa no limite e deslocamento refeito;
+ *  - correção em 100 mg/dL fora de ±30: NÃO aplica.
  */
 object Calibration {
     const val MIN_PAIRS = 2
@@ -30,46 +34,64 @@ object Calibration {
     const val MAX_SLOPE = 1.6
     const val MAX_CORRECTION_AT_100 = 30.0
     const val WARMUP_MS = 2 * 3_600_000L
-    const val RECENT_SENSOR_MS = 10 * 60_000L
-    /** Acima disso (mg/dL por minuto, em 15 min) a glicemia está "mudando rápido". */
-    const val FAST_RATE = 2.0
+    const val PAIR_LOOKBACK_MS = 10 * 60_000L
+    /** Variação máxima aceita, em mg/dL a cada 5 min (média curta de ~15 min). */
+    const val DELTA_GATE_PER_5MIN = 5.0
+    const val MIN_SENSOR_RANGE_FOR_SLOPE = 54.0
+    const val DECAY_TAU_MS = 2 * 86_400_000L
 
     /** Motivo para recusar o par, ou null se pode usar. [sensor] = leituras do sensor (hora, mg/dL). */
     fun check(atMs: Long, fingerstickMgDl: Double, sensorStartMs: Long?, sensor: List<Pair<Long, Double>>): CalRejection? {
         if (fingerstickMgDl !in 40.0..400.0) return CalRejection.OUT_OF_RANGE
-        if (sensorStartMs != null && atMs - sensorStartMs < WARMUP_MS) return CalRejection.WARMUP
-        val recent = sensor.filter { it.first in (atMs - RECENT_SENSOR_MS)..(atMs + 60_000L) }
-        if (recent.isEmpty()) return CalRejection.NO_RECENT_SENSOR
-        val window = sensor.filter { it.first in (atMs - 15 * 60_000L)..(atMs + 60_000L) }.sortedBy { it.first }
-        if (window.size >= 2) {
-            val minutes = (window.last().first - window.first().first) / 60_000.0
-            if (minutes >= 5 && abs(window.last().second - window.first().second) / minutes > FAST_RATE) return CalRejection.FAST_CHANGE
-        }
+        if (sensorStartMs == null) return CalRejection.NO_SESSION
+        if (atMs - sensorStartMs < WARMUP_MS) return CalRejection.WARMUP
+        shortAvgDelta(atMs, sensor)?.let { if (abs(it) > DELTA_GATE_PER_5MIN) return CalRejection.FAST_CHANGE }
+        if (sensorAt(atMs, sensor) == null) return CalRejection.NO_RECENT_SENSOR
         return null
     }
 
-    /** Valor do sensor mais perto de [atMs] (para formar o par). */
+    /** Variação média por 5 min nos ~15 min antes de [atMs] (como o shortAvgDelta), ou null. */
+    fun shortAvgDelta(atMs: Long, sensor: List<Pair<Long, Double>>): Double? {
+        val w = sensor.filter { it.first in (atMs - 17 * 60_000L)..atMs }.sortedBy { it.first }
+        if (w.size < 2) return null
+        val minutes = (w.last().first - w.first().first) / 60_000.0
+        if (minutes < 4.0) return null
+        return (w.last().second - w.first().second) / minutes * 5.0
+    }
+
+    /** Leitura do sensor mais recente até 10 min ANTES de [atMs] (o par da ponta de dedo). */
     fun sensorAt(atMs: Long, sensor: List<Pair<Long, Double>>): Double? =
-        sensor.filter { abs(it.first - atMs) <= RECENT_SENSOR_MS }.minByOrNull { abs(it.first - atMs) }?.second
+        sensor.filter { it.first in (atMs - PAIR_LOOKBACK_MS)..atMs }.maxByOrNull { it.first }?.second
 
     sealed interface Fit {
         data class Ok(val calibration: LinearCalibration) : Fit
         data class Rejected(val problem: CalFitProblem) : Fit
     }
 
-    fun fit(pairs: List<CalPair>): Fit {
+    private fun weight(atMs: Long, nowMs: Long) = if (atMs >= nowMs) 1.0 else exp(-(nowMs - atMs).toDouble() / DECAY_TAU_MS)
+
+    fun fit(pairs: List<CalPair>, nowMs: Long = pairs.maxOfOrNull { it.atMs } ?: 0L): Fit {
         if (pairs.size < MIN_PAIRS) return Fit.Rejected(CalFitProblem.TOO_FEW_PAIRS)
-        val xs = pairs.map { it.sensorMgDl }; val ys = pairs.map { it.fingerstickMgDl }
-        val mx = xs.average(); val my = ys.average()
-        val sxx = xs.sumOf { (it - mx) * (it - mx) }
-        var slope = if (sxx < 1e-6) 1.0 else xs.indices.sumOf { (xs[it] - mx) * (ys[it] - my) } / sxx
-        var limited = false
-        if (slope < MIN_SLOPE) { slope = MIN_SLOPE; limited = true }
-        if (slope > MAX_SLOPE) { slope = MAX_SLOPE; limited = true }
-        val offset = my - slope * mx
-        val cal = LinearCalibration(slope, offset, pairs.size)
+        val range = pairs.maxOf { it.sensorMgDl } - pairs.minOf { it.sensorMgDl }
+        val cal = if (range < MIN_SENSOR_RANGE_FOR_SLOPE) {
+            var sw = 0.0; var swd = 0.0
+            for (p in pairs) { val w = weight(p.atMs, nowMs); sw += w; swd += w * (p.fingerstickMgDl - p.sensorMgDl) }
+            LinearCalibration(1.0, swd / sw, pairs.size)
+        } else {
+            var sw = 0.0; var sx = 0.0; var sy = 0.0; var sxx = 0.0; var sxy = 0.0
+            for (p in pairs) {
+                val w = weight(p.atMs, nowMs); val x = p.sensorMgDl; val y = p.fingerstickMgDl
+                sw += w; sx += w * x; sy += w * y; sxx += w * x * x; sxy += w * x * y
+            }
+            val den = sw * sxx - sx * sx
+            if (den == 0.0) return Fit.Rejected(CalFitProblem.SLOPE_LIMIT)
+            val rawSlope = (sw * sxy - sx * sy) / den
+            val rawOffset = (sxx * sy - sx * sxy) / den
+            val slope = rawSlope.coerceIn(MIN_SLOPE, MAX_SLOPE)
+            if (slope == rawSlope) LinearCalibration(rawSlope, rawOffset, pairs.size)
+            else LinearCalibration(slope, (sy - slope * sx) / sw, pairs.size)
+        }
         if (abs(cal.correctionAt100) > MAX_CORRECTION_AT_100) return Fit.Rejected(CalFitProblem.TOO_LARGE)
-        if (limited && pairs.size == MIN_PAIRS && sxx < 1e-6) return Fit.Rejected(CalFitProblem.SLOPE_LIMIT)
         return Fit.Ok(cal)
     }
 }

@@ -47,7 +47,7 @@ class CalibrationManager @Inject constructor(
         if (sensorKey.isNullOrBlank() || !enabled()) return null
         val raw = preferences.calibrationPairs.first()
         if (sensorKey == cacheKey && raw == cacheRaw) return cacheModel
-        val fit = Calibration.fit(decode(raw).filter { it.sensorKey == sensorKey }.map { it.pair })
+        val fit = Calibration.fit(decode(raw).filter { it.sensorKey == sensorKey }.map { it.pair }, System.currentTimeMillis())
         val model = (fit as? Calibration.Fit.Ok)?.calibration
         cacheKey = sensorKey; cacheRaw = raw; cacheModel = model
         return model
@@ -66,9 +66,10 @@ class CalibrationManager @Inject constructor(
         val start = sensorHistoryDao.observeActive().first()?.takeIf { it.mac == key }?.startedAt
         Calibration.check(atMs, fingerstickMgDl, start, sensor)?.let { return CalAddResult.Rejected(it) }
         val sensorValue = Calibration.sensorAt(atMs, sensor) ?: return CalAddResult.Rejected(CalRejection.NO_RECENT_SENSOR)
+        // (o modelo em cache por sensor é refeito no próximo modelFor: a chave de cache inclui o texto dos pares)
         val all = pairs() + StoredCalPair(key, CalPair(atMs, fingerstickMgDl, sensorValue))
         preferences.saveCalibrationPairs(encode(all.takeLast(MAX_STORED)))
-        return when (val f = Calibration.fit(all.filter { it.sensorKey == key }.map { it.pair })) {
+        return when (val f = Calibration.fit(all.filter { it.sensorKey == key }.map { it.pair }, atMs)) {
             is Calibration.Fit.Ok -> CalAddResult.Added(f.calibration, null)
             is Calibration.Fit.Rejected -> CalAddResult.Added(null, f.problem)
         }

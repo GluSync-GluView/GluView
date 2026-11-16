@@ -1788,7 +1788,7 @@
     <string name="cal_subtitle">Fingerstick and a smoother curve</string>
     <string name="cal_warning_title">Warning</string>
     <string name="cal_warning">A wrong calibration makes ALL readings wrong, alerts included. Only calibrate with stable glucose, clean hands and a reliable meter. Do not calibrate the same sensor in two apps at the same time. When in doubt, do not calibrate.</string>
-    <string name="cal_how">How it works: each fingerstick forms a pair with the sensor value at that minute. With 2 or more pairs, GluView fits a line (slope 0.55 to 1.6) and corrects new readings from THIS sensor. If the correction at 100 mg/dL goes over 30, it is not applied. A new sensor starts from scratch. Old readings do not change.</string>
+    <string name="cal_how">How it works: each fingerstick forms a pair with the sensor value at that minute. With 2 or more pairs, GluView fits a line (slope 0.55 to 1.6; older pairs weigh less; with little spread in sensor values, it only shifts) and corrects new readings from THIS sensor. If the correction at 100 mg/dL goes over 30, it is not applied. A new sensor starts from scratch. Old readings do not change.</string>
     <string name="cal_enable">Calibrate with fingersticks</string>
     <string name="cal_enable_desc">Only for sensors read by this phone.</string>
     <string name="cal_enable_confirm">Have you read the warnings and understand that a wrong calibration changes every reading and alert from this sensor?</string>
@@ -1875,4 +1875,5 @@
     <string name="integrations_region_ae">United Arab Emirates</string>
     <string name="integrations_region_eu2">Europe 2</string>
     <string name="integrations_transient_error">Last attempt failed, GluSync retries on its own: %1$s</string>
+    <string name="cal_rej_nosession">Rejected: GluView does not know when this sensor started (set up the sensor with the wizard).</string>
 </resources>

@@ -73,7 +73,7 @@ class CalibrationViewModel @Inject constructor(
     fun refresh() = viewModelScope.launch {
         val key = manager.currentSensorKey()
         val pairs = manager.pairs().filter { it.sensorKey == key }
-        _ui.value = CalUi(key, pairs, if (pairs.isEmpty()) null else Calibration.fit(pairs.map { it.pair }))
+        _ui.value = CalUi(key, pairs, if (pairs.isEmpty()) null else Calibration.fit(pairs.map { it.pair }, System.currentTimeMillis()))
     }
     fun setEnabled(on: Boolean) = viewModelScope.launch { preferences.saveCalibrationEnabled(on) }
     fun setSmoothing(m: SmoothingMethod) = viewModelScope.launch { preferences.saveSmoothingMethod(m) }
@@ -168,6 +168,7 @@ private fun fitText(p: CalFitProblem) = when (p) {
 }
 
 private fun rejectText(r: CalRejection) = when (r) {
+    CalRejection.NO_SESSION -> R.string.cal_rej_nosession
     CalRejection.WARMUP -> R.string.cal_rej_warmup
     CalRejection.FAST_CHANGE -> R.string.cal_rej_fast
     CalRejection.NO_RECENT_SENSOR -> R.string.cal_rej_nosensor
