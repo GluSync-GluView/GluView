@@ -48,7 +48,7 @@ import com.gluview.app.data.local.entity.WatchFaceEntity
         ReminderLogEntity::class,
         HealthRecordEntity::class
     ],
-    version   = 15,
+    version   = 16,
     // E8 do plano OTA: esquema exportado em app/schemas (versionado) para testar migrações futuras
     // com MigrationTestHelper. Os esquemas 1–12 não foram guardados na época; daqui pra frente sim.
     exportSchema = true
@@ -282,6 +282,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `health_record` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `hcId` TEXT NOT NULL, `kind` TEXT NOT NULL, `startMs` INTEGER NOT NULL, `endMs` INTEGER NOT NULL, `value` REAL NOT NULL, `value2` REAL NOT NULL, `subtype` TEXT NOT NULL, `title` TEXT NOT NULL, `sourcePkg` TEXT NOT NULL, `importedAt` INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_health_record_hcId` ON `health_record` (`hcId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_health_record_kind_startMs` ON `health_record` (`kind`, `startMs`)")
+            }
+        }
+
+        // Plano 21 (F3.1) — calibração com glicemia capilar: guarda o valor original do sensor.
+        // Aditiva (coluna nova, nula para tudo que já existe).
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `glucose_readings` ADD COLUMN `uncalibratedMgDl` REAL")
             }
         }
     }

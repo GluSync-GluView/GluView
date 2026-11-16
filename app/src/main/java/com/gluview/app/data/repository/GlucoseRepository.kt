@@ -32,7 +32,9 @@ class GlucoseRepository @Inject constructor(
     private val dao: GlucoseDao,
     private val preferences: AppPreferences,
     // Plano 17: o diário segue a mesma regra de conta dona (claimUnownedReadings reclama os dois).
-    private val eventLogDao: com.gluview.app.data.local.dao.EventLogDao
+    private val eventLogDao: com.gluview.app.data.local.dao.EventLogDao,
+    // Plano 21, F3.1: calibração com glicemia capilar, aplicada aqui (ponto único dos sensores locais).
+    private val calibration: com.gluview.app.therapy.CalibrationManager
 ) {
     // StateFlow compartilhado entre Service e ViewModels
     private val _currentReading = MutableStateFlow<GlucoseReading?>(null)
@@ -183,6 +185,14 @@ class GlucoseRepository @Inject constructor(
         // (ver SibionicsBleSource.persist()) — esta função é agnóstica ao modo.
         confirmed: Boolean? = null
     ): GlucoseReading {
+        // Calibração do usuário (desligada por padrão; só o sensor em que os pares foram feitos).
+        val model = runCatching { calibration.modelFor(sensorMac) }.getOrNull()
+        val uncalibrated = sgvMgDl
+        @Suppress("NAME_SHADOWING")
+        val sgvMgDl = model?.apply(sgvMgDl) ?: sgvMgDl
+        // A variação veio do valor original: escala pela inclinação da calibração.
+        @Suppress("NAME_SHADOWING")
+        val delta = model?.let { Math.round(delta * it.slope).toInt() } ?: delta
         val thresholds = preferences.glucoseThresholds.first()
         val status = thresholds.status(sgvMgDl)
         val zone   = thresholds.classify(sgvMgDl, arrow)
@@ -201,7 +211,8 @@ class GlucoseRepository @Inject constructor(
                 sensorMac    = sensorMac,
                 sensorAgeMin = sensorAgeMin,
                 confirmed    = confirmed,
-                ownerEmail   = preferences.userEmail.first()
+                ownerEmail   = preferences.userEmail.first(),
+                uncalibratedMgDl = if (model != null) uncalibrated else null
             )
         )
         val reading = GlucoseReading(

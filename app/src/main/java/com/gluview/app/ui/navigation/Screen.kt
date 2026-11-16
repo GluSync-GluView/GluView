@@ -49,6 +49,8 @@ sealed class Screen(val route: String) {
     // Plano 21, F4 — calculadora de bolus e perfil de terapia
     data object Bolus : Screen("bolus")
     data object TherapyProfile : Screen("therapy_profile")
+    // Plano 21, F3 — calibração com ponta de dedo e suavização
+    data object Calibration : Screen("calibration")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6

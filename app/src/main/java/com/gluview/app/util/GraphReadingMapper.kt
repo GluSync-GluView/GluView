@@ -33,3 +33,14 @@ fun List<GraphReading>.applyDisplayMode(mode: GlucoseDisplayMode): List<GraphRea
     GlucoseDisplayMode.CONFIRMED_ONLY  -> filter { it.confirmed != false }
     GlucoseDisplayMode.ALL_WITH_MARKERS -> this
 }
+
+/**
+ * Plano 21, F3.2 — suavização da curva (Ajustes › Calibração e suavização). Só muda o DESENHO do
+ * gráfico; valor atual, alertas, envio e relatórios continuam com o valor medido.
+ */
+fun List<GraphReading>.smoothed(method: com.gluview.therapy.SmoothingMethod): List<GraphReading> {
+    if (method == com.gluview.therapy.SmoothingMethod.OFF || size < 3) return this
+    val sorted = sortedBy { it.timestampMs }
+    val s = com.gluview.therapy.Smoothing.smooth(sorted.map { it.timestampMs to it.sgvMgDl.toDouble() }, method)
+    return sorted.mapIndexed { i, r -> r.copy(sgvMgDl = s[i].second.toFloat()) }
+}

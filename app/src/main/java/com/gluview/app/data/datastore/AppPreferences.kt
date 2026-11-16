@@ -194,6 +194,10 @@ class AppPreferences @Inject constructor(
         val KEY_THERAPY_PROFILE             = stringPreferencesKey("therapy_profile")
         val KEY_DOSE_FEATURES               = booleanPreferencesKey("dose_features")
         val KEY_DOSE_INTRO_ACCEPTED_AT      = longPreferencesKey("dose_intro_accepted_at")
+        // Plano 21, F3: calibração com glicemia capilar (desligada) e suavização da curva (OFF).
+        val KEY_CALIBRATION_ENABLED         = booleanPreferencesKey("calibration_enabled")
+        val KEY_CALIBRATION_PAIRS           = stringPreferencesKey("calibration_pairs")
+        val KEY_SMOOTHING                   = stringPreferencesKey("smoothing_method")
         // PT-7 Fase A: envio local no formato do xDrip, só para os apps escolhidos.
         val KEY_LOCAL_BROADCAST_ENABLED     = booleanPreferencesKey("local_broadcast_enabled")
         val KEY_LOCAL_BROADCAST_PACKAGES    = stringSetPreferencesKey("local_broadcast_packages")
@@ -464,6 +468,13 @@ class AppPreferences @Inject constructor(
     suspend fun saveDoseFeatures(on: Boolean) = dataStore.edit { it[KEY_DOSE_FEATURES] = on }
     val doseIntroAcceptedAt: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_DOSE_INTRO_ACCEPTED_AT] ?: 0L }
     suspend fun saveDoseIntroAccepted(at: Long) = dataStore.edit { it[KEY_DOSE_INTRO_ACCEPTED_AT] = at }
+    val calibrationEnabled: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_CALIBRATION_ENABLED] ?: false }
+    suspend fun saveCalibrationEnabled(on: Boolean) = dataStore.edit { it[KEY_CALIBRATION_ENABLED] = on }
+    val calibrationPairs: Flow<String> = dataStore.data.safeMap("") { it[KEY_CALIBRATION_PAIRS] ?: "" }
+    suspend fun saveCalibrationPairs(raw: String) = dataStore.edit { it[KEY_CALIBRATION_PAIRS] = raw }
+    val smoothingMethod: Flow<com.gluview.therapy.SmoothingMethod> = dataStore.data.safeMap(com.gluview.therapy.SmoothingMethod.OFF) {
+        com.gluview.therapy.SmoothingMethod.entries.firstOrNull { m -> m.name == it[KEY_SMOOTHING] } ?: com.gluview.therapy.SmoothingMethod.OFF }
+    suspend fun saveSmoothingMethod(m: com.gluview.therapy.SmoothingMethod) = dataStore.edit { it[KEY_SMOOTHING] = m.name }
     /** Plano 21, F1: janela flutuante de glicemia (desligada por padrão). */
     val floatingConfig: Flow<com.gluview.app.overlay.FloatingConfig> = dataStore.data
         .safeMap(com.gluview.app.overlay.FloatingConfig()) { com.gluview.app.overlay.FloatingConfig.decode(it[KEY_FLOATING_CONFIG]) }
@@ -1215,6 +1226,7 @@ class AppPreferences @Inject constructor(
         o.put("home_show_diary",           p[KEY_HOME_SHOW_DIARY]       ?: true)
         p[KEY_FLOATING_CONFIG]?.let { o.put("floating_config", it) }
         p[KEY_THERAPY_PROFILE]?.let { o.put("therapy_profile", it) }
+        p[KEY_SMOOTHING]?.let { o.put("smoothing_method", it) }
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1274,6 +1286,8 @@ class AppPreferences @Inject constructor(
             // (no outro celular a pessoa lê o aviso e liga de novo).
             if (o.has("therapy_profile")) com.gluview.therapy.ProfileCodec.decode(o.getString("therapy_profile"))
                 ?.let { p[KEY_THERAPY_PROFILE] = com.gluview.therapy.ProfileCodec.encode(it) }
+            // Suavização vai no backup; calibração não (é por sensor, e o sensor é outro).
+            if (o.has("smoothing_method")) p[KEY_SMOOTHING] = o.getString("smoothing_method")
             // Janela flutuante: volta DESLIGADA no outro celular (a permissão de sobrepor não vem
             // junto no backup; quem quiser liga de novo e concede ali).
             if (o.has("floating_config")) p[KEY_FLOATING_CONFIG] =

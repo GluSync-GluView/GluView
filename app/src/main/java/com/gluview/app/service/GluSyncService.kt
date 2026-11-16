@@ -1,5 +1,6 @@
 package com.gluview.app.service
 
+import com.gluview.app.util.smoothed
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -503,6 +504,7 @@ class GluSyncService : LifecycleService() {
         val recentReadings = repository.getRecentReadingsForNotification(fromMs)
         val displayMode = GlucoseDisplayMode.fromId(preferences.glucoseDisplayMode.first())
         val graphReadings = recentReadings.map { it.toGraphReading(calFactor) }.applyDisplayMode(displayMode)
+            .smoothed(preferences.smoothingMethod.first())
         val limits = preferences.glucoseThresholds.first()
         val content = buildPersistentNotificationContent(
             withAppLanguage(preferences.appLanguage.first()), reading, graphReadings, unit, timeFormat,

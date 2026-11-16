@@ -1,5 +1,6 @@
 package com.gluview.app.widget
 
+import com.gluview.app.util.smoothed
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
@@ -101,6 +102,7 @@ class WidgetUpdater @Inject constructor(
         val recentReadings = repository.getRecentReadingsForNotification(fromMs) // seguidor: o buffer do paciente (L9)
         val displayMode = GlucoseDisplayMode.fromId(preferences.glucoseDisplayMode.first())
         val graphReadings = recentReadings.map { it.toGraphReading(calFactor) }.applyDisplayMode(displayMode)
+            .smoothed(preferences.smoothingMethod.first())
 
         val chartIds = manager.getGlanceIds(GluViewChartWidget::class.java)
         if (chartIds.isNotEmpty()) {

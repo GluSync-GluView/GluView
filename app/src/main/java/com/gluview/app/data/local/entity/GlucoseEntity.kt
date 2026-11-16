@@ -27,5 +27,8 @@ data class GlucoseEntity(
     // conta quando mais de uma é usada no mesmo aparelho (ex.: conta admin de teste). Linhas
     // anteriores a essa coluna nascem "" e são reclamadas pela 1ª conta que logar depois
     // (GlucoseDao.claimUnownedRows), preservando o histórico já existente.
-    val ownerEmail: String = ""
+    val ownerEmail: String = "",
+    // Plano 21, F3.1: valor do sensor ANTES da calibração com glicemia capilar (null = sem
+    // calibração do usuário). sgvMgDl guarda o calibrado, que é o que o app usa.
+    val uncalibratedMgDl: Double? = null
 )

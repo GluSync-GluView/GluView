@@ -1,5 +1,6 @@
 package com.gluview.app.ui.screen.home
 
+import com.gluview.app.util.smoothed
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -382,10 +383,12 @@ class HomeViewModel @Inject constructor(
             combine(
                 repository.observeRecentReadings(fromMs),
                 preferences.sibionicsCalFactor,
-                preferences.glucoseDisplayMode
-            ) { entities, calFactor, modeId ->
+                preferences.glucoseDisplayMode,
+                preferences.smoothingMethod
+            ) { entities, calFactor, modeId, smoothing ->
                 entities.map { it.toGraphReading(calFactor) }
                     .applyDisplayMode(GlucoseDisplayMode.fromId(modeId))
+                    .smoothed(smoothing)
             }
         }
         .stateIn<List<GraphReading>?>(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

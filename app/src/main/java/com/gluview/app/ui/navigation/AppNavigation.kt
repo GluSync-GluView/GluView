@@ -179,6 +179,7 @@ fun AppNavigation(
                 onFloatingSettings = { nav.navigate(Screen.SettingsFloating.route) },
                 onMirror          = { nav.navigate(Screen.Mirror.route) },
                 onBolus           = { nav.navigate(Screen.Bolus.route) },
+                onCalibration     = { nav.navigate(Screen.Calibration.route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -194,6 +195,9 @@ fun AppNavigation(
         }
         composable(Screen.SettingsHome.route) {
             com.gluview.app.ui.screen.settings.HomeSettingsScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Screen.Calibration.route) {
+            com.gluview.app.ui.screen.therapy.CalibrationScreen(onBack = { nav.popBackStack() })
         }
         composable(Screen.Bolus.route) {
             com.gluview.app.ui.screen.therapy.BolusScreen(onBack = { nav.popBackStack() },
