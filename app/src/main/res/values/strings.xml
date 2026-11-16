@@ -1875,4 +1875,11 @@
     <string name="ns_col_week">Semana</string>
     <string name="ns_col_goal_range">Meta alvo</string>
     <string name="ns_col_goal_low">Meta baixa</string>
+    <!-- Plano 21, F8 -->
+    <string name="integrations_region_la">América Latina</string>
+    <string name="integrations_region_ca">Canadá</string>
+    <string name="integrations_region_ap">Ásia-Pacífico</string>
+    <string name="integrations_region_ae">Emirados Árabes</string>
+    <string name="integrations_region_eu2">Europa 2</string>
+    <string name="integrations_transient_error">Última tentativa falhou, o GluSync tenta de novo sozinho: %1$s</string>
 </resources>

@@ -202,6 +202,10 @@ private fun ProviderCard(
             }
             status.region?.let { add(Fact(stringResource(R.string.integrations_region), regionLabel(provider, it))) }
         })
+        if (!authError && !status.lastError.isNullOrBlank()) {
+            // Plano 21 (F8): erro passageiro (rede, servidor fora): a integração continua ativa.
+            GluCallout(message = stringResource(R.string.integrations_transient_error, status.lastError!!), tone = Tone.Warning)
+        }
         if (authError) {
             // O erro do provedor vem cru (inglês, técnico): frase amigável com o detalhe embaixo.
             GluCallout(
@@ -224,7 +228,8 @@ private fun ProviderCard(
 private fun regions(provider: String): List<Triple<String?, String, String>> =
     if (provider == PROVIDER_DEXCOM) listOf(
         Triple("us", stringResource(R.string.integrations_region_us), "share2.dexcom.com"),
-        Triple("ous", stringResource(R.string.integrations_region_outside_us), "shareous1.dexcom.com")
+        Triple("ous", stringResource(R.string.integrations_region_outside_us), "shareous1.dexcom.com"),
+        Triple("jp", stringResource(R.string.integrations_region_jp), "share.dexcom.jp")
     ) else listOf(
         Triple(null, stringResource(R.string.integrations_region_global), "api.libreview.io"),
         Triple("us", stringResource(R.string.integrations_region_us), "api-us.libreview.io"),
@@ -232,7 +237,14 @@ private fun regions(provider: String): List<Triple<String?, String, String>> =
         Triple("de", stringResource(R.string.integrations_region_de), "api-de.libreview.io"),
         Triple("fr", stringResource(R.string.integrations_region_fr), "api-fr.libreview.io"),
         Triple("jp", stringResource(R.string.integrations_region_jp), "api-jp.libreview.io"),
-        Triple("au", stringResource(R.string.integrations_region_au), "api-au.libreview.io")
+        Triple("au", stringResource(R.string.integrations_region_au), "api-au.libreview.io"),
+        // Plano 21 (F8): regiões da referência que faltavam. O GluSync segue o "redirect" do
+        // LibreLinkUp sozinho, então "Global" também acha a certa.
+        Triple("la", stringResource(R.string.integrations_region_la), "api-la.libreview.io"),
+        Triple("ca", stringResource(R.string.integrations_region_ca), "api-ca.libreview.io"),
+        Triple("ap", stringResource(R.string.integrations_region_ap), "api-ap.libreview.io"),
+        Triple("ae", stringResource(R.string.integrations_region_ae), "api-ae.libreview.io"),
+        Triple("eu2", stringResource(R.string.integrations_region_eu2), "api-eu2.libreview.io")
     )
 
 /** Nome da região (antes o código cru: "eu", "ous"); o servidor fica só no menu de escolha. */
