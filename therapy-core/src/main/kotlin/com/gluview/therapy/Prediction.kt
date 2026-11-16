@@ -10,7 +10,10 @@ data class PredictionResult(
     val cob: List<PredPoint>,
     /** Tendência atual da glicemia (UAM, refeição não anunciada) somada à insulina, decaindo. */
     val uam: List<PredPoint>,
-    /** Faixa de incerteza: menor e maior valor entre as curvas em cada ponto. */
+    /**
+     * Faixa de incerteza: menor e maior valor entre as curvas QUE CONTAM O CARBO (COB e UAM). A curva
+     * "só insulina" fica de referência: ela ignora a refeição e assustaria à toa logo depois de comer.
+     */
     val low: List<PredPoint>,
     val high: List<PredPoint>
 )
@@ -51,8 +54,8 @@ object Prediction {
             uamBg = clamp(uamBg + bgi + devUam + carbImpact)
             iobL += PredPoint(t, iobBg); cobL += PredPoint(t, cobBg); uamL += PredPoint(t, uamBg)
         }
-        val low = iobL.indices.map { PredPoint(iobL[it].atMs, minOf(iobL[it].mgDl, cobL[it].mgDl, uamL[it].mgDl)) }
-        val high = iobL.indices.map { PredPoint(iobL[it].atMs, maxOf(iobL[it].mgDl, cobL[it].mgDl, uamL[it].mgDl)) }
+        val low = iobL.indices.map { PredPoint(iobL[it].atMs, minOf(cobL[it].mgDl, uamL[it].mgDl)) }
+        val high = iobL.indices.map { PredPoint(iobL[it].atMs, maxOf(cobL[it].mgDl, uamL[it].mgDl)) }
         return PredictionResult(iobL, cobL, uamL, low, high)
     }
 

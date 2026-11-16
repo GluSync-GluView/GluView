@@ -46,6 +46,9 @@ sealed class Screen(val route: String) {
     data object SettingsFloating : Screen("settings_floating")
     // Plano 21, F2 — espelhamento sem servidor e servidor web local
     data object Mirror : Screen("mirror")
+    // Plano 21, F4 — calculadora de bolus e perfil de terapia
+    data object Bolus : Screen("bolus")
+    data object TherapyProfile : Screen("therapy_profile")
     // PT-4 — Perfil Ambulatorial de Glicose (AGP)
     data object Agp           : Screen("agp")
     // Sprint 6

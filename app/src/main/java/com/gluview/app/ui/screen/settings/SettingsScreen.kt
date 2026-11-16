@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.SystemUpdate
 import com.gluview.app.ui.screen.updates.UpdatesViewModel
@@ -69,6 +70,7 @@ fun SettingsScreen(
     onHomeSettings: () -> Unit = {},
     onFloatingSettings: () -> Unit = {},
     onMirror: () -> Unit = {},
+    onBolus: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updatesViewModel: UpdatesViewModel = hiltViewModel(),
     donationEntryViewModel: DonationEntryViewModel = hiltViewModel()
@@ -138,7 +140,7 @@ fun SettingsScreen(
         debugSeedEnabled = debugSeedEnabled, debugBusy = debugBusy,
         nav = SettingsNav(onAccountSettings, onGeneralSettings, onSyncSettings, onAlertSettings, onWatchFaces,
             onCaregiver, onIntegrations, onSupportSettings, onUpdates, onDonate, onDiary, onReminders, onHealthConnect,
-            onHomeSettings, onFloatingSettings, onMirror),
+            onHomeSettings, onFloatingSettings, onMirror, onBolus),
         updateAvailableName = updatesUi.available?.versionName,
         showDonate = donationsEnabled,
         onDebugSeedToggle = viewModel::onDebugSeedToggle,
@@ -182,7 +184,9 @@ internal data class SettingsNav(
     // Plano 21, F1 — janela flutuante (com padrão, mesmo motivo).
     val floating: () -> Unit = {},
     // Plano 21, F2 — espelhamento (com padrão, mesmo motivo).
-    val mirror: () -> Unit = {}
+    val mirror: () -> Unit = {},
+    // Plano 21, F4 — calculadora de bolus (com padrão, mesmo motivo).
+    val bolus: () -> Unit = {}
 )
 
 /**
@@ -231,6 +235,8 @@ internal fun SettingsContent(
                         subtitle = stringResource(R.string.mirror_subtitle)) }
                     add { NavRow(stringResource(R.string.settings_configure_alerts), nav.alerts, icon = Icons.Default.NotificationsActive,
                         subtitle = stringResource(R.string.settings_alerts_section_subtitle)) }
+                    if (!isFollowerOnly) add { NavRow(stringResource(R.string.bolus_title), nav.bolus, icon = Icons.Default.Calculate,
+                        subtitle = stringResource(R.string.bolus_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.diary_title), nav.diary, icon = Icons.Default.EventNote,
                         subtitle = stringResource(R.string.settings_diary_subtitle)) }
                     if (!isFollowerOnly) add { NavRow(stringResource(R.string.reminders_title), nav.reminders, icon = Icons.Default.Alarm,

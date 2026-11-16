@@ -315,6 +315,8 @@ dependencies {
     // Testes unitários (JVM puro) — cobre a cripto determinística do Libre 2.
     // Plano 21, F2: espelhamento sem servidor e servidor web local (Kotlin puro, testado à parte).
     implementation(project(":mirror-core"))
+    // Plano 21, F4: perfil, IOB/COB, calculadora de bolus e previsão (Kotlin puro, testado à parte).
+    implementation(project(":therapy-core"))
     // Plano 21, F2: desenhar o QR code do pareamento do espelho (ZXing core, Apache-2.0, Java puro).
     implementation("com.google.zxing:core:3.5.3")
 

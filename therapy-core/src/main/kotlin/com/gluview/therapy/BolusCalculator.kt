@@ -10,7 +10,8 @@ data class BolusInput(
     val glucose: CurrentGlucose?,
     val useBgCorrection: Boolean = true,
     val useIob: Boolean = true,
-    val useCob: Boolean = false,
+    /** Padrão ligado (como no AAPS): sem isso, logo depois de comer a conta pediria carbo à toa. */
+    val useCob: Boolean = true,
     val useTrend: Boolean = false,
     /** Sensor em aquecimento (as primeiras horas): a correção pela glicemia fica de fora. */
     val sensorWarmup: Boolean = false

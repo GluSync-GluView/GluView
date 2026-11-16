@@ -163,6 +163,19 @@ class PredictionTest {
         assertFalse(both.low.zip(both.high).any { (l, h) -> l.mgDl > h.mgDl })
     }
 
+    @Test fun refeicaoComBolusNaoAssusta() {
+        // 4,5 U para 45 g (IC 10): a curva só-insulina despenca, mas a faixa (com carbo) não.
+        val r = Prediction.predict(now, 120.0, 0.0, p, 600, listOf(Dose(now, 4.5)), listOf(Carbs(now, 45.0)))
+        assertTrue(r.iob.minOf { it.mgDl } < 60.0)
+        assertTrue(r.low.minOf { it.mgDl } > 80.0)
+    }
+
+    @Test fun calculadoraLogoDepoisDeComerNaoPedeCarbo() {
+        val r = BolusCalculator.calculate(BolusInput(0.0, CurrentGlucose(120.0, 1)), p,
+            listOf(Dose(now, 4.5)), listOf(Carbs(now, 45.0)), now + 60_000L, 600)
+        assertTrue(r.carbsNeededG < 1.0)
+    }
+
     @Test fun limitesEAlertaPreditivo() {
         val r = Prediction.predict(now, 80.0, -6.0, p, 600, listOf(Dose(now, 5.0)), emptyList())
         assertTrue(r.low.all { it.mgDl >= 39.0 })

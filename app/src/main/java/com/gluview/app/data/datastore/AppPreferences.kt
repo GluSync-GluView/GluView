@@ -189,6 +189,11 @@ class AppPreferences @Inject constructor(
         val KEY_HOME_SHOW_DIARY             = booleanPreferencesKey("home_show_diary")
         // Plano 21, F1: ajustes da janela flutuante de glicemia (FloatingConfig.encode()).
         val KEY_FLOATING_CONFIG             = stringPreferencesKey("floating_config")
+        // Plano 21, F4: perfil terapêutico (ProfileCodec) e a chave geral dos recursos de dose
+        // (calculadora/previsão), DESLIGADA por padrão; o aceite do aviso guarda a hora.
+        val KEY_THERAPY_PROFILE             = stringPreferencesKey("therapy_profile")
+        val KEY_DOSE_FEATURES               = booleanPreferencesKey("dose_features")
+        val KEY_DOSE_INTRO_ACCEPTED_AT      = longPreferencesKey("dose_intro_accepted_at")
         // PT-7 Fase A: envio local no formato do xDrip, só para os apps escolhidos.
         val KEY_LOCAL_BROADCAST_ENABLED     = booleanPreferencesKey("local_broadcast_enabled")
         val KEY_LOCAL_BROADCAST_PACKAGES    = stringSetPreferencesKey("local_broadcast_packages")
@@ -450,6 +455,15 @@ class AppPreferences @Inject constructor(
     /** Home: linha do diário de hoje (carboidrato e insulina). */
     val homeShowDiary: Flow<Boolean> = dataStore.data.safeMap(true) { it[KEY_HOME_SHOW_DIARY] ?: true }
     suspend fun saveHomeShowDiary(show: Boolean) = dataStore.edit { it[KEY_HOME_SHOW_DIARY] = show }
+    /** Plano 21, F4: perfil terapêutico; null = ainda não configurado (calculadora fica bloqueada). */
+    val therapyProfile: Flow<com.gluview.therapy.TherapyProfile?> = dataStore.data
+        .safeMap(null) { com.gluview.therapy.ProfileCodec.decode(it[KEY_THERAPY_PROFILE]) }
+    suspend fun saveTherapyProfile(p: com.gluview.therapy.TherapyProfile) =
+        dataStore.edit { it[KEY_THERAPY_PROFILE] = com.gluview.therapy.ProfileCodec.encode(p) }
+    val doseFeatures: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_DOSE_FEATURES] ?: false }
+    suspend fun saveDoseFeatures(on: Boolean) = dataStore.edit { it[KEY_DOSE_FEATURES] = on }
+    val doseIntroAcceptedAt: Flow<Long> = dataStore.data.safeMap(0L) { it[KEY_DOSE_INTRO_ACCEPTED_AT] ?: 0L }
+    suspend fun saveDoseIntroAccepted(at: Long) = dataStore.edit { it[KEY_DOSE_INTRO_ACCEPTED_AT] = at }
     /** Plano 21, F1: janela flutuante de glicemia (desligada por padrão). */
     val floatingConfig: Flow<com.gluview.app.overlay.FloatingConfig> = dataStore.data
         .safeMap(com.gluview.app.overlay.FloatingConfig()) { com.gluview.app.overlay.FloatingConfig.decode(it[KEY_FLOATING_CONFIG]) }
@@ -1200,6 +1214,7 @@ class AppPreferences @Inject constructor(
         o.put("home_show_stats",           p[KEY_HOME_SHOW_STATS]       ?: true)
         o.put("home_show_diary",           p[KEY_HOME_SHOW_DIARY]       ?: true)
         p[KEY_FLOATING_CONFIG]?.let { o.put("floating_config", it) }
+        p[KEY_THERAPY_PROFILE]?.let { o.put("therapy_profile", it) }
         // Toggles de alerta (21 chaves)
         val alertZones = listOf(GlucoseZone.URGENT_LOW, GlucoseZone.LOW, GlucoseZone.HIGH,
             GlucoseZone.URGENT_HIGH, GlucoseZone.STALE, GlucoseZone.QUICK_DROP)
@@ -1255,6 +1270,10 @@ class AppPreferences @Inject constructor(
             if (o.has("notif_live_update"))         p[KEY_NOTIF_LIVE_UPDATE]     = o.getBoolean("notif_live_update")
             if (o.has("home_show_stats"))           p[KEY_HOME_SHOW_STATS]       = o.getBoolean("home_show_stats")
             if (o.has("home_show_diary"))           p[KEY_HOME_SHOW_DIARY]       = o.getBoolean("home_show_diary")
+            // Perfil terapêutico vai no backup; a chave dos recursos de dose e o aceite do aviso NÃO
+            // (no outro celular a pessoa lê o aviso e liga de novo).
+            if (o.has("therapy_profile")) com.gluview.therapy.ProfileCodec.decode(o.getString("therapy_profile"))
+                ?.let { p[KEY_THERAPY_PROFILE] = com.gluview.therapy.ProfileCodec.encode(it) }
             // Janela flutuante: volta DESLIGADA no outro celular (a permissão de sobrepor não vem
             // junto no backup; quem quiser liga de novo e concede ali).
             if (o.has("floating_config")) p[KEY_FLOATING_CONFIG] =
