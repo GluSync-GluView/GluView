@@ -68,6 +68,7 @@ object SensorVariantCatalog {
         SensorVariant("LIBRE2_EU", R.string.sensor_model_libre2, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED, implemented = false),
         SensorVariant("SIBIONICS_GS1_CN", R.string.sensor_model_sibionics_gs1, SensorRegion.CN, DataSourceType.SIBIONICS_CHINES, SensorMaturity.WORKS),
         SensorVariant("SIBIONICS_GS1_SA", R.string.sensor_model_sibionics_gs1, SensorRegion.SA, DataSourceType.SIBIONICS_NACIONAL, SensorMaturity.TESTING),
+        single(DataSourceType.SIBIONICS_GS3, SensorMaturity.UNTESTED),
         single(DataSourceType.ACCU_CHEK_SMARTGUIDE, SensorMaturity.UNTESTED),
         single(DataSourceType.MEDLEVENSOHN_SMART2, SensorMaturity.UNTESTED),
         // PT-3: Dexcom pelo código (G6: ID do transmissor; G7: pareado pelo app oficial + código).

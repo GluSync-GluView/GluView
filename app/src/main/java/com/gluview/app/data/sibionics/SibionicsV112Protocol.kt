@@ -57,7 +57,8 @@ class SibionicsV112Protocol private constructor(
     private val logger: AppLogger?,
     // Instrumentação de validação (não invasiva) — espelha o payload p/ o decoder experimental.
     // null = desligada. NUNCA altera o resultado retornado ao app. Ver [SibionicsOracle].
-    private val oracle: SibionicsOracle? = null
+    private val oracle: SibionicsOracle? = null,
+    private val reuseTransmitter: Boolean = false
 ) : SibionicsProtocol {
 
     private var ctx: Ctx112? = null
@@ -133,6 +134,17 @@ class SibionicsV112Protocol private constructor(
     }
 
     override fun onPacket(raw: ByteArray, sendCommand: (ByteArray) -> Unit): List<SibionicsProtocol.Reading> {
+        // Reset do GS2 condicionado a opção de transmissor reaproveitado (SiGattCallback.java:266-307)
+        if (reuseTransmitter && raw.size >= 4) {
+            val isResetSignal = (raw.size == 5 && raw[0] == 4.toByte() && raw[4] == 0xFC.toByte()) ||
+                    (raw.size >= 5 && raw[2] == 0x0A.toByte())
+            if (isResetSignal) {
+                logger?.usage(LOG, "Parser solicitou reset GS2; enviando 24 E7 6F 34")
+                sendCommand(GS2_RESET_BYTES)
+                return emptyList()
+            }
+        }
+
         // Só processamos pacotes de dados AA 55 09; o ACK do comando (AA 55 07) é ignorado.
         if (raw.size < 18 ||
             (raw[0].toInt() and 0xFF) != 0xAA ||
@@ -332,6 +344,12 @@ class SibionicsV112Protocol private constructor(
         /** Primeiro índice que existe no sensor — a contagem começa em 1, não em 0. */
         private const val FIRST_SENSOR_INDEX = 1
 
+        /**
+         * Reset do transmissor GS2 (Juggluco handleData.cpp:49-56 / SiGattCallback.java:266-307):
+         * 24 E7 6F 34
+         */
+        val GS2_RESET_BYTES = byteArrayOf(0x24.toByte(), 0xE7.toByte(), 0x6F.toByte(), 0x34.toByte())
+
         fun create(
             mac: String,
             sensorId: String,
@@ -339,7 +357,8 @@ class SibionicsV112Protocol private constructor(
             logger: AppLogger? = null,
             restoreContextJson: String? = null,
             restoreLastIndex: Int = -1,
-            oracle: SibionicsOracle? = null
+            oracle: SibionicsOracle? = null,
+            reuseTransmitter: Boolean = false
         ): SibionicsV112Protocol? =
             runCatching {
                 Class.forName("com.algorithm.v1_1_2.NativeAlgorithmLibraryV1_1_2",
@@ -347,8 +366,9 @@ class SibionicsV112Protocol private constructor(
                 logger?.usage(LOG, "libnative-algorithm-jni-v112.so carregada",
                     mapOf("mac" to mac, "sensorId" to sensorId, "serial" to serial,
                           "temContextoSalvo" to (restoreContextJson != null),
-                          "restoreLastIndex" to restoreLastIndex))
-                SibionicsV112Protocol(mac, sensorId, serial, restoreContextJson, restoreLastIndex, logger, oracle)
+                          "restoreLastIndex" to restoreLastIndex,
+                          "reuseTransmitter" to reuseTransmitter))
+                SibionicsV112Protocol(mac, sensorId, serial, restoreContextJson, restoreLastIndex, logger, oracle, reuseTransmitter)
             }.onFailure {
                 logger?.error(LOG, "Falha ao carregar lib v1.1.2",
                     mapOf("error" to (it.message ?: it::class.simpleName.orEmpty())))

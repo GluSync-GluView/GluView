@@ -82,6 +82,7 @@
     <string name="sensor_model_libre2">FreeStyle Libre 2</string>
     <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
+    <string name="sensor_model_sibionics_gs3">Sibionics GS3</string>
     <string name="sensor_region_eu">Europa</string>
     <string name="sensor_region_na">América do Norte</string>
     <string name="sensor_region_sa">América do Sul</string>
@@ -241,6 +242,13 @@
     <string name="data_source_glusync">GluSync (servidor)</string>
     <string name="data_source_sibionics_brasil">Sibionics Brasil</string>
     <string name="data_source_sibionics_china">Sibionics China</string>
+    <string name="data_source_sibionics_gs3">Sibionics GS3</string>
+    <string name="settings_sibionics_reuse_transmitter_title">Transmissor reaproveitado (GS2)</string>
+    <string name="settings_sibionics_reuse_transmitter_desc">Envia reset ao sensor ao reutilizar o transmissor físico. Desligado por padrão.</string>
+    <string name="settings_sibionics_reuse_transmitter_warning">Atenção: O reset do transmissor apaga a sessão anterior no sensor. Só ative se você estiver instalando um novo sensor físico mantendo o mesmo transmissor.</string>
+    <string name="settings_sibionics_gs3_account_title">Identificador de conta GS3 (V3)</string>
+    <string name="settings_sibionics_gs3_account_desc">Identificador de conta de 12 bytes do Sibionics GS3 V3 (opcional).</string>
+    <string name="settings_sibionics_gs3_account_hint">Ex.: 123456789</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
     <!-- Accu-Chek SmartGuide: assistente e aba Sensor (F4) -->

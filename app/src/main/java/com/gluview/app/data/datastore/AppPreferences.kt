@@ -249,6 +249,8 @@ class AppPreferences @Inject constructor(
         // reancorava usando o índice do primeiro pacote de BACKFILL (sempre atrasado em relação
         // ao "ao vivo"), empurrando todas as leituras (dateMs) para o futuro.
         val KEY_SIBIONICS_SENSOR_START = longPreferencesKey("sibionics_sensor_start_ms")
+        val KEY_SIBIONICS_REUSE_TRANSMITTER = booleanPreferencesKey("sibionics_reuse_transmitter")
+        val KEY_SIBIONICS_GS3_ACCOUNT_ID = stringPreferencesKey("sibionics_gs3_account_id")
         // Nome anunciado pelo sensor no ar. Guardado junto do endereço porque é ele que carrega a
         // IDENTIDADE do sensor (os 4 últimos caracteres batem com o código da embalagem) — o
         // endereço sozinho não diz de qual sensor é, e foi exatamente isso que permitiu o app
@@ -633,6 +635,8 @@ class AppPreferences @Inject constructor(
     val sibionicsAlgoCode: Flow<String>     = dataStore.data.safeMap("") { it[KEY_SIBIONICS_ALGO_CODE]    ?: "" }
     val sibionicsSensorStartMs: Flow<Long>  = dataStore.data.safeMap(0L) { it[KEY_SIBIONICS_SENSOR_START] ?: 0L }
     val sibionicsBleName: Flow<String>      = dataStore.data.safeMap("") { it[KEY_SIBIONICS_BLE_NAME]     ?: "" }
+    val sibionicsReuseTransmitter: Flow<Boolean> = dataStore.data.safeMap(false) { it[KEY_SIBIONICS_REUSE_TRANSMITTER] ?: false }
+    val sibionicsGs3AccountId: Flow<String> = dataStore.data.safeMap("") { it[KEY_SIBIONICS_GS3_ACCOUNT_ID] ?: "" }
     // FreeStyle Libre 2 Plus
     val libre2Mac: Flow<String>             = dataStore.data.safeMap("") { it[KEY_LIBRE2_MAC]          ?: "" }
     val libre2Serial: Flow<String>          = dataStore.data.safeMap("") { it[KEY_LIBRE2_SERIAL]       ?: "" }
@@ -937,6 +941,8 @@ class AppPreferences @Inject constructor(
 
     /** Memoriza o nome anunciado do sensor (identidade verificável do rádio). */
     suspend fun saveSibionicsBleName(name: String) = dataStore.edit { it[KEY_SIBIONICS_BLE_NAME] = name }
+    suspend fun saveSibionicsReuseTransmitter(reuse: Boolean) = dataStore.edit { it[KEY_SIBIONICS_REUSE_TRANSMITTER] = reuse }
+    suspend fun saveSibionicsGs3AccountId(id: String) = dataStore.edit { it[KEY_SIBIONICS_GS3_ACCOUNT_ID] = id }
 
     /** Troca o endereço do sensor mantendo código/serial — usado quando a busca por identidade
      *  encontra o mesmo sensor num endereço diferente do memorizado. */

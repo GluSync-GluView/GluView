@@ -75,6 +75,20 @@ class SettingsViewModel @Inject constructor(
     val medLevSerial: StateFlow<String> = preferences.medLevensohnSerial
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    val sibionicsReuseTransmitter: StateFlow<Boolean> = preferences.sibionicsReuseTransmitter
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun onSibionicsReuseTransmitterChange(reuse: Boolean) {
+        viewModelScope.launch { preferences.saveSibionicsReuseTransmitter(reuse) }
+    }
+
+    val sibionicsGs3AccountId: StateFlow<String> = preferences.sibionicsGs3AccountId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    fun onSibionicsGs3AccountIdChange(id: String) {
+        viewModelScope.launch { preferences.saveSibionicsGs3AccountId(id) }
+    }
+
     /** Smart 2.0: pede ao sensor para desparear na próxima conexão (resultado vem por notificação). */
     fun unpairMedLev() = medLevSource.requestUnpair()
 

@@ -49,6 +49,7 @@ enum class DataSourceType(
     GLUSYNC("GLUSYNC", "GluSync (servidor)", R.string.data_source_glusync),
     SIBIONICS_NACIONAL("SIBIONICS_NACIONAL", "Sibionics Brasil", R.string.data_source_sibionics_brasil),
     SIBIONICS_CHINES("SIBIONICS_CHINES", "Sibionics China", R.string.data_source_sibionics_china),
+    SIBIONICS_GS3("SIBIONICS_GS3", "Sibionics GS3", R.string.data_source_sibionics_gs3),
     LIBRE2_PLUS("LIBRE2_PLUS", "FreeStyle Libre 2 Plus", R.string.data_source_libre2_plus),
     ACCU_CHEK_SMARTGUIDE("ACCU_CHEK_SMARTGUIDE", "Accu-Chek SmartGuide", R.string.data_source_accu_chek_smartguide),
     MEDLEVENSOHN_SMART2("MEDLEVENSOHN_SMART2", "Smart 2.0 Medlevensohn", R.string.data_source_medlevensohn_smart2),
@@ -60,7 +61,7 @@ enum class DataSourceType(
      * Continua marcando o pacote data/sibionics (calibração/status/UI específica de Sibionics).
      * Para "é um sensor lido localmente por BLE?" use [isLocalSensor].
      */
-    val isSibionics: Boolean get() = this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES
+    val isSibionics: Boolean get() = this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES || this == SIBIONICS_GS3
 
     /** Dexcom G6/G7: configurado por código digitado (sem caixa para ler). */
     val isDexcom: Boolean get() = this == DEXCOM_G6 || this == DEXCOM_G7

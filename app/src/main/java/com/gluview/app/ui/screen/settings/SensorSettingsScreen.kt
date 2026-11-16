@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudQueue
@@ -13,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,7 +57,9 @@ internal data class SensorUi(
     /** Serial do Accu-Chek SmartGuide configurado ("" = nenhum). */
     val smartGuideSerial: String = "",
     /** Serial do Smart 2.0 configurado ("" = nenhum). */
-    val medLevSerial: String = ""
+    val medLevSerial: String = "",
+    val sibionicsReuseTransmitter: Boolean = false,
+    val sibionicsGs3AccountId: String = ""
 )
 
 internal data class SensorActions(
@@ -74,7 +78,9 @@ internal data class SensorActions(
     /** SmartGuide: esquece o sensor configurado (serial, PIN, pareamento). */
     val onSmartGuideForget: () -> Unit = {},
     /** Smart 2.0: desparear (libera o sensor para outro celular). */
-    val onMedLevUnpair: () -> Unit = {}
+    val onMedLevUnpair: () -> Unit = {},
+    val onSibionicsReuseTransmitterChange: (Boolean) -> Unit = {},
+    val onSibionicsGs3AccountIdChange: (String) -> Unit = {}
 )
 
 /**
@@ -100,14 +106,17 @@ fun SensorSettingsScreen(
     val glucoseDisplayMode by viewModel.glucoseDisplayMode.collectAsState()
     val smartGuideSerial by viewModel.smartGuideSerial.collectAsState()
     val medLevSerial by viewModel.medLevSerial.collectAsState()
+    val sibionicsReuseTransmitter by viewModel.sibionicsReuseTransmitter.collectAsState()
+    val sibionicsGs3AccountId by viewModel.sibionicsGs3AccountId.collectAsState()
     var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
     var confirmStopSensor by remember { mutableStateOf(false) }
+    var confirmReuseTransmitter by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorVariantId, smartGuideSerial, medLevSerial),
+            sensorVariantId, smartGuideSerial, medLevSerial, sibionicsReuseTransmitter, sibionicsGs3AccountId),
         actions = SensorActions(viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
             onSensorSetup, onSensorScanner, onLibre2Activation,
@@ -119,9 +128,31 @@ fun SensorSettingsScreen(
                 }
             },
             onSmartGuideForget = { confirmForgetSmartGuide = true },
-            onMedLevUnpair = { confirmMedLevUnpair = true }),
+            onMedLevUnpair = { confirmMedLevUnpair = true },
+            onSibionicsReuseTransmitterChange = { enable ->
+                if (enable) confirmReuseTransmitter = true
+                else viewModel.onSibionicsReuseTransmitterChange(false)
+            },
+            onSibionicsGs3AccountIdChange = viewModel::onSibionicsGs3AccountIdChange),
         onBack = onBack
     )
+
+    if (confirmReuseTransmitter) {
+        AlertDialog(
+            onDismissRequest = { confirmReuseTransmitter = false },
+            title = { Text(stringResource(R.string.settings_sibionics_reuse_transmitter_title)) },
+            text = { Text(stringResource(R.string.settings_sibionics_reuse_transmitter_warning)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmReuseTransmitter = false
+                    viewModel.onSibionicsReuseTransmitterChange(true)
+                }) { Text(stringResource(R.string.setup_continue)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReuseTransmitter = false }) { Text(stringResource(R.string.setup_cancel)) }
+            }
+        )
+    }
 
     if (confirmStopSensor) {
         AlertDialog(
@@ -235,6 +266,37 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
                         GlucoseDisplayMode.entries.forEach { mode ->
                             RadioRow(displayModeLabel(mode), ui.displayMode == mode.id, { actions.onDisplayMode(mode.id) })
                         }
+                    }
+                }
+            }
+        }
+
+        if (currentSource == DataSourceType.SIBIONICS_CHINES) {
+            GluSection(stringResource(R.string.settings_sibionics_reuse_transmitter_title),
+                description = stringResource(R.string.settings_sibionics_reuse_transmitter_desc)) {
+                GluCard {
+                    SwitchRow(
+                        title = stringResource(R.string.settings_sibionics_reuse_transmitter_title),
+                        checked = ui.sibionicsReuseTransmitter,
+                        onCheckedChange = actions.onSibionicsReuseTransmitterChange
+                    )
+                }
+            }
+        }
+
+        if (currentSource == DataSourceType.SIBIONICS_GS3) {
+            GluSection(stringResource(R.string.settings_sibionics_gs3_account_title),
+                description = stringResource(R.string.settings_sibionics_gs3_account_desc)) {
+                GluCard {
+                    Column(Modifier.fillMaxWidth().padding(Spacing.md)) {
+                        OutlinedTextField(
+                            value = ui.sibionicsGs3AccountId,
+                            onValueChange = actions.onSibionicsGs3AccountIdChange,
+                            label = { Text(stringResource(R.string.settings_sibionics_gs3_account_title)) },
+                            placeholder = { Text(stringResource(R.string.settings_sibionics_gs3_account_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }

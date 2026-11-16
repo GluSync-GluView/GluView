@@ -170,11 +170,32 @@ class SibionicsBleSource @Inject constructor(
                     appLogger.usage(LOG, "Preparando protocolo v1.1.2",
                         mapOf("sensorId" to sensorId, "restauraContexto" to canRestore,
                               "idxSalvo" to savedIdx))
+                    val reuseTransmitter = preferences.sibionicsReuseTransmitter.first()
                     SibionicsV112Protocol.create(
                         mac, sensorId, serial, appLogger,
                         restoreContextJson = if (canRestore) savedCtx else null,
                         restoreLastIndex   = if (canRestore) savedIdx else -1,
-                        oracle             = oracle
+                        oracle             = oracle,
+                        reuseTransmitter   = reuseTransmitter
+                    )
+                }
+                DataSourceType.SIBIONICS_GS3      -> {
+                    val accountIdStr = preferences.sibionicsGs3AccountId.first()
+                    val accountBytes = if (accountIdStr.isNotBlank()) {
+                        accountIdStr.toLongOrNull()?.let { SibionicsGS3Protocol.accountIdFromLong(it) }
+                            ?: accountIdStr.toByteArray(Charsets.UTF_8).copyOf(12)
+                    } else {
+                        SibionicsGS3Protocol.DEFAULT_ACCOUNT_ID
+                    }
+                    val savedIdx = preferences.sibionicsAlgoIdx.first()
+                    val savedStartMs = preferences.sibionicsSensorStartMs.first()
+                    val savedTimeSecs = if (savedStartMs > 0L) (savedStartMs / 1000L) + (savedIdx.coerceAtLeast(0) * 60L) else 0L
+                    SibionicsGS3Protocol(
+                        mac = mac,
+                        accountIdBytes = accountBytes,
+                        initialSavedIndex = savedIdx,
+                        initialSavedTimeSecs = savedTimeSecs,
+                        logger = appLogger
                     )
                 }
                 else -> null
