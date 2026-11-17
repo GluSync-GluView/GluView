@@ -40,7 +40,9 @@ object NativeSensorSupport {
      */
     fun libsBundled(type: DataSourceType): Boolean = when {
         type == DataSourceType.LIBRE2_PLUS -> BuildConfig.HAS_ABBOTT_LIBS
-        type.isSibionics                   -> BuildConfig.HAS_SIBIONICS_LIBS
+        // Só GS1/GS2 usam as .so da Sibionics; o GS3 é porte Kotlin puro.
+        type == DataSourceType.SIBIONICS_NACIONAL ||
+            type == DataSourceType.SIBIONICS_CHINES -> BuildConfig.HAS_SIBIONICS_LIBS
         else                               -> true
     }
 }

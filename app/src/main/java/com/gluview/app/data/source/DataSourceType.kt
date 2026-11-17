@@ -81,11 +81,13 @@ enum class DataSourceType(
     val isLocalSensor: Boolean get() = this != GLUSYNC
 
     /**
-     * Depende de biblioteca nativa proprietária que só existe em arm64 (Sibionics ×2 e Libre 2
-     * Plus). Em aparelho 32 bits ([NativeSensorSupport.isAvailable] = false) ou em build sem as
-     * bibliotecas ([NativeSensorSupport.libsBundled] = false) fica indisponível.
+     * Depende de biblioteca nativa proprietária que só existe em arm64 (Sibionics GS1/GS2 e Libre 2
+     * Plus). O Sibionics GS3 é porte Kotlin puro (sem .so) e não entra aqui. Em aparelho 32 bits
+     * ([NativeSensorSupport.isAvailable] = false) ou em build sem as bibliotecas
+     * ([NativeSensorSupport.libsBundled] = false) fica indisponível.
      */
-    val requiresNativeLibs: Boolean get() = isSibionics || this == LIBRE2_PLUS
+    val requiresNativeLibs: Boolean get() =
+        this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES || this == LIBRE2_PLUS
 
     /** Pode ser usada como fonte neste aparelho (ver [requiresNativeLibs]). */
     val isUsableOnThisDevice: Boolean get() =
