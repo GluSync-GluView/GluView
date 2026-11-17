@@ -5,6 +5,7 @@ import com.gluview.app.data.dexcom.DexcomG6Source
 import com.gluview.app.data.libre2.Libre2Source
 import com.gluview.app.data.medlevensohn.MedLevensohnSource
 import com.gluview.app.data.sibionics.SibionicsBleSource
+import com.gluview.app.data.librebridge.LibreBridgeSource
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +25,8 @@ class SensorSourceRegistry @Inject constructor(
     private val accuChek: AccuChekSource,
     private val medLevensohn: MedLevensohnSource,
     private val dexcomG6: DexcomG6Source,
-    private val dexcomG7: com.gluview.app.data.dexcom.DexcomG7Source
+    private val dexcomG7: com.gluview.app.data.dexcom.DexcomG7Source,
+    private val libreBridge: LibreBridgeSource
 ) {
     /**
      * A fonte para [type], ou null se a fonte não é um sensor local (ex.: [DataSourceType.GLUSYNC]),
@@ -39,6 +41,7 @@ class SensorSourceRegistry @Inject constructor(
         type == DataSourceType.MEDLEVENSOHN_SMART2  -> medLevensohn
         type == DataSourceType.DEXCOM_G6            -> dexcomG6
         type == DataSourceType.DEXCOM_G7            -> dexcomG7
+        type.isLibreBridge                           -> libreBridge
         else                                -> null
     }
 }

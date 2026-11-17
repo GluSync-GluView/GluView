@@ -54,7 +54,12 @@ enum class DataSourceType(
     ACCU_CHEK_SMARTGUIDE("ACCU_CHEK_SMARTGUIDE", "Accu-Chek SmartGuide", R.string.data_source_accu_chek_smartguide),
     MEDLEVENSOHN_SMART2("MEDLEVENSOHN_SMART2", "Smart 2.0 Medlevensohn", R.string.data_source_medlevensohn_smart2),
     DEXCOM_G6("DEXCOM_G6", "Dexcom G6", R.string.data_source_dexcom_g6),
-    DEXCOM_G7("DEXCOM_G7", "Dexcom G7", R.string.data_source_dexcom_g7);
+    DEXCOM_G7("DEXCOM_G7", "Dexcom G7", R.string.data_source_dexcom_g7),
+    // F6.4 - leitores acoplados ao Libre (MiaoMiao/Tomato, Bubble, Atom). Sem teste com hardware real.
+    // Porte fiel xDrip (GPLv3). Apenas Libre 1 e Libre 2; nunca Libre 2 Plus/3. Fonte nao confiavel para alca.
+    LIBRE_BRIDGE_MIAOMIAO("LIBRE_BRIDGE_MIAOMIAO", "MiaoMiao (leitor Libre)", R.string.data_source_libre_bridge_miaomiao),
+    LIBRE_BRIDGE_BUBBLE("LIBRE_BRIDGE_BUBBLE", "Bubble (leitor Libre)", R.string.data_source_libre_bridge_bubble),
+    LIBRE_BRIDGE_ATOM("LIBRE_BRIDGE_ATOM", "Atom (leitor Libre)", R.string.data_source_libre_bridge_atom);
 
     /**
      * Verdadeiro apenas para os sensores Sibionics.
@@ -65,6 +70,10 @@ enum class DataSourceType(
 
     /** Dexcom G6/G7: configurado por código digitado (sem caixa para ler). */
     val isDexcom: Boolean get() = this == DEXCOM_G6 || this == DEXCOM_G7
+
+    /** Leitor externo acoplado ao Libre (MiaoMiao/Bubble/Atom), F6.4. */
+    val isLibreBridge: Boolean get() =
+        this == LIBRE_BRIDGE_MIAOMIAO || this == LIBRE_BRIDGE_BUBBLE || this == LIBRE_BRIDGE_ATOM
 
     /**
      * Sensor com 1 h de aquecimento acompanhada pelo app (contagem na Home, sem alarme de "sem

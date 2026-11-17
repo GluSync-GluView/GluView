@@ -269,7 +269,10 @@ class AppPreferences @Inject constructor(
         val KEY_LIBRE2_CALIBRATION    = stringPreferencesKey("libre2_calibration")    // params de calibração (JSON) da FRAM
         val KEY_LIBRE2_FRAM           = stringPreferencesKey("libre2_fram")           // FRAM 344B para reconstruir scanstate
         val KEY_LIBRE2_SENSOR_START   = longPreferencesKey("libre2_sensor_start_ms")  // ativação (epoch ms) p/ idade
-        val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
+        val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
+        // F6.4 - leitores acoplados ao Libre (MiaoMiao/Tomato, Bubble, Atom). Sem teste com hardware.
+        val KEY_LIBRE_BRIDGE_MAC      = stringPreferencesKey("libre_bridge_mac")
+        val KEY_LIBRE_BRIDGE_KIND     = stringPreferencesKey("libre_bridge_kind")   // MIAOMIAO|BUBBLE|ATOM
         // BLE Accu-Chek SmartGuide — serviço CGM padrão (0x181F), sem cripto proprietária. O
         // histórico vem pelo RACP filtrado por MINUTO desde o início do sensor (ver AccuChekSource).
         val KEY_ACCUCHEK_MAC           = stringPreferencesKey("accuchek_mac")       // endereço do aparelho pareado
@@ -650,6 +653,10 @@ class AppPreferences @Inject constructor(
     val libre2SensorStartMs: Flow<Long>     = dataStore.data.safeMap(0L) { it[KEY_LIBRE2_SENSOR_START] ?: 0L }
     /** Fator de calibração Libre 2 (mmol_exibida = mmol_algoritmo × fator). 1.0 = valor de fábrica. */
     val libre2CalFactor: Flow<Double>       = dataStore.data.safeMap(1.0) { it[KEY_LIBRE2_CAL_FACTOR]  ?: 1.0 }
+
+    // F6.4 — leitores bridge Libre
+    val libreBridgeMac: Flow<String>        = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_MAC]  ?: "" }
+    val libreBridgeKind: Flow<String>       = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_KIND] ?: "" }
 
     val accuChekMac: Flow<String>          = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_MAC]           ?: "" }
     val accuChekSerial: Flow<String>       = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_SERIAL]        ?: "" }

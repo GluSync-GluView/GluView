@@ -83,6 +83,9 @@
     <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
     <string name="sensor_model_sibionics_gs3">Sibionics GS3</string>
+    <string name="sensor_model_libre_bridge_miaomiao">MiaoMiao (leitor Libre)</string>
+    <string name="sensor_model_libre_bridge_bubble">Bubble (leitor Libre)</string>
+    <string name="sensor_model_libre_bridge_atom">Atom (leitor Libre)</string>
     <string name="sensor_region_eu">Europa</string>
     <string name="sensor_region_na">América do Norte</string>
     <string name="sensor_region_sa">América do Sul</string>
@@ -300,6 +303,9 @@
     <string name="accuchek_warn_disconnected_body">Não foi possível reconectar ao Accu-Chek SmartGuide após 60 minutos. Verifique se o sensor está próximo e o Bluetooth está ativo.</string>
     <string name="data_source_medlevensohn_smart2">Smart 2.0 Medlevensohn</string>
     <string name="data_source_dexcom_g6">Dexcom G6</string>
+    <string name="data_source_libre_bridge_miaomiao">MiaoMiao (leitor Libre)</string>
+    <string name="data_source_libre_bridge_bubble">Bubble (leitor Libre)</string>
+    <string name="data_source_libre_bridge_atom">Atom (leitor Libre)</string>
     <string name="data_source_dexcom_g7">Dexcom G7</string>
     <string name="settings_activate_sensor_nfc">Ativar sensor (NFC)</string>
     <string name="settings_configure_sensor_ble">Configurar sensor BLE</string>

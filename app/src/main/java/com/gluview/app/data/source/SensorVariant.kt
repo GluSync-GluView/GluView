@@ -1,4 +1,4 @@
-package com.gluview.app.data.source
+﻿package com.gluview.app.data.source
 
 import androidx.annotation.StringRes
 import com.gluview.app.R
@@ -73,7 +73,11 @@ object SensorVariantCatalog {
         single(DataSourceType.MEDLEVENSOHN_SMART2, SensorMaturity.UNTESTED),
         // PT-3: Dexcom pelo código (G6: ID do transmissor; G7: pareado pelo app oficial + código).
         single(DataSourceType.DEXCOM_G6, SensorMaturity.UNTESTED),
-        single(DataSourceType.DEXCOM_G7, SensorMaturity.UNTESTED)
+        single(DataSourceType.DEXCOM_G7, SensorMaturity.UNTESTED),
+        // F6.4 - leitores acoplados ao Libre (Sem teste, fonte nao confiavel para alca). Apenas Libre 1/2.
+        single(DataSourceType.LIBRE_BRIDGE_MIAOMIAO, SensorMaturity.UNTESTED),
+        single(DataSourceType.LIBRE_BRIDGE_BUBBLE, SensorMaturity.UNTESTED),
+        single(DataSourceType.LIBRE_BRIDGE_ATOM, SensorMaturity.UNTESTED)
     )
 
     private fun single(source: DataSourceType, maturity: SensorMaturity, implemented: Boolean = true) =
