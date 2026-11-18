@@ -1,0 +1,13 @@
+﻿                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+ This module (:wearables-xiaomi) includes code derived from Gadgetbridge
+ (https://codeberg.org/Freeyourgadget/Gadgetbridge), licensed under the
+ GNU Affero General Public License version 3 or later. Files derived from
+ Gadgetbridge retain their original copyright and license headers.
+
+ (Texto completo da AGPLv3: https://www.gnu.org/licenses/agpl-3.0.txt)

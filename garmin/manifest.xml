@@ -1,0 +1,18 @@
+﻿<manifest xmlns="http://www.garmin.com/xml/connectiq" version="3">
+    <application id="b7b8f4d2-7c2a-4a7e-9d11-5b6a2f1c0e33" type="watch-app" name="@Strings.AppName" entry="GluViewApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+        <iq:products xmlns:iq="http://www.garmin.com/xml/connectiq">
+            <iq:product id="venu3"/>
+            <iq:product id="venu3s"/>
+            <iq:product id="vivoactive5"/>
+            <iq:product id="fenix7"/>
+            <iq:product id="forerunner965"/>
+        </iq:products>
+        <iq:permissions xmlns:iq="http://www.garmin.com/xml/connectiq">
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages xmlns:iq="http://www.garmin.com/xml/connectiq">
+            <iq:language>eng</iq:language>
+            <iq:language>por</iq:language>
+        </iq:languages>
+    </application>
+</manifest>

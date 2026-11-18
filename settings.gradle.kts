@@ -1,4 +1,4 @@
-pluginManagement {
+﻿pluginManagement {
     repositories {
         google()
         mavenCentral()
@@ -10,8 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Só para o leitor de AXML exigido pelo validador do Watch Face Push (plano 16) — o
-        // filtro impede que qualquer outra dependência venha do JitPack.
+        // SÃ³ para o leitor de AXML exigido pelo validador do Watch Face Push (plano 16) â€” o
+        // filtro impede que qualquer outra dependÃªncia venha do JitPack.
         maven("https://jitpack.io") { content { includeGroup("com.github.xgouchet") } }
     }
 }
@@ -24,3 +24,6 @@ include(":wear")
 include(":keks")
 include(":therapy-core")
 include(":mirror-core")
+include(":wearables-xiaomi")
+project(":wearables-xiaomi").projectDir = file("wearables-xiaomi")
+

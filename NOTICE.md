@@ -1,4 +1,4 @@
-# Avisos e créditos
+﻿# Avisos e créditos
 
 GluView — Copyright (C) 2026 os autores do GluView.
 
@@ -45,3 +45,8 @@ oficial e está sendo registrado na verificação de desenvolvedor do Google; no
 `-Pgluview.applicationIdSuffix=.meufork`) e deixar claro que não são o GluView oficial. O GluView é um
 projeto sem fins lucrativos; o nome não pode ser usado para vender o app ou sugerir uma versão
 oficial paga.
+
+## Módulo :wearables-xiaomi (AGPL-3.0, separado)
+
+O módulo wearables-xiaomi/ (suporte a Mi Band 7/8/9 e dispositivos Xiaomi novos, plano 21 F7.4) é licenciado sob **GNU Affero General Public License v3.0 (AGPL-3.0)** para compatibilizar a inclusão de código derivado do [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) (AGPL-3.0). Arquivos copiados/adaptados do Gadgetbridge preservam os cabeçalhos de copyright/licença originais e o módulo contém seu próprio arquivo LICENSE (AGPL-3.0). Nada de código AGPL é colocado fora desse módulo; o restante do GluView permanece GPLv3 conforme a licença principal.
+
