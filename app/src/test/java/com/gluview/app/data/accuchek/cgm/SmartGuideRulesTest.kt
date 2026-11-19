@@ -82,4 +82,16 @@ class SmartGuideRulesTest {
         assertFalse(s.onLiveRecord(stored = true, malfunction = true))   // LO gravado não conta
         assertEquals(0, s.count)
     }
+
+    @Test
+    fun `defeito no aquecimento nao conta`() {
+        val s = MalfunctionStreak()
+        for (minute in listOf(5, 10, 15, 20, 55)) {
+            assertFalse(s.onLiveRecord(stored = false, malfunction = true, sensorMinute = minute))
+        }
+        assertEquals(0, s.count)
+        assertFalse(s.onLiveRecord(stored = false, malfunction = true, sensorMinute = 60))
+        assertFalse(s.onLiveRecord(stored = false, malfunction = true, sensorMinute = 65))
+        assertTrue(s.onLiveRecord(stored = false, malfunction = true, sensorMinute = 70))
+    }
 }

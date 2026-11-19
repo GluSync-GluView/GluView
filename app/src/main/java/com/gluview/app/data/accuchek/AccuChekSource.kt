@@ -341,7 +341,11 @@ class AccuChekSource @Inject constructor(
             val live = now - atMs <= LIVE_MAX_AGE_MS
             val mgdl = SmartGuideRules.glucoseToStore(m, previous)?.takeIf { it in PLAUSIBLE_MGDL }
             if (live) {
-                if (malfunction.onLiveRecord(stored = mgdl != null, malfunction = SmartGuideRules.isMalfunction(m.annunciation))) {
+                if (malfunction.onLiveRecord(
+                        stored = mgdl != null,
+                        malfunction = SmartGuideRules.isMalfunction(m.annunciation),
+                        sensorMinute = m.timeOffsetMinutes
+                    )) {
                     appLogger.error(LOG, "Defeito do sensor há 15 min", mapOf("avisos" to m.annunciation.toString()))
                     warn(R.string.accuchek_warn_malfunction_title, R.string.accuchek_warn_malfunction_body)
                 }
@@ -386,6 +390,10 @@ class AccuChekSource @Inject constructor(
             appLogger.usage(LOG, "Avisos do sensor resolvidos — notificação removida")
             notificationHelper.cancelSensorWarning()
         }
+        // Minuto do sensor também pelas medições, com ou sem glicemia: no aquecimento elas vêm sem
+        // valor e o CGM Status só é lido na conexão — sem isto a contagem da Home parava no minuto
+        // da conexão (sensor real, 19/11/2026, F5).
+        statusHolder.onSensorClock(newestMinute, startMs)
         lastMinute = newestMinute
         preferences.saveAccuChekLastMinute(newestMinute)
     }
