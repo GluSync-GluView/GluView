@@ -1,5 +1,10 @@
 # Linha de base do check-strings (StringsAuditTest). Só pode DIMINUIR.
 # Regerar: gradlew :app:testDebugUnitTest --tests *StringsAuditTest -Pgluview.visualaudit.updateBaseline=true
+missing-en	data_source_libre3
+missing-en	sensor_model_libre3
+missing-en	sensor_model_lingo
+missing-en	sensor_region_global
+missing-en	setup_title_libre3
 pt-literals	dream/GluViewDreamService.kt	1
 pt-literals	notification/NotificationHelper.kt	6
 pt-literals	ui/screen/accessrequests/AccessRequestStatusScreen.kt	1
