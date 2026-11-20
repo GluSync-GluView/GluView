@@ -240,6 +240,28 @@ object SessionStartTimeParser {
     }
 }
 
+/**
+ * Escrita do CGM Session Start Time (0x2AAA), para quando o sensor liga "time sync required".
+ *
+ * O coletor grava a hora atual e o sensor calcula o início pela própria contagem de minutos. O
+ * formato segue o que o SmartGuide guarda depois do mySugr (captura real de 26/10/2026, cgm-probe):
+ * data/hora em UTC, fuso 0 e horário de verão `FF` (desconhecido), com E2E-CRC.
+ * Achado no sensor real (F5, 19/11/2026): iniciado só pelo GluView, o sensor ficou com o início
+ * zerado e "time sync required", sem glicemia depois dos 60 min de aquecimento.
+ */
+object SessionStartTimeWriter {
+    fun build(utcMillis: Long, e2eCrc: Boolean = true): ByteArray {
+        val t = LocalDateTime.ofEpochSecond(utcMillis / 1000, 0, ZoneOffset.UTC)
+        val payload = byteArrayOf(
+            (t.year and 0xFF).toByte(), (t.year ushr 8).toByte(),
+            t.monthValue.toByte(), t.dayOfMonth.toByte(),
+            t.hour.toByte(), t.minute.toByte(), t.second.toByte(),
+            0, 0xFF.toByte()
+        )
+        return if (e2eCrc) E2eCrc.append(payload) else payload
+    }
+}
+
 /** CGM Session Run Time (0x2AAB): vida útil prevista da sessão, em horas. */
 data class SessionRunTime(val hours: Int, val crc: CrcState)
 

@@ -281,4 +281,16 @@ class SmartGuideProtocolTest {
         assertTrue(Socp.parseResponse(hex("03 05")) is CgmParse.Invalid)
         assertTrue(Socp.parseResponse(ByteArray(0)) is CgmParse.Invalid)
     }
+
+    @Test
+    fun `escrita do Session Start Time no formato do mySugr`() {
+        // Mesma data da captura real (26/10/2026, cgm-probe): EA07 0A 0D 08 37 05 00 FF + CRC 15 48.
+        val ms = LocalDateTime.of(2026, 10, 13, 8, 55, 5).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val bytes = SessionStartTimeWriter.build(ms)
+        assertEquals("EA 07 0A 0D 08 37 05 00 FF 15 48", bytes.joinToString(" ") { "%02X".format(it) })
+        val back = ok(SessionStartTimeParser.parse(bytes))
+        assertEquals(ms, back.utcMillis)
+        assertEquals(CrcState.VALID, back.crc)
+        assertEquals(9, SessionStartTimeWriter.build(ms, e2eCrc = false).size)
+    }
 }
