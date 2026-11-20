@@ -311,4 +311,16 @@ class SmartGuideProtocolTest {
         assertEquals(Socp.OP_SET_CALIBRATION, ok.requestOpCode)
         assertTrue(ok.isSuccess)
     }
+
+    @Test
+    fun `status da calibracao gravada`() {
+        // Sensor real, 19/11/2026: resposta 06 A4 00 A4 00 11 D0 02 01 00 01 → status 1 = rejeitada.
+        val real = ok(Socp.parseResponse(hex("06 A4 00 A4 00 11 D0 02 01 00 01 C0 1B"))) as Socp.Response.CalibrationValue
+        assertEquals(1, real.status)
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(1), Socp.calibrationOutcome(real.status))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(2), Socp.calibrationOutcome(2))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Pending, Socp.calibrationOutcome(4))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted, Socp.calibrationOutcome(0))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted, Socp.calibrationOutcome(null))
+    }
 }

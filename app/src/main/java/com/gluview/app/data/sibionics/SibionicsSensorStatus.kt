@@ -61,7 +61,9 @@ data class SibionicsSensorStatus(
      */
     val expiryMinutes: Int = EXPIRY_MINUTES,
     /** O próprio sensor anunciou que a sessão acabou (SmartGuide: bit "session stopped"). */
-    val sessionEnded: Boolean = false
+    val sessionEnded: Boolean = false,
+    /** O próprio sensor está pedindo calibração por ponta de dedo (SmartGuide: "calibration required"). */
+    val calibrationRequired: Boolean = false
 ) {
     /** Idade do sensor em dias inteiros, ou null se o início é desconhecido. */
     fun ageDays(nowMs: Long = System.currentTimeMillis()): Int? =

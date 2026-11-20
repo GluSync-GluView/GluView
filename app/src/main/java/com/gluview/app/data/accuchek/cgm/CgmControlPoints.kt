@@ -147,6 +147,17 @@ object Socp {
         e2eCrc
     )
 
+    /**
+     * Calibration Status do registro gravado (norma CGMS): bit 0 = rejeitada, bit 1 = fora da
+     * faixa, bit 2 = em processamento. null = o registro não veio (conta como aceita: o comando foi).
+     */
+    fun calibrationOutcome(status: Int?): com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome = when {
+        status == null -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted
+        status and 0x03 != 0 -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(status)
+        status and 0x04 != 0 -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Pending
+        else -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted
+    }
+
     fun getCalibrationValue(record: Int = LAST_CALIBRATION, e2eCrc: Boolean = true): ByteArray =
         withCrc(byteArrayOf(OP_GET_CALIBRATION.toByte()) + le16(record.coerceIn(0, 0xFFFF)), e2eCrc)
 

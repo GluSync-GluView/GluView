@@ -280,6 +280,11 @@
     <string name="settings_smartguide_calibrate_rejected">O sensor recusou a calibração (código %1$d)</string>
     <string name="settings_smartguide_calibrate_not_connected">O sensor não está conectado agora. Tente de novo em alguns minutos.</string>
     <string name="settings_smartguide_calibrate_no_answer">O sensor não respondeu. Tente de novo.</string>
+    <string name="settings_smartguide_calibrate_pending">Calibração recebida; o sensor ainda está processando</string>
+    <string name="settings_smartguide_calibrate_rejected_by_sensor">O sensor recebeu o valor, mas não aceitou a calibração. Confira com outra ponta de dedo e tente de novo mais tarde; se continuar, o sensor pode estar com defeito.</string>
+    <string name="home_sensor_calibration_title">O sensor pede calibração</string>
+    <string name="home_sensor_calibration_banner">Faça um teste de ponta de dedo e informe o valor. Até lá, confira as glicemias no glicosímetro.</string>
+    <string name="home_sensor_calibration_action">Calibrar</string>
     <string name="settings_smartguide_forget">Esquecer este sensor</string>
     <string name="settings_smartguide_forget_title">Esquecer o SmartGuide?</string>
     <string name="settings_smartguide_forget_body">O GluView para de ler este sensor e desfaz o pareamento neste celular. As leituras já salvas continuam no histórico.</string>

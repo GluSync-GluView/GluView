@@ -274,6 +274,11 @@
     <string name="settings_smartguide_calibrate_rejected">The sensor rejected the calibration (code %1$d)</string>
     <string name="settings_smartguide_calibrate_not_connected">The sensor is not connected right now. Try again in a few minutes.</string>
     <string name="settings_smartguide_calibrate_no_answer">The sensor did not answer. Try again.</string>
+    <string name="settings_smartguide_calibrate_pending">Calibration received; the sensor is still processing it</string>
+    <string name="settings_smartguide_calibrate_rejected_by_sensor">The sensor received the value but did not accept the calibration. Check with another fingerstick and try again later; if it keeps happening, the sensor may be faulty.</string>
+    <string name="home_sensor_calibration_title">The sensor needs calibration</string>
+    <string name="home_sensor_calibration_banner">Take a fingerstick test and enter the value. Until then, check your glucose with the meter.</string>
+    <string name="home_sensor_calibration_action">Calibrate</string>
     <string name="settings_smartguide_forget">Forget this sensor</string>
     <string name="settings_smartguide_forget_title">Forget the SmartGuide?</string>
     <string name="settings_smartguide_forget_body">GluView stops reading this sensor and removes the pairing on this phone. Readings already saved stay in the history.</string>

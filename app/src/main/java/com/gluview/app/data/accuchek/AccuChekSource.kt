@@ -413,6 +413,7 @@ class AccuChekSource @Inject constructor(
             new
         }
         if (SmartGuideAlert.SESSION_ENDED in now) statusHolder.onSensorLifetime(sessionEnded = true)
+        statusHolder.onCalibrationRequest(SmartGuideAlert.CALIBRATION_REQUIRED in now)
         for (alert in appeared) {
             appLogger.error(LOG, "Aviso do sensor", mapOf("aviso" to alert.name, "anunciacao" to a.toString()))
             when (alert) {

@@ -326,6 +326,21 @@ internal fun PatientHomeContent(
                     } else if (minutesSinceSync >= 15 && uiState.reading != null) {
                         GluCallout(stringResource(R.string.home_no_update_warning, minutesSinceSync), tone = Tone.Danger, announce = true)
                     }
+                    // O próprio sensor (SmartGuide) pede ponta de dedo: aviso com a ação ali mesmo.
+                    if (state.isSensorSource && state.sensorStatus.calibrationRequired) {
+                        var showCalibration by remember { mutableStateOf(false) }
+                        GluCallout(
+                            message = stringResource(R.string.home_sensor_calibration_banner),
+                            title = stringResource(R.string.home_sensor_calibration_title),
+                            tone = Tone.Warning,
+                            actionLabel = stringResource(R.string.home_sensor_calibration_action),
+                            onAction = { showCalibration = true },
+                            announce = true
+                        )
+                        if (showCalibration) {
+                            com.gluview.app.ui.screen.smartguide.SmartGuideCalibrationDialog(onDismiss = { showCalibration = false })
+                        }
+                    }
 
                     if (uiState.isLoading && uiState.reading == null) {
                         Box(

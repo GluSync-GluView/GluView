@@ -42,6 +42,8 @@ import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -147,10 +149,22 @@ class AccuChekBleManager @Inject constructor(
     @Volatile private var timeSyncTried = false
     /** Calibração enviada esperando o Response Code do SOCP. */
     @Volatile private var pendingCalibration: CompletableDeferred<Int>? = null
+    /** Registro de calibração pedido depois do envio (para saber se o algoritmo aceitou). */
+    @Volatile private var pendingCalibrationRecord: CompletableDeferred<Socp.Response.CalibrationValue>? = null
 
     /** Resultado de [calibrate]. */
     sealed interface CalibrationOutcome {
+        /** Comando aceito e registro gravado sem erro. */
         data object Accepted : CalibrationOutcome
+        /** Recebida; o sensor ainda está processando ("calibration pending"). */
+        data object Pending : CalibrationOutcome
+        /**
+         * Comando aceito, mas o algoritmo do sensor recusou o valor (Calibration Status bit 0
+         * "rejected" ou bit 1 "out of range"). Visto no sensor real em 19/11/2026: dedo 164 com o
+         * sensor em LO voltou status 1, e a Home antes dizia "aceita".
+         */
+        data class RejectedBySensor(val status: Int) : CalibrationOutcome
+        /** O SOCP respondeu com erro ao comando. */
         data class Rejected(val code: Int) : CalibrationOutcome
         data object NotConnected : CalibrationOutcome
         data object NoAnswer : CalibrationOutcome
@@ -163,8 +177,14 @@ class AccuChekBleManager @Inject constructor(
      */
     suspend fun calibrate(mgdl: Int, calibrationMinute: Int, nextCalibrationMinute: Int): CalibrationOutcome {
         if (!ready || gatt == null) {
-            appLogger.usage(LOG, "Calibração pedida sem o sensor pronto", mapOf("mgdl" to mgdl))
-            return CalibrationOutcome.NotConnected
+            // O SmartGuide derruba a conexão entre medições: espera a próxima (até 6 min) em vez de
+            // falhar — no sensor real as duas primeiras tentativas caíram aqui.
+            appLogger.usage(LOG, "Calibração esperando o sensor conectar", mapOf("mgdl" to mgdl))
+            withTimeoutOrNull(6 * 60_000L) { events.filterIsInstance<LinkEvent.Ready>().first() }
+            if (!ready || gatt == null) {
+                appLogger.usage(LOG, "Calibração pedida sem o sensor pronto", mapOf("mgdl" to mgdl))
+                return CalibrationOutcome.NotConnected
+            }
         }
         suspend fun send(typeLocation: Int): Int? {
             val answer = CompletableDeferred<Int>()
@@ -184,14 +204,19 @@ class AccuChekBleManager @Inject constructor(
         }
         val outcome = when (code) {
             null -> CalibrationOutcome.NoAnswer
-            Socp.CODE_SUCCESS -> CalibrationOutcome.Accepted
+            Socp.CODE_SUCCESS -> {
+                // O "sucesso" do SOCP é só o comando recebido; quem diz se o algoritmo aceitou é o
+                // Calibration Status do registro gravado.
+                val record = CompletableDeferred<Socp.Response.CalibrationValue>()
+                pendingCalibrationRecord = record
+                enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCalibrationValue(e2eCrc = e2eCrc)))
+                val stored = withTimeoutOrNull(15_000L) { record.await() }.also { pendingCalibrationRecord = null }
+                enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
+                Socp.calibrationOutcome(stored?.status)
+            }
             else -> CalibrationOutcome.Rejected(code)
         }
         appLogger.usage(LOG, "Resultado da calibração", mapOf("resultado" to outcome.toString(), "codigo" to (code ?: "sem resposta")))
-        if (outcome == CalibrationOutcome.Accepted) {
-            enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCalibrationValue(e2eCrc = e2eCrc)))
-            enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
-        }
         return outcome
     }
     @Volatile private var bondRequested = false
@@ -794,6 +819,7 @@ class AccuChekBleManager @Inject constructor(
                 (r.getOrNull() as? Socp.Response.Code)
                     ?.takeIf { it.requestOpCode == Socp.OP_SET_CALIBRATION }
                     ?.let { pendingCalibration?.complete(it.code) }
+                (r.getOrNull() as? Socp.Response.CalibrationValue)?.let { pendingCalibrationRecord?.complete(it) }
             }
         }
     }

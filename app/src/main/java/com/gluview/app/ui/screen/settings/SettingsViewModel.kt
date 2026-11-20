@@ -90,23 +90,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calibra o SmartGuide com a glicemia de ponta de dedo medida agora. O minuto vem do início da
-     * sessão salvo pela fonte; a próxima calibração vai para +12 h, como no xDrip.
-     */
-    fun calibrateSmartGuide(mgdl: Int, onResult: (com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome) -> Unit) {
-        viewModelScope.launch {
-            val startMs = preferences.accuChekStartMs.first()
-            val outcome = if (startMs <= 0L) {
-                com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.NotConnected
-            } else {
-                val minute = ((System.currentTimeMillis() - startMs) / 60_000L).toInt()
-                accuChekBle.calibrate(mgdl, minute, minute + 12 * 60)
-            }
-            onResult(outcome)
-        }
-    }
-
     /** Esquece o SmartGuide: desfaz o pareamento, apaga serial/PIN/cursor e reinicia o serviço. */
     fun forgetSmartGuide() {
         viewModelScope.launch {

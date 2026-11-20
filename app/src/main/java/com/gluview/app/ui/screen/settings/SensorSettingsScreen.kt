@@ -105,8 +105,6 @@ fun SensorSettingsScreen(
     var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
     var calibrateSmartGuide by remember { mutableStateOf(false) }
-    var calibrationText by remember { mutableStateOf("") }
-    var calibrationSending by remember { mutableStateOf(false) }
     var confirmStopSensor by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -124,7 +122,7 @@ fun SensorSettingsScreen(
                 }
             },
             onSmartGuideForget = { confirmForgetSmartGuide = true },
-            onSmartGuideCalibrate = { calibrationText = ""; calibrateSmartGuide = true },
+            onSmartGuideCalibrate = { calibrateSmartGuide = true },
             onMedLevUnpair = { confirmMedLevUnpair = true }),
         onBack = onBack
     )
@@ -162,59 +160,7 @@ fun SensorSettingsScreen(
     }
 
     if (calibrateSmartGuide) {
-        val mgdl = calibrationText.trim().toIntOrNull()
-        val valid = mgdl != null && mgdl in 40..400
-        AlertDialog(
-            onDismissRequest = { if (!calibrationSending) calibrateSmartGuide = false },
-            title = { Text(stringResource(R.string.settings_smartguide_calibrate_title)) },
-            text = {
-                androidx.compose.foundation.layout.Column {
-                    Text(stringResource(R.string.settings_smartguide_calibrate_body))
-                    androidx.compose.material3.OutlinedTextField(
-                        value = calibrationText,
-                        onValueChange = { v -> calibrationText = v.filter { it.isDigit() }.take(3) },
-                        label = { Text(stringResource(R.string.settings_smartguide_calibrate_hint)) },
-                        singleLine = true,
-                        isError = calibrationText.isNotEmpty() && !valid,
-                        supportingText = if (calibrationText.isNotEmpty() && !valid) {
-                            { Text(stringResource(R.string.settings_smartguide_calibrate_invalid)) }
-                        } else null,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = valid && !calibrationSending, onClick = {
-                    val value = mgdl ?: return@TextButton
-                    calibrationSending = true
-                    viewModel.calibrateSmartGuide(value) { outcome ->
-                        calibrationSending = false
-                        calibrateSmartGuide = false
-                        val msg = when (outcome) {
-                            com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted ->
-                                context.getString(R.string.settings_smartguide_calibrate_ok)
-                            is com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Rejected ->
-                                context.getString(R.string.settings_smartguide_calibrate_rejected, outcome.code)
-                            com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.NotConnected ->
-                                context.getString(R.string.settings_smartguide_calibrate_not_connected)
-                            com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.NoAnswer ->
-                                context.getString(R.string.settings_smartguide_calibrate_no_answer)
-                        }
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                    }
-                }) {
-                    Text(stringResource(if (calibrationSending) R.string.settings_smartguide_calibrate_sending else R.string.settings_smartguide_calibrate_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(enabled = !calibrationSending, onClick = { calibrateSmartGuide = false }) {
-                    Text(stringResource(R.string.setup_cancel))
-                }
-            }
-        )
+        com.gluview.app.ui.screen.smartguide.SmartGuideCalibrationDialog(onDismiss = { calibrateSmartGuide = false })
     }
 
     if (confirmForgetSmartGuide) {
