@@ -265,11 +265,24 @@ class AppPreferences @Inject constructor(
         val KEY_LIBRE2_PATCH_INFO     = stringPreferencesKey("libre2_patch_info")     // hex do patchInfo (6 bytes)
         val KEY_LIBRE2_SESSION_KEY    = stringPreferencesKey("libre2_session_key")    // hex do material de chave BLE
         val KEY_LIBRE2_STREAMING_VALID = booleanPreferencesKey("libre2_streaming_valid") // handshake BLE concluído
-        val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      // contador de unlock do streaming
+val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      // contador de unlock do streaming
         val KEY_LIBRE2_CALIBRATION    = stringPreferencesKey("libre2_calibration")    // params de calibração (JSON) da FRAM
         val KEY_LIBRE2_FRAM           = stringPreferencesKey("libre2_fram")           // FRAM 344B para reconstruir scanstate
         val KEY_LIBRE2_SENSOR_START   = longPreferencesKey("libre2_sensor_start_ms")  // ativação (epoch ms) p/ idade
-        val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
+        val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
+
+        // F6.1 — FreeStyle Libre 3 / Lingo (porte fiel Juggluco GPLv3)
+        // whitebox crypto, fresh/saved auth, kAuth 149B, NFC activation, BLE streaming
+        val KEY_LIBRE3_SERIAL          = stringPreferencesKey("libre3_serial")
+        val KEY_LIBRE3_PATCH_INFO      = stringPreferencesKey("libre3_patch_info")
+        val KEY_LIBRE3_SAVED_AUTH      = stringPreferencesKey("libre3_saved_auth")      // hex do kAuth (149 bytes)
+        val KEY_LIBRE3_SENSOR_START    = longPreferencesKey("libre3_sensor_start_ms")   // ativação (epoch ms) p/ idade
+        val KEY_LIBRE3_BLE_ADDRESS     = stringPreferencesKey("libre3_ble_address")     // hex do device address (6 bytes)
+        val KEY_LIBRE3_PIN             = stringPreferencesKey("libre3_pin")             // hex do PIN (4 bytes)
+        val KEY_LIBRE3_LINGO_VERSION   = intPreferencesKey("libre3_lingo_version")      // 0=Libre 3, 3=Lingo v3
+        val KEY_LIBRE3_MAC             = stringPreferencesKey("libre3_mac")             // MAC salvo para conexão BLE
+        val KEY_LIBRE3_STREAMING_VALID = booleanPreferencesKey("libre3_streaming_valid") // handshake BLE concluído
+
         // F6.4 - leitores acoplados ao Libre (MiaoMiao/Tomato, Bubble, Atom). Sem teste com hardware.
         val KEY_LIBRE_BRIDGE_MAC      = stringPreferencesKey("libre_bridge_mac")
         val KEY_LIBRE_BRIDGE_KIND     = stringPreferencesKey("libre_bridge_kind")   // MIAOMIAO|BUBBLE|ATOM
@@ -654,6 +667,17 @@ class AppPreferences @Inject constructor(
     /** Fator de calibração Libre 2 (mmol_exibida = mmol_algoritmo × fator). 1.0 = valor de fábrica. */
     val libre2CalFactor: Flow<Double>       = dataStore.data.safeMap(1.0) { it[KEY_LIBRE2_CAL_FACTOR]  ?: 1.0 }
 
+    // F6.1 — FreeStyle Libre 3 / Lingo
+    val libre3Serial: Flow<String>             = dataStore.data.safeMap("") { it[KEY_LIBRE3_SERIAL]          ?: "" }
+    val libre3PatchInfo: Flow<String>          = dataStore.data.safeMap("") { it[KEY_LIBRE3_PATCH_INFO]      ?: "" }
+    val libre3SavedAuth: Flow<String>          = dataStore.data.safeMap("") { it[KEY_LIBRE3_SAVED_AUTH]      ?: "" }
+    val libre3SensorStartMs: Flow<Long>        = dataStore.data.safeMap(0L) { it[KEY_LIBRE3_SENSOR_START]    ?: 0L }
+    val libre3BleAddress: Flow<String>         = dataStore.data.safeMap("") { it[KEY_LIBRE3_BLE_ADDRESS]     ?: "" }
+    val libre3Pin: Flow<String>                = dataStore.data.safeMap("") { it[KEY_LIBRE3_PIN]             ?: "" }
+    val libre3LingoVersion: Flow<Int>          = dataStore.data.safeMap(0)  { it[KEY_LIBRE3_LINGO_VERSION]   ?: 0 }
+    val libre3Mac: Flow<String>                = dataStore.data.safeMap("") { it[KEY_LIBRE3_MAC]             ?: "" }
+    val libre3StreamingValid: Flow<Boolean>    = dataStore.data.safeMap(false) { it[KEY_LIBRE3_STREAMING_VALID] ?: false }
+
     // F6.4 — leitores bridge Libre
     val libreBridgeMac: Flow<String>        = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_MAC]  ?: "" }
     val libreBridgeKind: Flow<String>       = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_KIND] ?: "" }
@@ -1027,6 +1051,65 @@ class AppPreferences @Inject constructor(
         it.remove(KEY_LIBRE2_FRAM)
         it.remove(KEY_LIBRE2_SENSOR_START)
         it.remove(KEY_LIBRE2_CAL_FACTOR)
+    }
+
+    // F6.1 — FreeStyle Libre 3 / Lingo
+
+    /**
+     * Salva a sessão lida na ativação por NFC do Libre 3 / Lingo.
+     * Tudo que o streaming BLE headless precisa para conectar, autenticar e descriptografar.
+     * Zera a âncora (handshake ainda não feito) quando é um sensor novo (serial diferente).
+     */
+    suspend fun saveLibre3Session(
+        serial: String,
+        patchInfoHex: String,
+        savedAuthHex: String,
+        sensorStartMs: Long,
+        bleAddressHex: String,
+        pinHex: String,
+        lingoVersion: Int
+    ) = dataStore.edit {
+        val isNewSensor = it[KEY_LIBRE3_SERIAL] != serial
+        it[KEY_LIBRE3_SERIAL]          = serial
+        it[KEY_LIBRE3_PATCH_INFO]      = patchInfoHex
+        it[KEY_LIBRE3_SAVED_AUTH]      = savedAuthHex
+        it[KEY_LIBRE3_SENSOR_START]    = sensorStartMs
+        it[KEY_LIBRE3_BLE_ADDRESS]     = bleAddressHex
+        it[KEY_LIBRE3_PIN]             = pinHex
+        it[KEY_LIBRE3_LINGO_VERSION]   = lingoVersion
+        it[KEY_LIBRE3_STREAMING_VALID] = false
+        if (isNewSensor) {
+            it.remove(KEY_LIBRE3_MAC)
+        }
+    }
+
+    /** Atualiza a validade observada da sessão GATT persistida (handshake BLE concluído). */
+    suspend fun saveLibre3StreamingValid(valid: Boolean) =
+        dataStore.edit { it[KEY_LIBRE3_STREAMING_VALID] = valid }
+
+    /** Atualiza a versão de segurança do Lingo detectada. */
+    suspend fun saveLibre3LingoVersion(version: Int) =
+        dataStore.edit { it[KEY_LIBRE3_LINGO_VERSION] = version }
+
+    /** Salva a autorização persistida (savedAuth 149 bytes). */
+    suspend fun saveLibre3SavedAuth(hex: String) =
+        dataStore.edit { it[KEY_LIBRE3_SAVED_AUTH] = hex }
+
+    /** Salva o MAC do sensor descoberto por scan BLE. */
+    suspend fun saveLibre3Mac(mac: String) =
+        dataStore.edit { it[KEY_LIBRE3_MAC] = mac }
+
+    /** Esquece o sensor Libre 3 / Lingo configurado (sessão + MAC + âncora). */
+    suspend fun clearLibre3Sensor() = dataStore.edit {
+        it.remove(KEY_LIBRE3_SERIAL)
+        it.remove(KEY_LIBRE3_PATCH_INFO)
+        it.remove(KEY_LIBRE3_SAVED_AUTH)
+        it.remove(KEY_LIBRE3_SENSOR_START)
+        it.remove(KEY_LIBRE3_BLE_ADDRESS)
+        it.remove(KEY_LIBRE3_PIN)
+        it.remove(KEY_LIBRE3_LINGO_VERSION)
+        it.remove(KEY_LIBRE3_MAC)
+        it.remove(KEY_LIBRE3_STREAMING_VALID)
     }
 
     /** Salva o fator de calibração da glicemia (recalculável ao longo da vida do sensor). */

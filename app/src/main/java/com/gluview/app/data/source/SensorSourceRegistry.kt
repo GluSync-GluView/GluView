@@ -3,6 +3,7 @@ package com.gluview.app.data.source
 import com.gluview.app.data.accuchek.AccuChekSource
 import com.gluview.app.data.dexcom.DexcomG6Source
 import com.gluview.app.data.libre2.Libre2Source
+import com.gluview.app.data.libre3.Libre3Source
 import com.gluview.app.data.medlevensohn.MedLevensohnSource
 import com.gluview.app.data.sibionics.SibionicsBleSource
 import com.gluview.app.data.librebridge.LibreBridgeSource
@@ -17,11 +18,14 @@ import javax.inject.Singleton
  *
  * PT-3: [DataSourceType.DEXCOM_G7] entrou com o pareamento EC-JPAKE da libkeks do xDrip (módulo
  * `:keks`), para o G7 já pareado pelo app oficial no mesmo celular.
+ * F6.1: [DataSourceType.LIBRE3] entrou com o porte fiel Juggluco (GPLv3) — whitebox crypto,
+ * fresh/saved auth, kAuth 149B, NFC/BLE.
  */
 @Singleton
 class SensorSourceRegistry @Inject constructor(
     private val sibionics: SibionicsBleSource,
     private val libre2: Libre2Source,
+    private val libre3: Libre3Source,
     private val accuChek: AccuChekSource,
     private val medLevensohn: MedLevensohnSource,
     private val dexcomG6: DexcomG6Source,
@@ -37,6 +41,7 @@ class SensorSourceRegistry @Inject constructor(
         !type.isUsableOnThisDevice         -> null
         type.isSibionics                   -> sibionics
         type == DataSourceType.LIBRE2_PLUS -> libre2
+        type == DataSourceType.LIBRE3      -> libre3
         type == DataSourceType.ACCU_CHEK_SMARTGUIDE -> accuChek
         type == DataSourceType.MEDLEVENSOHN_SMART2  -> medLevensohn
         type == DataSourceType.DEXCOM_G6            -> dexcomG6

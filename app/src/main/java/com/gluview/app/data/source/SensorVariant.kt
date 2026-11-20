@@ -11,6 +11,8 @@ import com.gluview.app.R
  *   (caminho ainda não implementado); EUA e Brasil usam Gen2 (o mesmo código). O byte 3 do
  *   patchInfo traz a região (DiaBLE: 1 Europa, 2 EUA, 8 resto do mundo — o sensor brasileiro
  *   testado vem com 8).
+ * - Libre 3 / Lingo: protocolo único global (whitebox crypto), sem variantes regionais conhecidas.
+ *   Lingo (versão fitness) usa security version 3; Libre 3 médico usa security version 1.
  * - Sibionics GS1: cada mercado usa outro app oficial e outra chave de autenticação; o sensor só
  *   conversa com a do seu mercado. CN = caixa chinesa (硅基动感, registro NMPA), testado.
  */
@@ -18,7 +20,8 @@ enum class SensorRegion(val code: String, @StringRes val nameRes: Int) {
     EU("EU", R.string.sensor_region_eu),
     NA("NA", R.string.sensor_region_na),
     SA("SA", R.string.sensor_region_sa),
-    CN("CN", R.string.sensor_region_cn)
+    CN("CN", R.string.sensor_region_cn),
+    GLOBAL("GLOBAL", R.string.sensor_region_global)
 }
 
 /**
@@ -66,6 +69,9 @@ object SensorVariantCatalog {
         SensorVariant("LIBRE2PLUS_EU", R.string.sensor_model_libre2_plus, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED, implemented = false),
         SensorVariant("LIBRE2_NA", R.string.sensor_model_libre2, SensorRegion.NA, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED),
         SensorVariant("LIBRE2_EU", R.string.sensor_model_libre2, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED, implemented = false),
+        // F6.1 - Libre 3 / Lingo (protocolo único global, sem variantes regionais)
+        SensorVariant("LIBRE3_GLOBAL", R.string.sensor_model_libre3, SensorRegion.GLOBAL, DataSourceType.LIBRE3, SensorMaturity.UNTESTED),
+        SensorVariant("LINGO_GLOBAL", R.string.sensor_model_lingo, SensorRegion.GLOBAL, DataSourceType.LIBRE3, SensorMaturity.UNTESTED),
         SensorVariant("SIBIONICS_GS1_CN", R.string.sensor_model_sibionics_gs1, SensorRegion.CN, DataSourceType.SIBIONICS_CHINES, SensorMaturity.WORKS),
         SensorVariant("SIBIONICS_GS1_SA", R.string.sensor_model_sibionics_gs1, SensorRegion.SA, DataSourceType.SIBIONICS_NACIONAL, SensorMaturity.TESTING),
         single(DataSourceType.SIBIONICS_GS3, SensorMaturity.UNTESTED),

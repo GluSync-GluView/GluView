@@ -82,6 +82,8 @@
     <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
     <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
     <string name="sensor_model_sibionics_gs3">Sibionics GS3</string>
+    <string name="sensor_model_libre3">FreeStyle Libre 3</string>
+    <string name="sensor_model_lingo">Lingo</string>
     <string name="sensor_model_libre_bridge_miaomiao">MiaoMiao (Libre reader)</string>
     <string name="sensor_model_libre_bridge_bubble">Bubble (Libre reader)</string>
     <string name="sensor_model_libre_bridge_atom">Atom (Libre reader)</string>
@@ -247,6 +249,7 @@
     <string name="settings_sibionics_gs3_account_desc">12-byte account identifier for Sibionics GS3 V3 (optional).</string>
     <string name="settings_sibionics_gs3_account_hint">E.g. 123456789</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
+    <string name="data_source_libre3">FreeStyle Libre 3 / Lingo</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
     <!-- Accu-Chek SmartGuide: setup wizard and Sensor tab (F4) -->
     <string name="setup_package_title_smartguide">Get the sensor package</string>

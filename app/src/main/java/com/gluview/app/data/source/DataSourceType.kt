@@ -12,7 +12,10 @@ import com.gluview.app.R
  * - SIBIONICS_NACIONAL:   BLE direto, protocolo v1.1.0 (sensor distribuído no Brasil).
  *                         Em teste — implementado, ainda sem validação num sensor real.
  * - SIBIONICS_CHINES:     BLE direto, protocolo v1.1.2 com autenticação (hardware chinês)
+ * - SIBIONICS_GS3:        BLE direto, protocolo GS3 (Kotlin puro, sem .so). Sem teste.
  * - LIBRE2_PLUS:          BLE direto FreeStyle Libre 2 Plus (ativação NFC + streaming cifrado)
+ * - LIBRE3:               BLE direto FreeStyle Libre 3 / Lingo (NFC + handshake cripto whitebox,
+ *                         fresh/saved auth, kAuth 149B). Porte fiel Juggluco (GPLv3). Sem teste.
  * - ACCU_CHEK_SMARTGUIDE: BLE direto, serviço CGM padrão da Bluetooth SIG (0x181F) — sem cripto
  *                         proprietária nem .so. Sem teste com sensor real até a validação (F5 do
  *                         plano 12_sprint_accuchek_smartguide.md).
@@ -51,6 +54,7 @@ enum class DataSourceType(
     SIBIONICS_CHINES("SIBIONICS_CHINES", "Sibionics China", R.string.data_source_sibionics_china),
     SIBIONICS_GS3("SIBIONICS_GS3", "Sibionics GS3", R.string.data_source_sibionics_gs3),
     LIBRE2_PLUS("LIBRE2_PLUS", "FreeStyle Libre 2 Plus", R.string.data_source_libre2_plus),
+    LIBRE3("LIBRE3", "FreeStyle Libre 3 / Lingo", R.string.data_source_libre3),
     ACCU_CHEK_SMARTGUIDE("ACCU_CHEK_SMARTGUIDE", "Accu-Chek SmartGuide", R.string.data_source_accu_chek_smartguide),
     MEDLEVENSOHN_SMART2("MEDLEVENSOHN_SMART2", "Smart 2.0 Medlevensohn", R.string.data_source_medlevensohn_smart2),
     DEXCOM_G6("DEXCOM_G6", "Dexcom G6", R.string.data_source_dexcom_g6),
@@ -71,32 +75,36 @@ enum class DataSourceType(
     /** Dexcom G6/G7: configurado por código digitado (sem caixa para ler). */
     val isDexcom: Boolean get() = this == DEXCOM_G6 || this == DEXCOM_G7
 
-    /** Leitor externo acoplado ao Libre (MiaoMiao/Bubble/Atom), F6.4. */
+/** Leitor externo acoplado ao Libre (MiaoMiao/Bubble/Atom), F6.4. */
     val isLibreBridge: Boolean get() =
         this == LIBRE_BRIDGE_MIAOMIAO || this == LIBRE_BRIDGE_BUBBLE || this == LIBRE_BRIDGE_ATOM
+
+    /** Libre 3 / Lingo (F6.1). */
+    val isLibre3: Boolean get() = this == LIBRE3
 
     /**
      * Sensor com 1 h de aquecimento acompanhada pelo app (contagem na Home, sem alarme de "sem
      * sinal" nesse período): Sibionics e Accu-Chek SmartGuide (aquecimento de 60 min, Juggluco
      * `mkdatabaseAccu`). Os dois informam a idade em minutos, de onde sai a contagem.
      */
-    val hasWarmupWindow: Boolean get() = isSibionics || this == ACCU_CHEK_SMARTGUIDE
+    val hasWarmupWindow: Boolean get() = isSibionics || this == ACCU_CHEK_SMARTGUIDE || this == LIBRE3
 
     /**
      * Verdadeiro para qualquer fonte de sensor lida localmente pelo aparelho (BLE direto):
-     * Sibionics (×2) e Libre 2 Plus. Falso só para [GLUSYNC] (dado vem da nuvem).
+     * Sibionics (×2), Libre 2 Plus e Libre 3. Falso só para [GLUSYNC] (dado vem da nuvem).
      * É este o gate do caminho "sensor local" no serviço (FGS CONNECTED_DEVICE, upload à nuvem, etc.).
      */
     val isLocalSensor: Boolean get() = this != GLUSYNC
 
     /**
      * Depende de biblioteca nativa proprietária que só existe em arm64 (Sibionics GS1/GS2 e Libre 2
-     * Plus). O Sibionics GS3 é porte Kotlin puro (sem .so) e não entra aqui. Em aparelho 32 bits
+     * Plus). O Sibionics GS3 é porte Kotlin puro (sem .so) e não entra aqui. O Libre 3 usa
+     * whitebox crypto nativa (gluviewlibre3.so) que também é arm64-only. Em aparelho 32 bits
      * ([NativeSensorSupport.isAvailable] = false) ou em build sem as bibliotecas
      * ([NativeSensorSupport.libsBundled] = false) fica indisponível.
      */
     val requiresNativeLibs: Boolean get() =
-        this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES || this == LIBRE2_PLUS
+        this == SIBIONICS_NACIONAL || this == SIBIONICS_CHINES || this == LIBRE2_PLUS || this == LIBRE3
 
     /** Pode ser usada como fonte neste aparelho (ver [requiresNativeLibs]). */
     val isUsableOnThisDevice: Boolean get() =

@@ -81,6 +81,8 @@
     <string name="caregiver_follow_not_entitled">O acompanhamento ainda não foi liberado para o paciente. Peça a liberação em Ajustes › Conta › Nuvem e acompanhamento.</string>
     <string name="sensor_model_libre2">FreeStyle Libre 2</string>
     <string name="sensor_model_libre2_plus">FreeStyle Libre 2 Plus</string>
+    <string name="sensor_model_libre3">FreeStyle Libre 3</string>
+    <string name="sensor_model_lingo">Lingo</string>
     <string name="sensor_model_sibionics_gs1">Sibionics GS1</string>
     <string name="sensor_model_sibionics_gs3">Sibionics GS3</string>
     <string name="sensor_model_libre_bridge_miaomiao">MiaoMiao (leitor Libre)</string>
@@ -90,6 +92,7 @@
     <string name="sensor_region_na">América do Norte</string>
     <string name="sensor_region_sa">América do Sul</string>
     <string name="sensor_region_cn">China</string>
+    <string name="sensor_region_global">Global</string>
     <string name="sensor_variant_label">%1$s %2$s</string>
     <string name="sensor_official_app_notice">Use um app por vez com o sensor: dois apps disputando o mesmo sensor causam falhas e leituras perdidas. Siga as instruções do fabricante e confirme com o glicosímetro antes de decidir um tratamento. Projeto independente, sem afiliação com os fabricantes.</string>
     <string name="libre2_gen1_not_supported">Este é um FreeStyle Libre 2 europeu (geração 1). O GluView ainda não lê essa versão — por enquanto, só a da América do Norte e da América do Sul.</string>
@@ -253,6 +256,7 @@
     <string name="settings_sibionics_gs3_account_desc">Identificador de conta de 12 bytes do Sibionics GS3 V3 (opcional).</string>
     <string name="settings_sibionics_gs3_account_hint">Ex.: 123456789</string>
     <string name="data_source_libre2_plus">FreeStyle Libre 2 Plus</string>
+    <string name="data_source_libre3">FreeStyle Libre 3 / Lingo</string>
     <string name="data_source_accu_chek_smartguide">Accu-Chek SmartGuide</string>
     <!-- Accu-Chek SmartGuide: assistente e aba Sensor (F4) -->
     <string name="setup_package_title_smartguide">Pegue a embalagem do sensor</string>

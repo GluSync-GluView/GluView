@@ -17,10 +17,10 @@ class NativeSensorSupportTest {
         assertFalse(NativeSensorSupport.supports(arrayOf("arm64-v8a"), is64BitProcess = false))
     }
 
-    @Test fun `só Sibionics e Libre 2 dependem de biblioteca nativa`() {
+    @Test fun `só Sibionics, Libre 2 e Libre 3 dependem de biblioteca nativa`() {
         val native = DataSourceType.entries.filter { it.requiresNativeLibs }.toSet()
         assertEquals(
-            setOf(DataSourceType.SIBIONICS_NACIONAL, DataSourceType.SIBIONICS_CHINES, DataSourceType.LIBRE2_PLUS),
+            setOf(DataSourceType.SIBIONICS_NACIONAL, DataSourceType.SIBIONICS_CHINES, DataSourceType.LIBRE2_PLUS, DataSourceType.LIBRE3),
             native
         )
         // GluSync (a fonte do seguidor) nunca depende de biblioteca nativa.
