@@ -263,6 +263,17 @@
     <string name="settings_smartguide_serial">Sensor %1$s</string>
     <string name="settings_smartguide_setup">Set up the SmartGuide</string>
     <string name="settings_smartguide_repair">Pair again</string>
+    <string name="settings_smartguide_calibrate">Calibrate with fingerstick</string>
+    <string name="settings_smartguide_calibrate_title">Calibrate the SmartGuide</string>
+    <string name="settings_smartguide_calibrate_body">Take a fingerstick test now and enter the value. It goes to the sensor, which adjusts the next readings.</string>
+    <string name="settings_smartguide_calibrate_hint">Fingerstick glucose (mg/dL)</string>
+    <string name="settings_smartguide_calibrate_invalid">Enter a value between 40 and 400 mg/dL</string>
+    <string name="settings_smartguide_calibrate_confirm">Send to sensor</string>
+    <string name="settings_smartguide_calibrate_sending">Sending…</string>
+    <string name="settings_smartguide_calibrate_ok">Calibration accepted by the sensor</string>
+    <string name="settings_smartguide_calibrate_rejected">The sensor rejected the calibration (code %1$d)</string>
+    <string name="settings_smartguide_calibrate_not_connected">The sensor is not connected right now. Try again in a few minutes.</string>
+    <string name="settings_smartguide_calibrate_no_answer">The sensor did not answer. Try again.</string>
     <string name="settings_smartguide_forget">Forget this sensor</string>
     <string name="settings_smartguide_forget_title">Forget the SmartGuide?</string>
     <string name="settings_smartguide_forget_body">GluView stops reading this sensor and removes the pairing on this phone. Readings already saved stay in the history.</string>
@@ -281,7 +292,7 @@
     <string name="accuchek_warn_temperature_title">SmartGuide temperature out of range</string>
     <string name="accuchek_warn_temperature_body">The sensor may pause readings until its temperature returns to normal (heat, sauna, very hot bath or intense cold).</string>
     <string name="accuchek_warn_calibration_title">SmartGuide requests calibration</string>
-    <string name="accuchek_warn_calibration_body">The sensor requested a calibration. GluView does not calibrate the SmartGuide yet; confirm with a fingerstick test before making treatment decisions.</string>
+    <string name="accuchek_warn_calibration_body">The sensor requested a calibration. Take a fingerstick test and enter the value in Sensor › Calibrate with fingerstick.</string>
     <string name="accuchek_warn_disconnected_title">Sensor disconnected</string>
     <string name="accuchek_warn_disconnected_body">Could not reconnect to the Accu-Chek SmartGuide after 60 minutes. Check that the sensor is nearby and Bluetooth is on.</string>
     <string name="data_source_medlevensohn_smart2">Smart 2.0 Medlevensohn</string>

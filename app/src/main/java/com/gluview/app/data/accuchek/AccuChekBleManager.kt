@@ -40,6 +40,8 @@ import com.gluview.app.data.accuchek.cgm.Socp
 import com.gluview.app.data.sensor.SensorCode
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -143,6 +145,55 @@ class AccuChekBleManager @Inject constructor(
     @Volatile private var timeSyncRequired = false
     /** Já gravamos o Session Start Time nesta conexão (uma tentativa por conexão). */
     @Volatile private var timeSyncTried = false
+    /** Calibração enviada esperando o Response Code do SOCP. */
+    @Volatile private var pendingCalibration: CompletableDeferred<Int>? = null
+
+    /** Resultado de [calibrate]. */
+    sealed interface CalibrationOutcome {
+        data object Accepted : CalibrationOutcome
+        data class Rejected(val code: Int) : CalibrationOutcome
+        data object NotConnected : CalibrationOutcome
+        data object NoAnswer : CalibrationOutcome
+    }
+
+    /**
+     * Manda a glicemia de ponta de dedo ao sensor (SOCP `04`, como o xDrip). Primeiro com o byte
+     * tipo/local da norma (`11`); se o sensor responder "operando inválido", tenta uma vez com o
+     * byte que o xDrip manda (`01`). Depois de aceita, lê a calibração gravada e o Status para o log.
+     */
+    suspend fun calibrate(mgdl: Int, calibrationMinute: Int, nextCalibrationMinute: Int): CalibrationOutcome {
+        if (!ready || gatt == null) {
+            appLogger.usage(LOG, "Calibração pedida sem o sensor pronto", mapOf("mgdl" to mgdl))
+            return CalibrationOutcome.NotConnected
+        }
+        suspend fun send(typeLocation: Int): Int? {
+            val answer = CompletableDeferred<Int>()
+            pendingCalibration = answer
+            val bytes = Socp.setCalibrationValue(mgdl, calibrationMinute, nextCalibrationMinute, typeLocation, e2eCrc)
+            appLogger.usage(LOG, "Enviando calibração", mapOf(
+                "mgdl" to mgdl, "minuto" to calibrationMinute, "proxima" to nextCalibrationMinute,
+                "tipoLocal" to "%02X".format(typeLocation), "hex" to bytes.toHexLog()
+            ))
+            enqueue(GattOp.Write(SmartGuideGatt.SOCP, bytes))
+            return withTimeoutOrNull(20_000L) { answer.await() }.also { pendingCalibration = null }
+        }
+        var code = send(Socp.CALIBRATION_FINGER_CAPILLARY)
+        if (code == Socp.CODE_INVALID_OPERAND) {
+            appLogger.usage(LOG, "Sensor recusou o byte 11; tentando como o xDrip (01)")
+            code = send(Socp.CALIBRATION_XDRIP_BYTE)
+        }
+        val outcome = when (code) {
+            null -> CalibrationOutcome.NoAnswer
+            Socp.CODE_SUCCESS -> CalibrationOutcome.Accepted
+            else -> CalibrationOutcome.Rejected(code)
+        }
+        appLogger.usage(LOG, "Resultado da calibração", mapOf("resultado" to outcome.toString(), "codigo" to (code ?: "sem resposta")))
+        if (outcome == CalibrationOutcome.Accepted) {
+            enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCalibrationValue(e2eCrc = e2eCrc)))
+            enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
+        }
+        return outcome
+    }
     @Volatile private var bondRequested = false
     @Volatile private var deviceInfoRead = false
     @Volatile private var connectAttempt = 0
@@ -740,6 +791,9 @@ class AccuChekBleManager @Inject constructor(
             SmartGuideGatt.SOCP -> {
                 val r = Socp.parseResponse(value, e2eCrc)
                 appLogger.usage(LOG, "Resposta do SOCP", mapOf("hex" to value.toHexLog(), "lido" to (r.getOrNull()?.toString() ?: r.toString())))
+                (r.getOrNull() as? Socp.Response.Code)
+                    ?.takeIf { it.requestOpCode == Socp.OP_SET_CALIBRATION }
+                    ?.let { pendingCalibration?.complete(it.code) }
             }
         }
     }

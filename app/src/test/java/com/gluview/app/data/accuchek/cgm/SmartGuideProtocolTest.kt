@@ -293,4 +293,22 @@ class SmartGuideProtocolTest {
         assertEquals(CrcState.VALID, back.crc)
         assertEquals(9, SessionStartTimeWriter.build(ms, e2eCrc = false).size)
     }
+
+    @Test
+    fun `SOCP set calibration no layout do xDrip`() {
+        val b = Socp.setCalibrationValue(mgdl = 98, calibrationMinute = 140, nextCalibrationMinute = 860)
+        assertEquals(13, b.size)
+        assertEquals("04 62 00 8C 00 11 5C 03 00 00 00", b.copyOfRange(0, 11).joinToString(" ") { "%02X".format(it) })
+        assertTrue(E2eCrc.hasValidTrailing(b))
+        val x = Socp.setCalibrationValue(98, 140, 860, Socp.CALIBRATION_XDRIP_BYTE, e2eCrc = false)
+        assertEquals(11, x.size)
+        assertEquals(0x01, x[5].toInt())
+    }
+
+    @Test
+    fun `SOCP resposta da calibracao`() {
+        val ok = ok(Socp.parseResponse(E2eCrc.append(byteArrayOf(0x1C, 0x04, 0x01)))) as Socp.Response.Code
+        assertEquals(Socp.OP_SET_CALIBRATION, ok.requestOpCode)
+        assertTrue(ok.isSuccess)
+    }
 }
