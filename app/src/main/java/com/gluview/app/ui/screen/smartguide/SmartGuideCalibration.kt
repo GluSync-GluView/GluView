@@ -39,7 +39,7 @@ import javax.inject.Inject
 class SmartGuideCalibrationViewModel @Inject constructor(
     private val ble: AccuChekBleManager,
     private val preferences: AppPreferences,
-    statusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
+    private val statusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
 ) : ViewModel() {
 
     /** O sensor aceita calibração agora (bit "calibration not allowed" desligado). */
@@ -57,6 +57,7 @@ class SmartGuideCalibrationViewModel @Inject constructor(
                 val minute = ((System.currentTimeMillis() - startMs) / 60_000L).toInt()
                 ble.calibrate(mgdl, minute, minute + 12 * 60)
             }
+            if (outcome == CalibrationOutcome.Accepted) statusHolder.onCalibrationAccepted(System.currentTimeMillis())
             onResult(outcome)
         }
     }

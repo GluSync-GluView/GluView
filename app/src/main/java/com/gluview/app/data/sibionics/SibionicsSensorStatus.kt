@@ -69,7 +69,9 @@ data class SibionicsSensorStatus(
      * o bit ligado o sensor recusa qualquer valor (sensor real, 19/11/2026: status 1 duas vezes).
      * Ele não informa quando libera: o app acompanha o bit e avisa quando desliga.
      */
-    val calibrationAllowed: Boolean = true
+    val calibrationAllowed: Boolean = true,
+    /** Hora da última calibração aceita pelo sensor nesta execução (para o 2º passo da rotina inicial). */
+    val lastCalibrationAcceptedMs: Long = 0L
 ) {
     /** Idade do sensor em dias inteiros, ou null se o início é desconhecido. */
     fun ageDays(nowMs: Long = System.currentTimeMillis()): Int? =
