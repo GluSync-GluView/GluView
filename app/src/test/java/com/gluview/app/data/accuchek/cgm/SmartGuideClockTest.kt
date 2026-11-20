@@ -53,4 +53,18 @@ class SmartGuideClockTest {
         // sem pulo
         assertEquals(0L, SmartGuideClock.wallClockJumpMs(1_000_000L, 50_000L, 1_600_000L, 650_000L))
     }
+
+    @Test
+    fun `horario de inicio regravado como no xDrip`() {
+        val computed = 1_795_131_927_000L
+        // zerado/ilegível (sensor iniciado só pelo GluView, 19/11/2026)
+        org.junit.Assert.assertTrue(SmartGuideClock.startTimeNeedsSync(null, computed))
+        // 47 s de diferença (visto depois de gravar): fica
+        org.junit.Assert.assertFalse(SmartGuideClock.startTimeNeedsSync(computed - 47_000L, computed))
+        // exatamente 2 min: fica; 2 min e 1 s: regrava
+        org.junit.Assert.assertFalse(SmartGuideClock.startTimeNeedsSync(computed + 120_000L, computed))
+        org.junit.Assert.assertTrue(SmartGuideClock.startTimeNeedsSync(computed + 121_000L, computed))
+        // sem Status ainda (início calculado desconhecido): não decide
+        org.junit.Assert.assertFalse(SmartGuideClock.startTimeNeedsSync(null, 0L))
+    }
 }

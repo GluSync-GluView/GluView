@@ -37,6 +37,7 @@ import com.gluview.app.data.accuchek.cgm.SessionStartTimeWriter
 import com.gluview.app.data.accuchek.cgm.SmartGuideGatt
 import com.gluview.app.data.accuchek.cgm.SmartGuideIdentityMatcher
 import com.gluview.app.data.accuchek.cgm.Socp
+import com.gluview.app.data.accuchek.cgm.SmartGuideClock
 import com.gluview.app.data.sensor.SensorCode
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -145,6 +146,10 @@ class AccuChekBleManager @Inject constructor(
     @Volatile private var setupStarted = false
     /** Último CGM Status pediu "time sync required" (o início da sessão não foi gravado por ninguém). */
     @Volatile private var timeSyncRequired = false
+    /** Session Start Time do sensor ilegível/zerado ou a mais de 2 min do início calculado (regra do xDrip). */
+    @Volatile private var startTimeOff = false
+    /** Início calculado pelo último CGM Status (agora − minutos do sensor). */
+    @Volatile private var statusStartMs = 0L
     /** Já gravamos o Session Start Time nesta conexão (uma tentativa por conexão). */
     @Volatile private var timeSyncTried = false
     /** Calibração enviada esperando o Response Code do SOCP. */
@@ -600,11 +605,14 @@ class AccuChekBleManager @Inject constructor(
             enqueue(GattOp.Read(SmartGuideGatt.MANUFACTURER_NAME))
         }
         enqueue(GattOp.Action("sincronizar horário") {
-            if (timeSyncRequired && !timeSyncTried) {
+            if ((timeSyncRequired || startTimeOff) && !timeSyncTried) {
                 timeSyncTried = true
                 val now = System.currentTimeMillis()
                 val bytes = SessionStartTimeWriter.build(now, e2eCrc)
-                appLogger.usage(LOG, "Gravando o horário no sensor (time sync)", mapOf("utcMs" to now, "hex" to bytes.toHexLog()))
+                appLogger.usage(LOG, "Gravando o horário no sensor (time sync)", mapOf(
+                    "utcMs" to now, "hex" to bytes.toHexLog(),
+                    "avisoDoSensor" to timeSyncRequired, "horarioDiferente" to startTimeOff
+                ))
                 enqueue(GattOp.Write(SmartGuideGatt.SESSION_START_TIME, bytes))
                 enqueue(GattOp.Read(SmartGuideGatt.SESSION_START_TIME))
                 enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
@@ -768,11 +776,20 @@ class AccuChekBleManager @Inject constructor(
                 if (s.crc == CrcState.INVALID) appLogger.error(LOG, "Status com CRC errado — ignorado")
                 else {
                     timeSyncRequired = s.annunciation.timeSyncRequired
+                    statusStartMs = now - s.timeOffsetMinutes * 60_000L
                     appLogger.usage(LOG, "Status do sensor", mapOf("minuto" to s.timeOffsetMinutes, "avisos" to s.annunciation.toString()))
                     listener?.onStatus(s, now)
                 }
             }
-            SmartGuideGatt.SESSION_START_TIME -> SessionStartTimeParser.parse(value).ok("Start Time")?.let { listener?.onSessionStartTime(it) }
+            SmartGuideGatt.SESSION_START_TIME -> {
+                val start = SessionStartTimeParser.parse(value).getOrNull()?.takeIf { it.crc != CrcState.INVALID }
+                startTimeOff = SmartGuideClock.startTimeNeedsSync(start?.utcMillis, statusStartMs)
+                if (start == null) appLogger.usage(LOG, "Start Time do sensor ilegível ou zerado", mapOf("hex" to value.toHexLog()))
+                else listener?.onSessionStartTime(start)
+                if (startTimeOff) appLogger.usage(LOG, "Horário de início do sensor diferente do calculado", mapOf(
+                    "sensorMs" to (start?.utcMillis ?: "?"), "calculadoMs" to statusStartMs
+                ))
+            }
             SmartGuideGatt.SESSION_RUN_TIME -> SessionRunTimeParser.parse(value).ok("Run Time")?.let { listener?.onSessionRunTime(it) }
             SmartGuideGatt.SERIAL_NUMBER -> {
                 deviceInfoRead = true
