@@ -1,15 +1,21 @@
-Ôªøpackage com.gluview.wearables.xiaomi
+package com.gluview.wearables.xiaomi
+
+import com.gluview.wearables.core.WearableCapabilities
+import com.gluview.wearables.core.WearableDeviceInfo
+import com.gluview.wearables.xiaomi.modern.XiaomiModernCoordinator
+import com.gluview.wearables.xiaomi.modern.XiaomiModernTransport
+import kotlinx.coroutines.CoroutineScope
 
 /**
- * Plano 21, F7.4 (Sem teste com hardware real).
- * M√≥dulo separado AGPL-3.0 para suporte a Mi Band 7/8/9 e dispositivos Xiaomi novos
- * (protocolo protobuf/autentica√ß√£o por vers√£o), a ser integrado ao n√∫cleo de wearables
- * do GluView. C√≥digo derivado/adaptado do Gadgetbridge (AGPLv3) deve manter cabe√ßalhos
- * originais nos arquivos copiados.
+ * F7.4 (plano 21): Suporte a dispositivos Xiaomi modernos (Mi Band 7/8/9).
+ * MÛdulo separado AGPL-3.0 para protocolo protobuf/autenticaÁ„o por vers„o.
+ * CÛdigo derivado/adaptado do Gadgetbridge (AGPLv3) - headers preservados.
  *
- * Implementa√ß√£o m√≠nima de integra√ß√£o: contrato de envio de glicemia/notifica√ß√£o e
- * identifica√ß√£o de modelos suportados; o transporte/protocolo completo depende de
- * aparelhos reais e vetores de captura.
+ * ImplementaÁ„o mÌnima de integraÁ„o: contrato de envio de glicemia/notificaÁ„o
+ * e identificaÁ„o de modelos suportados; o transporte/protocolo completo depende
+ * de aparelhos reais e vetores de captura.
+ *
+ * SEM TESTE COM HARDWARE REAL.
  */
 enum class XiaomiModernModel(val id: String, val displayName: String) {
     MI_BAND_7("mi_band_7", "Xiaomi Smart Band 7"),
@@ -22,6 +28,33 @@ enum class XiaomiModernModel(val id: String, val displayName: String) {
     companion object {
         fun fromId(id: String?): XiaomiModernModel? = entries.firstOrNull { it.id == id }
     }
+
+    fun deviceInfo(): WearableDeviceInfo = WearableDeviceInfo(
+        id = id,
+        displayName = displayName,
+        family = "xiaomi_modern",
+        capabilities = WearableCapabilities(
+            canShowGlucose = true,
+            canShowGraph = true,
+            canVibrate = true,
+            canReceiveSnooze = true,
+            canReportBattery = true,
+            canSendWatchface = true
+        ),
+        maturityLabel = "Sem teste com hardware real"
+    )
+
+    /**
+     * Cria transporte para integraÁ„o com WearableDeviceManager (F7.1 core).
+     */
+    fun createTransport(scope: CoroutineScope): XiaomiModernTransport =
+        XiaomiModernTransport(this, scope)
+
+    /**
+     * Cria coordenador para autenticaÁ„o protobuf e gerenciamento de sess„o.
+     */
+    fun createCoordinator(scope: CoroutineScope): XiaomiModernCoordinator =
+        XiaomiModernCoordinator(this, scope)
 }
 
 data class XiaomiGlucoseUpdate(
@@ -33,6 +66,6 @@ data class XiaomiGlucoseUpdate(
 )
 
 interface XiaomiModernGlucoseSink {
-    /** Envia atualiza√ß√£o de glicemia (notifica√ß√£o/visor/widget conforme suporte). Sem teste. */
+    /** Envia atualizaÁ„o de glicemia (notificaÁ„o/visor/widget conforme suporte). Sem teste. */
     suspend fun pushGlucose(update: XiaomiGlucoseUpdate): Boolean
 }

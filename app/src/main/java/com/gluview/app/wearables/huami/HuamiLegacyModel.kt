@@ -1,13 +1,13 @@
-ï»¿package com.gluview.app.wearables.huami
+package com.gluview.app.wearables.huami
 
-import com.gluview.app.wearables.core.WearableCapabilities
-import com.gluview.app.wearables.core.WearableDeviceInfo
+import com.gluview.wearables.core.WearableCapabilities
+import com.gluview.wearables.core.WearableDeviceInfo
 
 /**
- * F7.2 (plano 21): modelos Huami/Amazfit antigos suportados por referÃªncia WatchDrip+
+ * F7.2 (plano 21): modelos Huami/Amazfit antigos suportados por referência WatchDrip+
  * (GPLv3, `C:\claude\_research\wd_src\app\src\main\java\com\thatguysservice\huami_xdrip\watch\miband\`,
  * ex.: `MiBandType.java`, `Firmware/Sequence/SequenceState*.java`, `Firmware/operations/AuthOperations*.java`).
- * Todos **Sem teste com hardware real** nesta execuÃ§Ã£o, exceto Mi Band 6 (caminho existente preservado).
+ * Todos **Sem teste com hardware real** nesta execução, exceto Mi Band 6 (caminho existente preservado).
  */
 enum class HuamiLegacyModel(
     val id: String,
@@ -41,7 +41,7 @@ enum class HuamiLegacyModel(
         capabilities = WearableCapabilities(
             canShowGlucose = true,
             canShowGraph = supportsWatchfaceUpload,
-            canVibrate = false, // sem confirmaÃ§Ã£o de comando por modelo nesta execuÃ§Ã£o
+            canVibrate = false, // sem confirmação de comando por modelo nesta execução
             canReceiveSnooze = false,
             canReportBattery = false,
             canSendWatchface = supportsWatchfaceUpload

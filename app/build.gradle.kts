@@ -217,6 +217,8 @@ ksp {
 dependencies {
     // Fase 4 do plano 14 (Wear OS): contrato celular↔relógio (WatchFaceSnapshot + caminhos do Data Layer).
     implementation(project(":wear-contract"))
+    // F7.1 core: wearables núcleo (transport, command queue, device manager, etc.)
+    implementation(project(":wearables-core"))
     // PT-3: pareamento EC-JPAKE do Dexcom G7 (libkeks do xDrip, GPLv3).
     implementation(project(":keks"))
     // Fase 5: envio ao relógio pelo Data Layer (falha em silêncio em aparelho sem Play Services).

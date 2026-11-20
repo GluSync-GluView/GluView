@@ -1,5 +1,6 @@
-﻿package com.gluview.app.wearables.core
+package com.gluview.wearables.core
 
+import com.gluview.wearables.domain.GlucoseZone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** Transporte falso para testes de unidade do núcleo F7.1 (sem BLE/hardware). */
+/** Transporte falso para testes de unidade do n�cleo F7.1 (sem BLE/hardware). */
 class FakeWearableTransport(
     override val info: WearableDeviceInfo = WearableDeviceInfo(
         "fake", "Fake", "test", WearableCapabilities(
@@ -43,7 +44,7 @@ class WearableCoreTest {
 
     @Test fun `fila coalesce glicose e prioriza vibracao`() {
         val q = WearableCommandQueue()
-        val p = GlucosePayload(null, "100", "+0", "→", 1, false)
+        val p = GlucosePayload(null, "100", "+0", "?", 1, false)
         q.enqueue(WearableCommand.SendGlucose(p.copy(displayValue = "90")))
         q.enqueue(WearableCommand.Vibrate(WearableAlertKind.LOW))
         q.enqueue(WearableCommand.SendGlucose(p.copy(displayValue = "110")))
@@ -73,7 +74,7 @@ class WearableCoreTest {
         val m = WearableDeviceManager(t, scope, ReconnectBackoff(1, 2, 2.0, 0.0), nowMs = { 1_000L })
         m.start()
         delay(80)
-        val p = GlucosePayload(null, "120", "+1", "→", 0, false)
+        val p = GlucosePayload(null, "120", "+1", "?", 0, false)
         m.enqueue(WearableCommand.SendGlucose(p))
         delay(200)
         assertTrue(t.sent.any { it is WearableCommand.SendGlucose })
@@ -86,7 +87,7 @@ class WearableCoreTest {
     }
 
     @Test fun `politica de vibracao por tipo`() {
-        assertEquals(WearableAlertKind.URGENT_LOW, WearableVibrationPolicy.kindFor(com.gluview.app.domain.model.GlucoseZone.URGENT_LOW))
+        assertEquals(WearableAlertKind.URGENT_LOW, WearableVibrationPolicy.kindFor(GlucoseZone.URGENT_LOW))
         assertTrue(WearableVibrationPolicy.pattern(WearableAlertKind.URGENT_LOW).size >= 5)
         assertEquals(0, WearableVibrationPolicy.pattern(WearableAlertKind.NORMAL).size)
     }

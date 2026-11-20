@@ -1,17 +1,17 @@
-Ôªøpackage com.gluview.app.wearables.huami
+package com.gluview.app.wearables.huami
 
 import android.content.Context
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.GlucoseRepository
 import com.gluview.app.watchface.miband.MiBandWatchFacePusher
-import com.gluview.app.wearables.core.GlucosePayload
-import com.gluview.app.wearables.core.WearableAlertKind
-import com.gluview.app.wearables.core.WearableCapabilities
-import com.gluview.app.wearables.core.WearableCommand
-import com.gluview.app.wearables.core.WearableDeviceInfo
-import com.gluview.app.wearables.core.WearableDeviceManager
-import com.gluview.app.wearables.core.WearableEvent
-import com.gluview.app.wearables.core.WearableTransport
+import com.gluview.wearables.core.GlucosePayload
+import com.gluview.wearables.core.WearableAlertKind
+import com.gluview.wearables.core.WearableCapabilities
+import com.gluview.wearables.core.WearableCommand
+import com.gluview.wearables.core.WearableDeviceInfo
+import com.gluview.wearables.core.WearableDeviceManager
+import com.gluview.wearables.core.WearableEvent
+import com.gluview.wearables.core.WearableTransport
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -22,10 +22,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Adaptador F7.1 para a Mi Band 6/Huami que J√Å funciona: reutiliza o [MiBandWatchFacePusher]
+ * Adaptador F7.1 para a Mi Band 6/Huami que J¡ funciona: reutiliza o [MiBandWatchFacePusher]
  * e o pareamento existente sem alterar o comportamento/protocolo deles. O envio de glicose
- * segue sendo por visor (pusher); vibra√ß√£o remota e bateria s√£o capacidades n√£o expostas aqui
- * (mantidas conservadoras) para n√£o inventar comportamento.
+ * segue sendo por visor (pusher); vibraÁ„o remota e bateria s„o capacidades n„o expostas aqui
+ * (mantidas conservadoras) para n„o inventar comportamento.
  */
 class MiBand6HuamiTransport(
     private val pusher: MiBandWatchFacePusher,
@@ -40,7 +40,7 @@ class MiBand6HuamiTransport(
             canShowGlucose = true, canShowGraph = true, canVibrate = false,
             canReceiveSnooze = false, canReportBattery = false, canSendWatchface = true
         ),
-        maturityLabel = "Funciona (Mi Band 6 do Felipe)" // caminho existente, n√£o quebrar
+        maturityLabel = "Funciona (Mi Band 6 do Felipe)" // caminho existente, n„o quebrar
     )
 
     private val _events = MutableSharedFlow<WearableEvent>(extraBufferCapacity = 16)
@@ -64,7 +64,7 @@ class MiBand6HuamiTransport(
 
     override suspend fun send(command: WearableCommand): Boolean = when (command) {
         is WearableCommand.SendGlucose -> {
-            // Reusa exatamente o pusher atual (gera+envia visor); sem mudan√ßa de protocolo.
+            // Reusa exatamente o pusher atual (gera+envia visor); sem mudanÁa de protocolo.
             val ok = pusher.send(staleOverrideText = if (command.payload.stale) command.payload.deltaText else null) { }
             connected = ok || connected
             ok
@@ -73,7 +73,7 @@ class MiBand6HuamiTransport(
     }
 }
 
-/** Registro m√≠nimo para encaixar a Mi Band 6 no n√∫cleo sem alterar o servi√ßo atual. */
+/** Registro mÌnimo para encaixar a Mi Band 6 no n˙cleo sem alterar o serviÁo atual. */
 @Singleton
 class HuamiWearableRegistry @Inject constructor(
     private val pusher: MiBandWatchFacePusher,

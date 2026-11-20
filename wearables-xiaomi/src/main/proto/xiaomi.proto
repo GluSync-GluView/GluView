@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package com.gluview.wearables.xiaomi.proto;
+
+option java_package = "com.gluview.wearables.xiaomi.proto";
+option java_multiple_files = true;
+
+// Xiaomi Mi Band 7/8/9 protobuf message definitions
+// Derived from Gadgetbridge (AGPLv3) - nodomain.freeyourgadget.gadgetbridge.devices.xiaomi.watches
+// Headers preserved from original source.
+
+// Authentication and device info messages
+message AuthRequest {
+    bytes random = 1;
+    int32 version = 2;
+}
+
+message AuthResponse {
+    bytes random = 1;
+    bytes signature = 2;
+    int32 version = 3;
+}
+
+message DeviceInfoRequest {
+}
+
+message DeviceInfoResponse {
+    string firmware_version = 1;
+    string hardware_version = 2;
+    string mac_address = 3;
+    int32 battery_level = 4;
+    bool charging = 5;
+}
+
+// Glucose data message
+message GlucoseData {
+    int32 mgdl = 1;
+    int32 delta_mgdl = 2;
+    string direction = 3;  // "FLAT", "UP", "DOWN", "UP_UP", "DOWN_DOWN"
+    int64 timestamp = 4;
+    bool stale = 5;
+}
+
+// Notification message
+message Notification {
+    int32 id = 1;
+    string title = 2;
+    string content = 3;
+    int64 timestamp = 4;
+    string package_name = 5;
+}
+
+// Watchface messages
+message WatchfaceRequest {
+    int32 watchface_id = 1;
+    bytes data = 2;
+}
+
+message WatchfaceResponse {
+    int32 watchface_id = 1;
+    bool success = 2;
+    string error = 3;
+}
+
+// Command/response wrapper
+message XiaomiCommand {
+    int32 command_type = 1;
+    bytes payload = 2;
+    int32 sequence = 3;
+}
+
+message XiaomiResponse {
+    int32 command_type = 1;
+    bytes payload = 2;
+    int32 sequence = 3;
+    bool success = 4;
+    string error = 5;
+}
+
+// Command types
+enum CommandType {
+    CMD_UNKNOWN = 0;
+    CMD_AUTH_REQUEST = 1;
+    CMD_AUTH_RESPONSE = 2;
+    CMD_DEVICE_INFO_REQUEST = 3;
+    CMD_DEVICE_INFO_RESPONSE = 4;
+    CMD_GLUCOSE_DATA = 10;
+    CMD_NOTIFICATION = 11;
+    CMD_WATCHFACE_REQUEST = 12;
+    CMD_WATCHFACE_RESPONSE = 13;
+    CMD_HEART_RATE = 20;
+    CMD_STEPS = 21;
+    CMD_BATTERY = 22;
+    CMD_FIND_DEVICE = 23;
+}

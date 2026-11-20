@@ -24,6 +24,8 @@ include(":wear")
 include(":keks")
 include(":therapy-core")
 include(":mirror-core")
+include(":wearables-core")
 include(":wearables-xiaomi")
+project(":wearables-core").projectDir = file("wearables-core")
 project(":wearables-xiaomi").projectDir = file("wearables-xiaomi")
 
