@@ -25,7 +25,12 @@ import com.gluview.app.data.accuchek.AccuChekBleManager
 import com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome
 import com.gluview.app.data.datastore.AppPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.MaterialTheme
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,8 +38,14 @@ import javax.inject.Inject
 @HiltViewModel
 class SmartGuideCalibrationViewModel @Inject constructor(
     private val ble: AccuChekBleManager,
-    private val preferences: AppPreferences
+    private val preferences: AppPreferences,
+    statusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
 ) : ViewModel() {
+
+    /** O sensor aceita calibração agora (bit "calibration not allowed" desligado). */
+    val calibrationAllowed = statusHolder.status
+        .map { it.calibrationAllowed }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /** Minuto do sensor = agora − início da sessão salvo pela fonte; próxima em +12 h, como o xDrip. */
     fun calibrate(mgdl: Int, onResult: (CalibrationOutcome) -> Unit) {
@@ -58,6 +69,7 @@ fun SmartGuideCalibrationDialog(
     viewModel: SmartGuideCalibrationViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val allowed by viewModel.calibrationAllowed.collectAsState()
     var text by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     val mgdl = text.trim().toIntOrNull()
@@ -68,6 +80,13 @@ fun SmartGuideCalibrationDialog(
         text = {
             Column {
                 Text(stringResource(R.string.settings_smartguide_calibrate_body))
+                if (!allowed) {
+                    Text(
+                        stringResource(R.string.settings_smartguide_calibrate_not_allowed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 OutlinedTextField(
                     value = text,
                     onValueChange = { v -> text = v.filter { it.isDigit() }.take(3) },
@@ -90,7 +109,7 @@ fun SmartGuideCalibrationDialog(
                 viewModel.calibrate(value) { outcome ->
                     sending = false
                     onDismiss()
-                    Toast.makeText(context, outcomeMessage(context, outcome), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, outcomeMessage(context, outcome, allowed), Toast.LENGTH_LONG).show()
                 }
             }) {
                 Text(stringResource(if (sending) R.string.settings_smartguide_calibrate_sending else R.string.settings_smartguide_calibrate_confirm))
@@ -102,10 +121,13 @@ fun SmartGuideCalibrationDialog(
     )
 }
 
-private fun outcomeMessage(context: android.content.Context, outcome: CalibrationOutcome): String = when (outcome) {
+private fun outcomeMessage(context: android.content.Context, outcome: CalibrationOutcome, allowed: Boolean): String = when (outcome) {
     CalibrationOutcome.Accepted -> context.getString(R.string.settings_smartguide_calibrate_ok)
     CalibrationOutcome.Pending -> context.getString(R.string.settings_smartguide_calibrate_pending)
-    is CalibrationOutcome.RejectedBySensor -> context.getString(R.string.settings_smartguide_calibrate_rejected_by_sensor)
+    is CalibrationOutcome.RejectedBySensor -> context.getString(
+        if (allowed) R.string.settings_smartguide_calibrate_rejected_by_sensor
+        else R.string.settings_smartguide_calibrate_rejected_not_allowed
+    )
     is CalibrationOutcome.Rejected -> context.getString(R.string.settings_smartguide_calibrate_rejected, outcome.code)
     CalibrationOutcome.NotConnected -> context.getString(R.string.settings_smartguide_calibrate_not_connected)
     CalibrationOutcome.NoAnswer -> context.getString(R.string.settings_smartguide_calibrate_no_answer)

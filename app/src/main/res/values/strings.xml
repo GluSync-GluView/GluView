@@ -285,6 +285,12 @@
     <string name="home_sensor_calibration_title">O sensor pede calibração</string>
     <string name="home_sensor_calibration_banner">Faça um teste de ponta de dedo e informe o valor. Até lá, confira as glicemias no glicosímetro.</string>
     <string name="home_sensor_calibration_action">Calibrar</string>
+    <string name="settings_smartguide_calibrate_not_allowed">O sensor ainda não está aceitando calibração; o valor provavelmente será recusado.</string>
+    <string name="settings_smartguide_calibrate_rejected_not_allowed">O sensor recusou porque ainda não está aceitando calibração. O GluView avisa quando ele liberar.</string>
+    <string name="home_sensor_calibration_wait_banner">Ele ainda não aceita valores, e não informa quando vai liberar. O GluView avisa quando liberar. Até lá, confira as glicemias no glicosímetro.</string>
+    <string name="accuchek_warn_calibration_wait_body">O sensor pediu calibração, mas ainda não aceita valores. O GluView avisa quando liberar; até lá, confira com a ponta de dedo.</string>
+    <string name="accuchek_warn_calibration_ready_title">SmartGuide pronto para calibrar</string>
+    <string name="accuchek_warn_calibration_ready_body">O sensor agora aceita calibração. Faça um teste de ponta de dedo e toque em Calibrar na tela inicial.</string>
     <string name="settings_smartguide_forget">Esquecer este sensor</string>
     <string name="settings_smartguide_forget_title">Esquecer o SmartGuide?</string>
     <string name="settings_smartguide_forget_body">O GluView para de ler este sensor e desfaz o pareamento neste celular. As leituras já salvas continuam no histórico.</string>

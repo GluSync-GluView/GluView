@@ -279,6 +279,12 @@
     <string name="home_sensor_calibration_title">The sensor needs calibration</string>
     <string name="home_sensor_calibration_banner">Take a fingerstick test and enter the value. Until then, check your glucose with the meter.</string>
     <string name="home_sensor_calibration_action">Calibrate</string>
+    <string name="settings_smartguide_calibrate_not_allowed">The sensor is not accepting calibration yet; the value will probably be rejected.</string>
+    <string name="settings_smartguide_calibrate_rejected_not_allowed">The sensor rejected it because it is not accepting calibration yet. GluView will let you know when it does.</string>
+    <string name="home_sensor_calibration_wait_banner">It is not accepting values yet and does not say when it will. GluView will let you know. Until then, check your glucose with the meter.</string>
+    <string name="accuchek_warn_calibration_wait_body">The sensor requested a calibration but is not accepting values yet. GluView will let you know; until then, confirm with a fingerstick.</string>
+    <string name="accuchek_warn_calibration_ready_title">SmartGuide ready to calibrate</string>
+    <string name="accuchek_warn_calibration_ready_body">The sensor now accepts calibration. Take a fingerstick test and tap Calibrate on the home screen.</string>
     <string name="settings_smartguide_forget">Forget this sensor</string>
     <string name="settings_smartguide_forget_title">Forget the SmartGuide?</string>
     <string name="settings_smartguide_forget_body">GluView stops reading this sensor and removes the pairing on this phone. Readings already saved stay in the history.</string>

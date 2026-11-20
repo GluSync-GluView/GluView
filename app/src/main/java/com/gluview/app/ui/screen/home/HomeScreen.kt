@@ -327,7 +327,15 @@ internal fun PatientHomeContent(
                         GluCallout(stringResource(R.string.home_no_update_warning, minutesSinceSync), tone = Tone.Danger, announce = true)
                     }
                     // O próprio sensor (SmartGuide) pede ponta de dedo: aviso com a ação ali mesmo.
-                    if (state.isSensorSource && state.sensorStatus.calibrationRequired) {
+                    if (state.isSensorSource && state.sensorStatus.calibrationRequired && !state.sensorStatus.calibrationAllowed) {
+                        // Pede, mas ainda recusa qualquer valor: explica a espera, sem botão que só falharia.
+                        GluCallout(
+                            message = stringResource(R.string.home_sensor_calibration_wait_banner),
+                            title = stringResource(R.string.home_sensor_calibration_title),
+                            tone = Tone.Warning,
+                            announce = true
+                        )
+                    } else if (state.isSensorSource && state.sensorStatus.calibrationRequired) {
                         var showCalibration by remember { mutableStateOf(false) }
                         GluCallout(
                             message = stringResource(R.string.home_sensor_calibration_banner),

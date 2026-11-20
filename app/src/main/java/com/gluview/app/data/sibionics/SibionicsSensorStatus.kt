@@ -63,7 +63,13 @@ data class SibionicsSensorStatus(
     /** O próprio sensor anunciou que a sessão acabou (SmartGuide: bit "session stopped"). */
     val sessionEnded: Boolean = false,
     /** O próprio sensor está pedindo calibração por ponta de dedo (SmartGuide: "calibration required"). */
-    val calibrationRequired: Boolean = false
+    val calibrationRequired: Boolean = false,
+    /**
+     * O sensor aceita calibração agora (SmartGuide: bit "calibration not allowed" desligado). Com
+     * o bit ligado o sensor recusa qualquer valor (sensor real, 19/11/2026: status 1 duas vezes).
+     * Ele não informa quando libera: o app acompanha o bit e avisa quando desliga.
+     */
+    val calibrationAllowed: Boolean = true
 ) {
     /** Idade do sensor em dias inteiros, ou null se o início é desconhecido. */
     fun ageDays(nowMs: Long = System.currentTimeMillis()): Int? =
