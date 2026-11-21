@@ -177,9 +177,12 @@ class WidgetUpdater @Inject constructor(
 abstract class GlucoseWidgetReceiver : androidx.glance.appwidget.GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, appWidgetManager: android.appwidget.AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
-        val pending = goAsync()
+        // O super (GlanceAppWidgetReceiver) JÁ chama goAsync() por dentro; um segundo goAsync() devolve
+        // null e o finish() derrubava o processo (NPE no boot e a cada atualização do app — visto no S23
+        // em 19/11 e 21/11). Tipo explícito anulável: o Kotlin não confere retorno de plataforma.
+        val pending: android.content.BroadcastReceiver.PendingResult? = goAsync()
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
-            try { runCatching { WidgetUpdater.from(context).refreshFromLatest() } } finally { pending.finish() }
+            try { runCatching { WidgetUpdater.from(context).refreshFromLatest() } } finally { pending?.finish() }
         }
     }
 }
