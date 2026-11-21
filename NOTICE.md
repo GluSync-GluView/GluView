@@ -1,4 +1,4 @@
-﻿# Avisos e créditos
+# Avisos e créditos
 
 GluView — Copyright (C) 2026 os autores do GluView.
 

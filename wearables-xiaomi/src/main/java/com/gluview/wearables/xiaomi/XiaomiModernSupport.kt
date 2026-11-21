@@ -8,11 +8,11 @@ import kotlinx.coroutines.CoroutineScope
 
 /**
  * F7.4 (plano 21): Suporte a dispositivos Xiaomi modernos (Mi Band 7/8/9).
- * MÛdulo separado AGPL-3.0 para protocolo protobuf/autenticaÁ„o por vers„o.
- * CÛdigo derivado/adaptado do Gadgetbridge (AGPLv3) - headers preservados.
+ * M√≥dulo separado AGPL-3.0 para protocolo protobuf/autentica√ß√£o por vers√£o.
+ * C√≥digo derivado/adaptado do Gadgetbridge (AGPLv3) - headers preservados.
  *
- * ImplementaÁ„o mÌnima de integraÁ„o: contrato de envio de glicemia/notificaÁ„o
- * e identificaÁ„o de modelos suportados; o transporte/protocolo completo depende
+ * Implementa√ß√£o m√≠nima de integra√ß√£o: contrato de envio de glicemia/notifica√ß√£o
+ * e identifica√ß√£o de modelos suportados; o transporte/protocolo completo depende
  * de aparelhos reais e vetores de captura.
  *
  * SEM TESTE COM HARDWARE REAL.
@@ -45,13 +45,13 @@ enum class XiaomiModernModel(val id: String, val displayName: String) {
     )
 
     /**
-     * Cria transporte para integraÁ„o com WearableDeviceManager (F7.1 core).
+     * Cria transporte para integra√ß√£o com WearableDeviceManager (F7.1 core).
      */
     fun createTransport(scope: CoroutineScope): XiaomiModernTransport =
         XiaomiModernTransport(this, scope)
 
     /**
-     * Cria coordenador para autenticaÁ„o protobuf e gerenciamento de sess„o.
+     * Cria coordenador para autentica√ß√£o protobuf e gerenciamento de sess√£o.
      */
     fun createCoordinator(scope: CoroutineScope): XiaomiModernCoordinator =
         XiaomiModernCoordinator(this, scope)
@@ -66,6 +66,6 @@ data class XiaomiGlucoseUpdate(
 )
 
 interface XiaomiModernGlucoseSink {
-    /** Envia atualizaÁ„o de glicemia (notificaÁ„o/visor/widget conforme suporte). Sem teste. */
+    /** Envia atualiza√ß√£o de glicemia (notifica√ß√£o/visor/widget conforme suporte). Sem teste. */
     suspend fun pushGlucose(update: XiaomiGlucoseUpdate): Boolean
 }

@@ -2,7 +2,7 @@ package com.gluview.wearables.core
 
 import com.gluview.wearables.domain.GlucoseZone
 
-/** Mapeia zona/tipo de alerta do app para vibração no aparelho (F7.1). */
+/** Mapeia zona/tipo de alerta do app para vibraÃ§Ã£o no aparelho (F7.1). */
 object WearableVibrationPolicy {
     fun kindFor(zone: GlucoseZone): WearableAlertKind = when (zone) {
         GlucoseZone.URGENT_LOW -> WearableAlertKind.URGENT_LOW
@@ -14,7 +14,7 @@ object WearableVibrationPolicy {
         GlucoseZone.NORMAL -> WearableAlertKind.NORMAL
     }
 
-    /** Padrão [delay, vibra, pausa, vibra, ...] em ms; vazio = não vibrar. */
+    /** PadrÃ£o [delay, vibra, pausa, vibra, ...] em ms; vazio = nÃ£o vibrar. */
     fun pattern(kind: WearableAlertKind): LongArray = when (kind) {
         WearableAlertKind.URGENT_LOW, WearableAlertKind.URGENT_HIGH ->
             longArrayOf(0, 500, 150, 500, 150, 500)

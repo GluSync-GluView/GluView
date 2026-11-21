@@ -1,4 +1,4 @@
-﻿# Gadgetbridge-derived (AGPL-3.0) - F7.4
+# Gadgetbridge-derived (AGPL-3.0) - F7.4
 
 Este diretório guarda referências/arquivos copiados do Gadgetbridge (AGPL-3.0,
 https://codeberg.org/Freeyourgadget/Gadgetbridge) para o porte do suporte a

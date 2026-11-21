@@ -1,4 +1,4 @@
-﻿/* Plano 21, F7.3 (Sem teste em simulador/hardware): serviço lateral do Zepp OS.
+/* Plano 21, F7.3 (Sem teste em simulador/hardware): serviço lateral do Zepp OS.
  * Lê a glicemia do servidor web local do GluView no celular (F2), porta 17580,
  * endpoint compatível Nightscout/xDrip: /sgv.json?count=1 (só leitura).
  * Referência de dados: mirror-core LocalHttpServer.kt (/sgv.json).

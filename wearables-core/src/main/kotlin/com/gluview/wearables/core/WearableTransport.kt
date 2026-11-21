@@ -2,7 +2,7 @@ package com.gluview.wearables.core
 
 import kotlinx.coroutines.flow.Flow
 
-/** Transporte/aparelho concreto. Implementações reais falam BLE/protocolo; testes usam transporte falso. */
+/** Transporte/aparelho concreto. ImplementaÃ§Ãµes reais falam BLE/protocolo; testes usam transporte falso. */
 interface WearableTransport {
     val info: WearableDeviceInfo
     val events: Flow<WearableEvent>

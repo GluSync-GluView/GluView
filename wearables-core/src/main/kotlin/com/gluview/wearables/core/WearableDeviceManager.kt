@@ -13,9 +13,9 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * N˙cleo F7.1: gerencia um aparelho (fila, envio, reconex„o com recuo, bateria e soneca).
- * N„o conhece BLE nem protocolo: opera sobre [WearableTransport] (real ou falso nos testes).
- * Integr·vel sem alterar o caminho Mi Band 6 existente.
+ * N√∫cleo F7.1: gerencia um aparelho (fila, envio, reconex√£o com recuo, bateria e soneca).
+ * N√£o conhece BLE nem protocolo: opera sobre [WearableTransport] (real ou falso nos testes).
+ * Integr√°vel sem alterar o caminho Mi Band 6 existente.
  */
 class WearableDeviceManager(
     private val transport: WearableTransport,
@@ -86,7 +86,7 @@ class WearableDeviceManager(
             if (!transport.info.capabilities.canReportBattery && cmd is WearableCommand.RequestBattery) continue
             val sent = runCatching { transport.send(cmd) }.getOrDefault(false)
             if (!sent) {
-                // reconecta no prÛximo ciclo; recoloca comandos que n„o s„o glicose obsoleta
+                // reconecta no pr√≥ximo ciclo; recoloca comandos que n√£o s√£o glicose obsoleta
                 if (cmd !is WearableCommand.SendGlucose) queue.enqueue(cmd)
                 runCatching { transport.disconnect() }
             }

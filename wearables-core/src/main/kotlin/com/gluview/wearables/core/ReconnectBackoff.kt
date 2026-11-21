@@ -5,7 +5,7 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * Recuo exponencial com teto, usado na reconexão (F7.1). Determinístico quando [jitterRatio]=0 (útil em testes).
+ * Recuo exponencial com teto, usado na reconexÃ£o (F7.1). DeterminÃ­stico quando [jitterRatio]=0 (Ãºtil em testes).
  */
 class ReconnectBackoff(
     private val initialMs: Long = 2_000L,

@@ -1,4 +1,4 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 import java.util.Locale
 
@@ -131,7 +131,7 @@ object LibreBridgeUtils {
         return 256 * (data[317].toInt() and 0xFF) + (data[316].toInt() and 0xFF)
     }
 
-    fun rawToMgdl(raw: Int): Double = raw / 8.5 // equivalente a raw * 1000 / 8500, ~LIBRE_MULTIPLIER/1000? xDrip usa raw/8.5 em vários pontos
+    // (removido em 21/11: "rawToMgdl" convertia BRUTO em glicemia; ver LibreBridgeFramDecoder)
 
     fun toHex(bytes: ByteArray?, max: Int = bytes?.size ?: 0): String {
         if (bytes == null) return ""

@@ -1,9 +1,8 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 import com.gluview.app.data.libre2.Libre2Native
 import com.gluview.app.data.libre2.hexToBytes
 import com.gluview.app.util.AppLogger
-import kotlin.math.roundToInt
 
 /**
  * Decodifica uma leitura de FRAM Libre 1/2 entregue por leitor acoplado (MiaoMiao/Bubble/Atom).
@@ -13,9 +12,8 @@ import kotlin.math.roundToInt
  * - Status do sensor em data[4] (LibreUtils.isSensorReady): 0x02/0x03/0x04 aceitos.
  * - Tempo do sensor em [316,317] e trend ring buffer (index em [26], 16 registros de 6 bytes a partir de 28)
  *   (NFCReaderX: FRAM_RECORD_SIZE=6, TREND_START=28; parseTrendData/parseData:885-961, getGlucoseRaw:997).
- * - Valor bruto: (256*hi + lo) & 0x1FFF; conversão de referência xDrip: raw/8.5 mg/dL
- *   (Constants.LIBRE_MULTIPLIER=117.64705 => mg/dL = raw*1000/8500 = raw/8.5), usada como base
- *   quando não há decodificação proprietária/OOP. GlucoseData.glucoseLevelRaw é o bruto.
+ * - Valor bruto: (256*hi + lo) & 0x1FFF — é BRUTO, não glicemia (xDrip só o usa com calibração ou OOP);
+ *   por isso o GluView não converte bruto em glicemia (auditoria 21/11).
  *
  * Libre 2 com memória cifrada: xDrip delega à OOP2 (patchInfo decodificável) e/ou aplica HandleGoodReading
  * após decifrar. Sem OOP2 no GluView, tenta-se decodificação nativa Abbott quando disponível
@@ -66,23 +64,18 @@ object LibreBridgeFramDecoder {
             }
         }
 
-        // Caminho Libre 1 (FRAM em claro): CRC + status + trend atual.
-        if (!LibreBridgeUtils.verifyLibre1Frame(fram)) {
-            logger?.error(LOG, "Checksum FRAM inválido — leitura descartada", mapOf("serial" to serial))
-            return null
+        // Auditoria 21/11 (Claude): NÃO há mais o caminho "bruto ÷ 8,5". No xDrip esse valor é o BRUTO do
+        // sensor e só vira glicemia com calibração por ponta de dedo ou com o algoritmo oficial (OOP);
+        // gravá-lo como glicemia podia errar muito. Sem o algoritmo oficial, a leitura é recusada.
+        // (CRC e status continuam conferidos para o log dizer o motivo certo.)
+        val motivo = when {
+            !LibreBridgeUtils.verifyLibre1Frame(fram) -> "checksum da memória inválido"
+            !LibreBridgeUtils.isSensorReady(fram.getOrNull(4) ?: 0) -> "sensor não pronto ou vencido"
+            uid == null || pi == null -> "leitor não informou UID/patchInfo do sensor"
+            !Libre2Native.available -> "algoritmo oficial (biblioteca da Abbott) indisponível neste aparelho"
+            else -> "algoritmo oficial não decodificou esta memória"
         }
-        val status = fram.getOrNull(4) ?: 0
-        if (!LibreBridgeUtils.isSensorReady(status)) {
-            logger?.usage(LOG, "Sensor não pronto/expirado pelo status FRAM", mapOf("status" to (status.toInt() and 0xFF), "serial" to serial))
-            return null
-        }
-        val raw = LibreBridgeUtils.currentRawFromFram(fram) ?: run {
-            logger?.error(LOG, "Não foi possível extrair raw do trend FRAM", mapOf("serial" to serial))
-            return null
-        }
-        val sensorMin = LibreBridgeUtils.sensorTimeMinutes(fram) ?: 0
-        val mgdl = (raw / 8.5).roundToInt().coerceIn(20, 500)
-        logger?.usage(LOG, "FRAM Libre 1 decodificado", mapOf("mgdl" to mgdl, "raw" to raw, "sensorMin" to sensorMin, "serial" to serial))
-        return Decoded(mgdl, raw, sensorMin, serial)
+        logger?.error(LOG, "Leitura recusada: sem algoritmo oficial não há glicemia confiável", mapOf("motivo" to motivo, "serial" to serial))
+        return null
     }
 }

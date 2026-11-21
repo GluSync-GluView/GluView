@@ -33,6 +33,14 @@ object Libre3Native {
             }
             .isSuccess
         if (!loaded) return false
+        // Auditoria 21/11: carregar a .so não basta — confere se as funções JNI existem com os nomes
+        // que o Kotlin chama. Hoje não existem (a .so exporta os nomes do Juggluco), e sem esta
+        // conferência a 1ª chamada derrubava o app com UnsatisfiedLinkError.
+        val linked = try { nativeFreeSecurityContext(0L); true } catch (e: UnsatisfiedLinkError) {
+            appLogger.error(LOG, "Ponte nativa do Libre 3 incompleta (funções JNI não ligadas)", mapOf("erro" to (e.message ?: "?")))
+            false
+        }
+        if (!linked) return false
         available = true
         appLogger.usage(LOG, "init", mapOf("available" to available))
         return available

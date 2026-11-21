@@ -2,7 +2,7 @@ package com.gluview.wearables.core
 
 import com.gluview.wearables.domain.GlucoseReading
 
-/** Tipo lógico de alerta para vibrar no aparelho; independe do canal Android. */
+/** Tipo lÃ³gico de alerta para vibrar no aparelho; independe do canal Android. */
 enum class WearableAlertKind { NORMAL, LOW, URGENT_LOW, HIGH, URGENT_HIGH, QUICK_DROP, STALE, PREDICTIVE }
 
 data class GlucosePayload(
@@ -28,7 +28,7 @@ sealed interface WearableEvent {
     data class Connected(val deviceId: String) : WearableEvent
     data class Disconnected(val deviceId: String, val reason: String? = null) : WearableEvent
     data class Battery(val deviceId: String, val status: BatteryStatus) : WearableEvent
-    /** Soneca pedida no próprio aparelho (F7.1). */
+    /** Soneca pedida no prÃ³prio aparelho (F7.1). */
     data class SnoozeRequested(val deviceId: String) : WearableEvent
     data class Error(val deviceId: String, val message: String, val recoverable: Boolean = true) : WearableEvent
 }

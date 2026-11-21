@@ -1,4 +1,4 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 import com.gluview.app.data.datastore.AppPreferences
 import com.gluview.app.data.repository.GlucoseRepository

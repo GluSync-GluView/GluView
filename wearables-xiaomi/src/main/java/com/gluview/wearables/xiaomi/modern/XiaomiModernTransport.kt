@@ -22,6 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Cabeçalhos originais preservados nos arquivos copiados.
  *
  * SEM TESTE COM HARDWARE REAL — necessita aparelhos físicos e vetores de captura.
+ *
+ * Auditoria 21/11/2026 (Claude): o protocolo NÃO está implementado. Antes, connect() fingia conectar,
+ * o envio fingia sucesso e a bateria devolvia 85% inventado. Agora tudo responde "não implementado"
+ * (false / sem eventos) até existir o porte real (BLE + autenticação + protobuf do Gadgetbridge).
  */
 class XiaomiModernTransport(
     private val model: XiaomiModernModel,
@@ -39,12 +43,8 @@ class XiaomiModernTransport(
 
     override suspend fun connect(): Boolean {
         if (connected.get()) return true
-        return runCatching {
-            authCompleted = true
-            connected.set(true)
-            _events.tryEmit(WearableEvent.Connected(info.id))
-            true
-        }.getOrDefault(false)
+        // Não implementado: nunca finge conexão.
+        return false
     }
 
     override suspend fun disconnect() {
@@ -68,19 +68,18 @@ class XiaomiModernTransport(
     }
 
     private suspend fun sendGlucose(payload: GlucosePayload): Boolean {
-        // Converte GlucosePayload para XiaomiGlucoseUpdate e codifica em protobuf
-        return true // placeholder
+        // Não implementado (antes devolvia true sem enviar nada).
+        return false
     }
 
     private suspend fun sendVibration(patternMs: LongArray): Boolean {
-        // Envia comando de vibração via protobuf
-        return true // placeholder
+        // Não implementado.
+        return false
     }
 
     private suspend fun requestBattery(): Boolean {
-        // Solicita nível de bateria via protobuf
-        scope.launch { _events.tryEmit(WearableEvent.Battery(info.id, BatteryStatus(85, false))) }
-        return true
+        // Não implementado (antes emitia uma bateria de 85% inventada).
+        return false
     }
 
     private fun snooze() {

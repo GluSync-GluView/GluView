@@ -1,4 +1,4 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 /**
  * Constantes dos leitores acoplados ao Libre (MiaoMiao/Tomato, Bubble, Atom),

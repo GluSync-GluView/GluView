@@ -1,4 +1,4 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 /**
  * Resultado de decodificação de pacote do leitor (porte conceitual de BridgeResponse do xDrip).

@@ -1,9 +1,10 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -13,7 +14,7 @@ import org.junit.Test
  * - LibreUtils.java: computeCRC16/verify (blocos 0..24, 24..296, 320..24), decodeSerialNumberKey,
  *   isSensorReady, FRAM Libre 1/2 = 344 bytes (Constants.LIBRE_1_2_FRAM_SIZE).
  * - NFCReaderX.java: getGlucoseRaw ((256*hi+lo)&0x1FFF), sensorTime em [316,317], trend index [26],
- *   TREND_START=28, FRAM_RECORD_SIZE=6; conversão raw/8.5 mg/dL (Constants.LIBRE_MULTIPLIER).
+ *   TREND_START=28, FRAM_RECORD_SIZE=6; o bruto NÃO é convertido em glicemia (auditoria 21/11).
  * - Tomato.java: montagem 0x28 (tamanho em [1,2]), header 18, FRAM 344, patchUid [5,13), bateria [13].
  * - Bubble.java/Atom.java: info 0x80/0xC0/0xC1, dados 0x82 com payload a partir do byte 4.
  */
@@ -83,8 +84,11 @@ class LibreBridgeProtocolTest {
         fram[316] = 0x10; fram[317] = 0x27
         assertEquals(0x123, LibreBridgeUtils.currentRawFromFram(fram))
         assertEquals(10000, LibreBridgeUtils.sensorTimeMinutes(fram))
-        val mgdl = (0x123 / 8.5).toInt().coerceIn(20, 500)
-        assertTrue(mgdl in 20..500)
+        // Auditoria 21/11: sem o algoritmo oficial (ponte nativa indisponível na JVM), o decodificador
+        // NUNCA devolve glicemia a partir do bruto (antes convertia bruto ÷ 8,5).
+        val reading = BridgeFramReading(fram, ByteArray(8), byteArrayOf(0x9D.toByte(), 0x08, 0x30, 0x01, 0, 0),
+            "TESTE", 1_800_000_000_000L, "teste")
+        assertNull(LibreBridgeFramDecoder.decode(reading, null))
     }
 
     @Test

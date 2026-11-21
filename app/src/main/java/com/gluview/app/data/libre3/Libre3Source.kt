@@ -30,7 +30,7 @@ import javax.inject.Singleton
  * Pré-requisito: a sessão já ter sido lida por NFC (ver [Libre3NfcActivator]) e salva em preferences.
  * Sem sessão, loga erro claro e não conecta.
  *
- * Reutiliza a MESMA grade de reconexão do Sibionics/Libre2 (5�-1min + 3�-5min + 4�-10min ≈ 60 min).
+ * Reutiliza a MESMA grade de reconexÃ£o do Sibionics/Libre2 (5Ã-1min + 3Ã-5min + 4Ã-10min â‰ˆ 60 min).
  */
 @Singleton
 class Libre3Source @Inject constructor(
@@ -249,7 +249,7 @@ class Libre3Source @Inject constructor(
     private fun arrowFromDelta(delta: Int): String = when {
         delta >= 15 -> "↑↑"
         delta >= 7 -> "↑"
-        delta >= 3 -> "�-"
+        delta >= 3 -> "â†-"
         delta > -3 -> "→"
         delta > -7 -> "↘"
         delta > -15 -> "↓"

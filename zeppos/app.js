@@ -1,4 +1,4 @@
-﻿/* app.js - F7.3 GluView Zepp OS (Sem teste). */
+/* app.js - F7.3 GluView Zepp OS (Sem teste). */
 App({
   globalData: { messaging: null },
   onCreate() {

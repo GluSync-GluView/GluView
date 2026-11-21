@@ -1,4 +1,4 @@
-﻿# F7.8 — Wearables genéricos, espelhamento de notificações e Pebble
+# F7.8 — Wearables genéricos, espelhamento de notificações e Pebble
 
 ## Qualquer pulseira pelo espelhamento de notificações do Android
 

@@ -22,10 +22,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Adaptador F7.1 para a Mi Band 6/Huami que J¡ funciona: reutiliza o [MiBandWatchFacePusher]
+ * Adaptador F7.1 para a Mi Band 6/Huami que J√Å funciona: reutiliza o [MiBandWatchFacePusher]
  * e o pareamento existente sem alterar o comportamento/protocolo deles. O envio de glicose
- * segue sendo por visor (pusher); vibraÁ„o remota e bateria s„o capacidades n„o expostas aqui
- * (mantidas conservadoras) para n„o inventar comportamento.
+ * segue sendo por visor (pusher); vibra√ß√£o remota e bateria s√£o capacidades n√£o expostas aqui
+ * (mantidas conservadoras) para n√£o inventar comportamento.
  */
 class MiBand6HuamiTransport(
     private val pusher: MiBandWatchFacePusher,
@@ -40,7 +40,7 @@ class MiBand6HuamiTransport(
             canShowGlucose = true, canShowGraph = true, canVibrate = false,
             canReceiveSnooze = false, canReportBattery = false, canSendWatchface = true
         ),
-        maturityLabel = "Funciona (Mi Band 6 do Felipe)" // caminho existente, n„o quebrar
+        maturityLabel = "Funciona (testada com Mi Band 6 real)" // caminho existente, n√£o quebrar
     )
 
     private val _events = MutableSharedFlow<WearableEvent>(extraBufferCapacity = 16)
@@ -64,7 +64,7 @@ class MiBand6HuamiTransport(
 
     override suspend fun send(command: WearableCommand): Boolean = when (command) {
         is WearableCommand.SendGlucose -> {
-            // Reusa exatamente o pusher atual (gera+envia visor); sem mudanÁa de protocolo.
+            // Reusa exatamente o pusher atual (gera+envia visor); sem mudan√ßa de protocolo.
             val ok = pusher.send(staleOverrideText = if (command.payload.stale) command.payload.deltaText else null) { }
             connected = ok || connected
             ok
@@ -73,7 +73,7 @@ class MiBand6HuamiTransport(
     }
 }
 
-/** Registro mÌnimo para encaixar a Mi Band 6 no n˙cleo sem alterar o serviÁo atual. */
+/** Registro m√≠nimo para encaixar a Mi Band 6 no n√∫cleo sem alterar o servi√ßo atual. */
 @Singleton
 class HuamiWearableRegistry @Inject constructor(
     private val pusher: MiBandWatchFacePusher,

@@ -15,6 +15,6 @@ data class WearableDeviceInfo(
     val displayName: String,
     val family: String,
     val capabilities: WearableCapabilities,
-    /** "Sem teste com hardware real" para modelos ainda n„o validados em aparelho fÌsico. */
+    /** "Sem teste com hardware real" para modelos ainda n√£o validados em aparelho f√≠sico. */
     val maturityLabel: String = "Sem teste com hardware real"
 )

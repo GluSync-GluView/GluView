@@ -962,8 +962,8 @@ private fun acquireSetupWakeLock() {
 /**
  * Glicemia decodificada do Libre 3 / Lingo.
  * Encoding (igual Juggluco glucoseback / g.cpp):
- * - res & 0xFFFFFFFF = glicemia �-10 (mg/dL); 0 = falha
- * - (res >> 32) & 0xFFFF = taxa �-1000 (short com sinal) → tendência mg/dL/min
+ * - res & 0xFFFFFFFF = glicemia Ã-10 (mg/dL); 0 = falha
+ * - (res >> 32) & 0xFFFF = taxa Ã-1000 (short com sinal) â†’ tendÃªncia mg/dL/min
  * - (res >> 48) & 0xFF = alarme (3=again,4=highest,5=lowest,6=high,7=low,16=veryHigh,17=veryLow,18=preHigh,19=preLow)
  */
 data class Libre3Reading(val mgdl: Int, val rate: Float, val alarm: Int) {

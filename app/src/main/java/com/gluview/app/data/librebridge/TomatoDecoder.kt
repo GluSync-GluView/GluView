@@ -1,4 +1,4 @@
-﻿package com.gluview.app.data.librebridge
+package com.gluview.app.data.librebridge
 
 import com.gluview.app.util.AppLogger
 import java.util.Arrays

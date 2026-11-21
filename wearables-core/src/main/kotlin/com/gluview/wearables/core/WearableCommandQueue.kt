@@ -3,11 +3,11 @@ package com.gluview.wearables.core
 import java.util.ArrayDeque
 
 /**
- * Fila de comandos por prioridade com coalescência: vários [WearableCommand.SendGlucose] seguidos
- * viram um só (o mais recente), para não saturar a banda/relógio.
+ * Fila de comandos por prioridade com coalescÃªncia: vÃ¡rios [WearableCommand.SendGlucose] seguidos
+ * viram um sÃ³ (o mais recente), para nÃ£o saturar a banda/relÃ³gio.
  */
 class WearableCommandQueue {
-    private val high = ArrayDeque<WearableCommand>()   // vibração, soneca
+    private val high = ArrayDeque<WearableCommand>()   // vibraÃ§Ã£o, soneca
     private val normal = ArrayDeque<WearableCommand>() // ping/bateria
     @Volatile private var latestGlucose: WearableCommand.SendGlucose? = null
 
