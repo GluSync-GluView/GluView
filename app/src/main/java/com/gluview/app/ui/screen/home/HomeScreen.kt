@@ -326,6 +326,10 @@ internal fun PatientHomeContent(
                     } else if (minutesSinceSync >= 15 && uiState.reading != null) {
                         GluCallout(stringResource(R.string.home_no_update_warning, minutesSinceSync), tone = Tone.Danger, announce = true)
                     }
+                    // O próprio sensor (SmartGuide) pede ponta de dedo: aviso com a ação ali mesmo.
+                    if (state.isSensorSource) {
+                        SmartGuideCalibrationCallout(state.sensorStatus, nowMs)
+                    }
 
                     if (uiState.isLoading && uiState.reading == null) {
                         Box(
@@ -766,5 +770,60 @@ private fun HomeStatsRow(min: String, avg: String, max: String, onLongPress: () 
                 }
             }
         }
+    }
+}
+
+/**
+ * Aviso de calibração do SmartGuide na Home, com o que a Roche manda fazer em cada fase (ver
+ * [com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase]). O botão Calibrar só aparece
+ * quando o sensor aceita valores.
+ */
+@Composable
+private fun SmartGuideCalibrationCallout(status: SibionicsSensorStatus, nowMs: Long) {
+    val phase = com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.of(
+        required = status.calibrationRequired,
+        allowed = status.calibrationAllowed,
+        sensorStartMs = status.sensorStartMs,
+        lastAcceptedMs = status.lastCalibrationAcceptedMs,
+        nowMs = nowMs
+    )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    fun hour(ms: Long): String = android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(ms))
+    var showCalibration by remember { mutableStateOf(false) }
+    when (phase) {
+        com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.Phase.None -> Unit
+        is com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.Phase.WaitingFirst -> GluCallout(
+            message = phase.unlockAtMs
+                ?.let { stringResource(R.string.home_sensor_calibration_trend_at, hour(it)) }
+                ?: stringResource(R.string.home_sensor_calibration_trend_soon),
+            title = stringResource(R.string.home_sensor_calibration_trend_title),
+            tone = Tone.Warning,
+            announce = true
+        )
+        is com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.Phase.WaitingSecond -> GluCallout(
+            message = stringResource(R.string.home_sensor_calibration_second_wait, hour(phase.fromMs)),
+            title = stringResource(R.string.home_sensor_calibration_second_title),
+            tone = Tone.Info,
+            announce = true
+        )
+        com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.Phase.Ready -> GluCallout(
+            message = stringResource(R.string.home_sensor_calibration_banner),
+            title = stringResource(R.string.home_sensor_calibration_title),
+            tone = Tone.Warning,
+            actionLabel = stringResource(R.string.home_sensor_calibration_action),
+            onAction = { showCalibration = true },
+            announce = true
+        )
+        is com.gluview.app.data.accuchek.cgm.SmartGuideCalibrationPhase.Phase.ReadySecond -> GluCallout(
+            message = stringResource(R.string.home_sensor_calibration_second_ready, hour(phase.deadlineMs)),
+            title = stringResource(R.string.home_sensor_calibration_second_title),
+            tone = Tone.Warning,
+            actionLabel = stringResource(R.string.home_sensor_calibration_action),
+            onAction = { showCalibration = true },
+            announce = true
+        )
+    }
+    if (showCalibration) {
+        com.gluview.app.ui.screen.smartguide.SmartGuideCalibrationDialog(onDismiss = { showCalibration = false })
     }
 }

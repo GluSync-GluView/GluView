@@ -33,12 +33,18 @@ import com.gluview.app.data.accuchek.cgm.SessionRunTime
 import com.gluview.app.data.accuchek.cgm.SessionRunTimeParser
 import com.gluview.app.data.accuchek.cgm.SessionStartTime
 import com.gluview.app.data.accuchek.cgm.SessionStartTimeParser
+import com.gluview.app.data.accuchek.cgm.SessionStartTimeWriter
 import com.gluview.app.data.accuchek.cgm.SmartGuideGatt
 import com.gluview.app.data.accuchek.cgm.SmartGuideIdentityMatcher
 import com.gluview.app.data.accuchek.cgm.Socp
+import com.gluview.app.data.accuchek.cgm.SmartGuideClock
 import com.gluview.app.data.sensor.SensorCode
 import com.gluview.app.util.AppLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -138,6 +144,86 @@ class AccuChekBleManager @Inject constructor(
     @Volatile private var e2eCrc = true
     @Volatile private var ready = false
     @Volatile private var setupStarted = false
+    /** Último CGM Status pediu "time sync required" (o início da sessão não foi gravado por ninguém). */
+    @Volatile private var timeSyncRequired = false
+    /** Session Start Time do sensor ilegível/zerado ou a mais de 2 min do início calculado (regra do xDrip). */
+    @Volatile private var startTimeOff = false
+    /** Início calculado pelo último CGM Status (agora − minutos do sensor). */
+    @Volatile private var statusStartMs = 0L
+    /** Já gravamos o Session Start Time nesta conexão (uma tentativa por conexão). */
+    @Volatile private var timeSyncTried = false
+    /** Calibração enviada esperando o Response Code do SOCP. */
+    @Volatile private var pendingCalibration: CompletableDeferred<Int>? = null
+    /** Registro de calibração pedido depois do envio (para saber se o algoritmo aceitou). */
+    @Volatile private var pendingCalibrationRecord: CompletableDeferred<Socp.Response.CalibrationValue>? = null
+
+    /** Resultado de [calibrate]. */
+    sealed interface CalibrationOutcome {
+        /** Comando aceito e registro gravado sem erro. */
+        data object Accepted : CalibrationOutcome
+        /** Recebida; o sensor ainda está processando ("calibration pending"). */
+        data object Pending : CalibrationOutcome
+        /**
+         * Comando aceito, mas o algoritmo do sensor recusou o valor (Calibration Status bit 0
+         * "rejected" ou bit 1 "out of range"). Visto no sensor real em 19/11/2026: dedo 164 com o
+         * sensor em LO voltou status 1, e a Home antes dizia "aceita".
+         */
+        data class RejectedBySensor(val status: Int) : CalibrationOutcome
+        /** O SOCP respondeu com erro ao comando. */
+        data class Rejected(val code: Int) : CalibrationOutcome
+        data object NotConnected : CalibrationOutcome
+        data object NoAnswer : CalibrationOutcome
+    }
+
+    /**
+     * Manda a glicemia de ponta de dedo ao sensor (SOCP `04`, como o xDrip). Primeiro com o byte
+     * tipo/local da norma (`11`); se o sensor responder "operando inválido", tenta uma vez com o
+     * byte que o xDrip manda (`01`). Depois de aceita, lê a calibração gravada e o Status para o log.
+     */
+    suspend fun calibrate(mgdl: Int, calibrationMinute: Int, nextCalibrationMinute: Int): CalibrationOutcome {
+        if (!ready || gatt == null) {
+            // O SmartGuide derruba a conexão entre medições: espera a próxima (até 6 min) em vez de
+            // falhar — no sensor real as duas primeiras tentativas caíram aqui.
+            appLogger.usage(LOG, "Calibração esperando o sensor conectar", mapOf("mgdl" to mgdl))
+            withTimeoutOrNull(6 * 60_000L) { events.filterIsInstance<LinkEvent.Ready>().first() }
+            if (!ready || gatt == null) {
+                appLogger.usage(LOG, "Calibração pedida sem o sensor pronto", mapOf("mgdl" to mgdl))
+                return CalibrationOutcome.NotConnected
+            }
+        }
+        suspend fun send(typeLocation: Int): Int? {
+            val answer = CompletableDeferred<Int>()
+            pendingCalibration = answer
+            val bytes = Socp.setCalibrationValue(mgdl, calibrationMinute, nextCalibrationMinute, typeLocation, e2eCrc)
+            appLogger.usage(LOG, "Enviando calibração", mapOf(
+                "mgdl" to mgdl, "minuto" to calibrationMinute, "proxima" to nextCalibrationMinute,
+                "tipoLocal" to "%02X".format(typeLocation), "hex" to bytes.toHexLog()
+            ))
+            enqueue(GattOp.Write(SmartGuideGatt.SOCP, bytes))
+            return withTimeoutOrNull(20_000L) { answer.await() }.also { pendingCalibration = null }
+        }
+        var code = send(Socp.CALIBRATION_FINGER_CAPILLARY)
+        if (code == Socp.CODE_INVALID_OPERAND) {
+            appLogger.usage(LOG, "Sensor recusou o byte 11; tentando como o xDrip (01)")
+            code = send(Socp.CALIBRATION_XDRIP_BYTE)
+        }
+        val outcome = when (code) {
+            null -> CalibrationOutcome.NoAnswer
+            Socp.CODE_SUCCESS -> {
+                // O "sucesso" do SOCP é só o comando recebido; quem diz se o algoritmo aceitou é o
+                // Calibration Status do registro gravado.
+                val record = CompletableDeferred<Socp.Response.CalibrationValue>()
+                pendingCalibrationRecord = record
+                enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCalibrationValue(e2eCrc = e2eCrc)))
+                val stored = withTimeoutOrNull(15_000L) { record.await() }.also { pendingCalibrationRecord = null }
+                enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
+                Socp.calibrationOutcome(stored?.status)
+            }
+            else -> CalibrationOutcome.Rejected(code)
+        }
+        appLogger.usage(LOG, "Resultado da calibração", mapOf("resultado" to outcome.toString(), "codigo" to (code ?: "sem resposta")))
+        return outcome
+    }
     @Volatile private var bondRequested = false
     @Volatile private var deviceInfoRead = false
     @Volatile private var connectAttempt = 0
@@ -369,6 +455,7 @@ class AccuChekBleManager @Inject constructor(
         val wasReady = ready
         ready = false
         setupStarted = false
+        timeSyncTried = false
         bondRequested = false
         g?.let { runCatching { it.disconnect() }; runCatching { it.close() } }
         if (notify && (g != null || wasReady)) listener?.onConnectionChanged(false)
@@ -517,6 +604,20 @@ class AccuChekBleManager @Inject constructor(
             enqueue(GattOp.Read(SmartGuideGatt.FIRMWARE_REVISION))
             enqueue(GattOp.Read(SmartGuideGatt.MANUFACTURER_NAME))
         }
+        enqueue(GattOp.Action("sincronizar horário") {
+            if ((timeSyncRequired || startTimeOff) && !timeSyncTried) {
+                timeSyncTried = true
+                val now = System.currentTimeMillis()
+                val bytes = SessionStartTimeWriter.build(now, e2eCrc)
+                appLogger.usage(LOG, "Gravando o horário no sensor (time sync)", mapOf(
+                    "utcMs" to now, "hex" to bytes.toHexLog(),
+                    "avisoDoSensor" to timeSyncRequired, "horarioDiferente" to startTimeOff
+                ))
+                enqueue(GattOp.Write(SmartGuideGatt.SESSION_START_TIME, bytes))
+                enqueue(GattOp.Read(SmartGuideGatt.SESSION_START_TIME))
+                enqueue(GattOp.Read(SmartGuideGatt.CGM_STATUS))
+            }
+        })
         enqueue(GattOp.Action("pedir intervalo ao SOCP") {
             enqueue(GattOp.Write(SmartGuideGatt.SOCP, Socp.getCommunicationInterval(e2eCrc)))
             enqueue(GattOp.Action("pronto") { onSetupDone(g) })
@@ -674,11 +775,21 @@ class AccuChekBleManager @Inject constructor(
             SmartGuideGatt.CGM_STATUS -> CgmStatusParser.parse(value).ok("Status")?.let { s ->
                 if (s.crc == CrcState.INVALID) appLogger.error(LOG, "Status com CRC errado — ignorado")
                 else {
+                    timeSyncRequired = s.annunciation.timeSyncRequired
+                    statusStartMs = now - s.timeOffsetMinutes * 60_000L
                     appLogger.usage(LOG, "Status do sensor", mapOf("minuto" to s.timeOffsetMinutes, "avisos" to s.annunciation.toString()))
                     listener?.onStatus(s, now)
                 }
             }
-            SmartGuideGatt.SESSION_START_TIME -> SessionStartTimeParser.parse(value).ok("Start Time")?.let { listener?.onSessionStartTime(it) }
+            SmartGuideGatt.SESSION_START_TIME -> {
+                val start = SessionStartTimeParser.parse(value).getOrNull()?.takeIf { it.crc != CrcState.INVALID }
+                startTimeOff = SmartGuideClock.startTimeNeedsSync(start?.utcMillis, statusStartMs)
+                if (start == null) appLogger.usage(LOG, "Start Time do sensor ilegível ou zerado", mapOf("hex" to value.toHexLog()))
+                else listener?.onSessionStartTime(start)
+                if (startTimeOff) appLogger.usage(LOG, "Horário de início do sensor diferente do calculado", mapOf(
+                    "sensorMs" to (start?.utcMillis ?: "?"), "calculadoMs" to statusStartMs
+                ))
+            }
             SmartGuideGatt.SESSION_RUN_TIME -> SessionRunTimeParser.parse(value).ok("Run Time")?.let { listener?.onSessionRunTime(it) }
             SmartGuideGatt.SERIAL_NUMBER -> {
                 deviceInfoRead = true
@@ -722,6 +833,10 @@ class AccuChekBleManager @Inject constructor(
             SmartGuideGatt.SOCP -> {
                 val r = Socp.parseResponse(value, e2eCrc)
                 appLogger.usage(LOG, "Resposta do SOCP", mapOf("hex" to value.toHexLog(), "lido" to (r.getOrNull()?.toString() ?: r.toString())))
+                (r.getOrNull() as? Socp.Response.Code)
+                    ?.takeIf { it.requestOpCode == Socp.OP_SET_CALIBRATION }
+                    ?.let { pendingCalibration?.complete(it.code) }
+                (r.getOrNull() as? Socp.Response.CalibrationValue)?.let { pendingCalibrationRecord?.complete(it) }
             }
         }
     }

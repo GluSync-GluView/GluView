@@ -50,6 +50,13 @@ class SibionicsStatusHolder @Inject constructor() {
         )
     }
 
+    /** Pedido de calibração do próprio sensor (SmartGuide), ligado/desligado a cada Status/medição. */
+    fun onCalibrationRequest(required: Boolean, allowed: Boolean) =
+        _status.update { it.copy(calibrationRequired = required, calibrationAllowed = allowed) }
+
+    /** Calibração aceita pelo sensor (SmartGuide): marca a hora para o 2º passo da rotina inicial. */
+    fun onCalibrationAccepted(atMs: Long) = _status.update { it.copy(lastCalibrationAcceptedMs = atMs) }
+
     /** Vida útil e fim de sessão informados pelo próprio sensor (SmartGuide). */
     fun onSensorLifetime(expiryMinutes: Int? = null, sessionEnded: Boolean? = null) = _status.update {
         it.copy(

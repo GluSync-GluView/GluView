@@ -95,6 +95,7 @@ object Socp {
     const val OP_SET_INTERVAL = 0x01
     const val OP_GET_INTERVAL = 0x02
     const val OP_INTERVAL_RESPONSE = 0x03
+    const val OP_SET_CALIBRATION = 0x04
     const val OP_GET_CALIBRATION = 0x05
     const val OP_CALIBRATION_RESPONSE = 0x06
     const val OP_RESPONSE_CODE = 0x1C
@@ -115,6 +116,47 @@ object Socp {
 
     fun setCommunicationInterval(minutes: Int, e2eCrc: Boolean = true): ByteArray =
         withCrc(byteArrayOf(OP_SET_INTERVAL.toByte(), minutes.coerceIn(0, 0xFF).toByte()), e2eCrc)
+
+    /** Tipo "sangue capilar" (nibble baixo) e local "dedo" (nibble alto), como manda a norma. */
+    const val CALIBRATION_FINGER_CAPILLARY = 0x11
+    /**
+     * O mesmo byte como o xDrip manda: a biblioteca Nordic que ele usa desloca o local 8 bits num
+     * campo de 8 bits e o local se perde (fica só o tipo, `01`). Usado só se o sensor recusar `11`.
+     */
+    const val CALIBRATION_XDRIP_BYTE = 0x01
+
+    /**
+     * Set Glucose Calibration Value (`04`): glicemia (SFLOAT, mg/dL), minuto do sensor em que a
+     * gota foi medida, tipo/local, minuto da próxima calibração, nº de registro e status (ignorados
+     * pelo sensor, vão 0). Mesmo layout do `CGMSpecificOpsControlPointData.setCalibrationValue`
+     * (Nordic 2.6.1) usado pelo xDrip `libglupro`, que manda a próxima para +12 h.
+     */
+    fun setCalibrationValue(
+        mgdl: Int,
+        calibrationMinute: Int,
+        nextCalibrationMinute: Int,
+        typeLocation: Int = CALIBRATION_FINGER_CAPILLARY,
+        e2eCrc: Boolean = true
+    ): ByteArray = withCrc(
+        byteArrayOf(OP_SET_CALIBRATION.toByte()) +
+            le16(SFloat.encodeInt(mgdl)) +
+            le16(calibrationMinute.coerceIn(0, 0xFFFF)) +
+            byteArrayOf(typeLocation.toByte()) +
+            le16(nextCalibrationMinute.coerceIn(0, 0xFFFF)) +
+            le16(0) + byteArrayOf(0),
+        e2eCrc
+    )
+
+    /**
+     * Calibration Status do registro gravado (norma CGMS): bit 0 = rejeitada, bit 1 = fora da
+     * faixa, bit 2 = em processamento. null = o registro não veio (conta como aceita: o comando foi).
+     */
+    fun calibrationOutcome(status: Int?): com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome = when {
+        status == null -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted
+        status and 0x03 != 0 -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(status)
+        status and 0x04 != 0 -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Pending
+        else -> com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted
+    }
 
     fun getCalibrationValue(record: Int = LAST_CALIBRATION, e2eCrc: Boolean = true): ByteArray =
         withCrc(byteArrayOf(OP_GET_CALIBRATION.toByte()) + le16(record.coerceIn(0, 0xFFFF)), e2eCrc)

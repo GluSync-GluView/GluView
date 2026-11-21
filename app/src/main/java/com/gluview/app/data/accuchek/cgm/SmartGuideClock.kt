@@ -14,6 +14,18 @@ import kotlin.math.abs
 object SmartGuideClock {
     const val START_TOLERANCE_MS = 90_000L
 
+    /** Diferença a partir da qual o horário de início guardado no sensor é regravado (xDrip: 120 s). */
+    const val START_TIME_SYNC_MS = 120_000L
+
+    /**
+     * O Session Start Time do sensor precisa ser regravado? Mesma regra do xDrip `libglupro`
+     * (`GluProBle.onContinuousGlucoseMonitorSessionStartTimeReceived`): grava quando o horário do
+     * sensor difere mais de 2 min do início calculado (agora − minutos do sensor). [sensorStartUtcMs]
+     * null = ilegível ou zerado (sensor iniciado sem app que grave a hora: caso real de 19/11/2026).
+     */
+    fun startTimeNeedsSync(sensorStartUtcMs: Long?, computedStartMs: Long): Boolean =
+        computedStartMs > 0L && (sensorStartUtcMs == null || kotlin.math.abs(sensorStartUtcMs - computedStartMs) > START_TIME_SYNC_MS)
+
     fun startFromStatus(receivedAtMs: Long, status: CgmStatus): Long =
         receivedAtMs - status.timeOffsetMinutes * 60_000L
 

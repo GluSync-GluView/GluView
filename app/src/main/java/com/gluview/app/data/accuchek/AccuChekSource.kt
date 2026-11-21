@@ -111,6 +111,8 @@ class AccuChekSource @Inject constructor(
     private val malfunction = MalfunctionStreak()
     /** Avisos já notificados e ainda ativos (não repete a notificação a cada leitura). */
     private val activeAlerts = mutableSetOf<SmartGuideAlert>()
+    /** Último valor do bit "calibration not allowed" invertido (null = ainda não visto nesta execução). */
+    @Volatile private var lastCalibrationAllowed: Boolean? = null
 
     override fun start(type: DataSourceType) {
         if (scope != null) return
@@ -341,7 +343,11 @@ class AccuChekSource @Inject constructor(
             val live = now - atMs <= LIVE_MAX_AGE_MS
             val mgdl = SmartGuideRules.glucoseToStore(m, previous)?.takeIf { it in PLAUSIBLE_MGDL }
             if (live) {
-                if (malfunction.onLiveRecord(stored = mgdl != null, malfunction = SmartGuideRules.isMalfunction(m.annunciation))) {
+                if (malfunction.onLiveRecord(
+                        stored = mgdl != null,
+                        malfunction = SmartGuideRules.isMalfunction(m.annunciation),
+                        sensorMinute = m.timeOffsetMinutes
+                    )) {
                     appLogger.error(LOG, "Defeito do sensor há 15 min", mapOf("avisos" to m.annunciation.toString()))
                     warn(R.string.accuchek_warn_malfunction_title, R.string.accuchek_warn_malfunction_body)
                 }
@@ -386,6 +392,10 @@ class AccuChekSource @Inject constructor(
             appLogger.usage(LOG, "Avisos do sensor resolvidos — notificação removida")
             notificationHelper.cancelSensorWarning()
         }
+        // Minuto do sensor também pelas medições, com ou sem glicemia: no aquecimento elas vêm sem
+        // valor e o CGM Status só é lido na conexão — sem isto a contagem da Home parava no minuto
+        // da conexão (sensor real, 19/11/2026, F5).
+        statusHolder.onSensorClock(newestMinute, startMs)
         lastMinute = newestMinute
         preferences.saveAccuChekLastMinute(newestMinute)
     }
@@ -405,6 +415,15 @@ class AccuChekSource @Inject constructor(
             new
         }
         if (SmartGuideAlert.SESSION_ENDED in now) statusHolder.onSensorLifetime(sessionEnded = true)
+        val calibrationRequired = SmartGuideAlert.CALIBRATION_REQUIRED in now
+        val calibrationAllowed = !a.calibrationNotAllowed
+        statusHolder.onCalibrationRequest(calibrationRequired, calibrationAllowed)
+        // Pedido que estava travado ("not allowed") e liberou: avisa que agora dá para calibrar.
+        if (calibrationRequired && calibrationAllowed && lastCalibrationAllowed == false && SmartGuideAlert.CALIBRATION_REQUIRED !in appeared) {
+            appLogger.usage(LOG, "Sensor liberou a calibração")
+            warn(R.string.accuchek_warn_calibration_ready_title, R.string.accuchek_warn_calibration_ready_body)
+        }
+        lastCalibrationAllowed = calibrationAllowed
         for (alert in appeared) {
             appLogger.error(LOG, "Aviso do sensor", mapOf("aviso" to alert.name, "anunciacao" to a.toString()))
             when (alert) {
@@ -415,7 +434,11 @@ class AccuChekSource @Inject constructor(
                 SmartGuideAlert.TEMPERATURE ->
                     warn(R.string.accuchek_warn_temperature_title, R.string.accuchek_warn_temperature_body)
                 SmartGuideAlert.CALIBRATION_REQUIRED ->
-                    warn(R.string.accuchek_warn_calibration_title, R.string.accuchek_warn_calibration_body)
+                    warn(
+                        R.string.accuchek_warn_calibration_title,
+                        if (a.calibrationNotAllowed) R.string.accuchek_warn_calibration_wait_body
+                        else R.string.accuchek_warn_calibration_body
+                    )
                 SmartGuideAlert.MALFUNCTION -> Unit // vem do MalfunctionStreak
             }
         }

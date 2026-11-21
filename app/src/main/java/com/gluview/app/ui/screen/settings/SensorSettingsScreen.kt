@@ -77,6 +77,8 @@ internal data class SensorActions(
     val onSmartGuideRepair: () -> Unit = {},
     /** SmartGuide: esquece o sensor configurado (serial, PIN, pareamento). */
     val onSmartGuideForget: () -> Unit = {},
+    /** SmartGuide: manda a glicemia de ponta de dedo ao sensor. */
+    val onSmartGuideCalibrate: () -> Unit = {},
     /** Smart 2.0: desparear (libera o sensor para outro celular). */
     val onMedLevUnpair: () -> Unit = {},
     val onSibionicsReuseTransmitterChange: (Boolean) -> Unit = {},
@@ -110,6 +112,7 @@ fun SensorSettingsScreen(
     val sibionicsGs3AccountId by viewModel.sibionicsGs3AccountId.collectAsState()
     var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
+    var calibrateSmartGuide by remember { mutableStateOf(false) }
     var confirmStopSensor by remember { mutableStateOf(false) }
     var confirmReuseTransmitter by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -128,6 +131,7 @@ fun SensorSettingsScreen(
                 }
             },
             onSmartGuideForget = { confirmForgetSmartGuide = true },
+            onSmartGuideCalibrate = { calibrateSmartGuide = true },
             onMedLevUnpair = { confirmMedLevUnpair = true },
             onSibionicsReuseTransmitterChange = { enable ->
                 if (enable) confirmReuseTransmitter = true
@@ -184,6 +188,10 @@ fun SensorSettingsScreen(
                 TextButton(onClick = { confirmMedLevUnpair = false }) { Text(stringResource(R.string.setup_cancel)) }
             }
         )
+    }
+
+    if (calibrateSmartGuide) {
+        com.gluview.app.ui.screen.smartguide.SmartGuideCalibrationDialog(onDismiss = { calibrateSmartGuide = false })
     }
 
     if (confirmForgetSmartGuide) {
@@ -380,6 +388,9 @@ private fun CurrentSensorActions(ui: SensorUi, source: DataSourceType, actions: 
                 Text(stringResource(if (ui.smartGuideSerial.isBlank()) R.string.settings_smartguide_setup else R.string.settings_change_sensor))
             }
             if (ui.smartGuideSerial.isNotBlank()) {
+                OutlinedButton(onClick = actions.onSmartGuideCalibrate, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_smartguide_calibrate))
+                }
                 // Sensor levado a outro celular (ou pareamento corrompido): desfaz e pareia de novo.
                 OutlinedButton(onClick = actions.onSmartGuideRepair, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.settings_smartguide_repair))

@@ -281,4 +281,46 @@ class SmartGuideProtocolTest {
         assertTrue(Socp.parseResponse(hex("03 05")) is CgmParse.Invalid)
         assertTrue(Socp.parseResponse(ByteArray(0)) is CgmParse.Invalid)
     }
+
+    @Test
+    fun `escrita do Session Start Time no formato do mySugr`() {
+        // Mesma data da captura real (26/10/2026, cgm-probe): EA07 0A 0D 08 37 05 00 FF + CRC 15 48.
+        val ms = LocalDateTime.of(2026, 10, 13, 8, 55, 5).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val bytes = SessionStartTimeWriter.build(ms)
+        assertEquals("EA 07 0A 0D 08 37 05 00 FF 15 48", bytes.joinToString(" ") { "%02X".format(it) })
+        val back = ok(SessionStartTimeParser.parse(bytes))
+        assertEquals(ms, back.utcMillis)
+        assertEquals(CrcState.VALID, back.crc)
+        assertEquals(9, SessionStartTimeWriter.build(ms, e2eCrc = false).size)
+    }
+
+    @Test
+    fun `SOCP set calibration no layout do xDrip`() {
+        val b = Socp.setCalibrationValue(mgdl = 98, calibrationMinute = 140, nextCalibrationMinute = 860)
+        assertEquals(13, b.size)
+        assertEquals("04 62 00 8C 00 11 5C 03 00 00 00", b.copyOfRange(0, 11).joinToString(" ") { "%02X".format(it) })
+        assertTrue(E2eCrc.hasValidTrailing(b))
+        val x = Socp.setCalibrationValue(98, 140, 860, Socp.CALIBRATION_XDRIP_BYTE, e2eCrc = false)
+        assertEquals(11, x.size)
+        assertEquals(0x01, x[5].toInt())
+    }
+
+    @Test
+    fun `SOCP resposta da calibracao`() {
+        val ok = ok(Socp.parseResponse(E2eCrc.append(byteArrayOf(0x1C, 0x04, 0x01)))) as Socp.Response.Code
+        assertEquals(Socp.OP_SET_CALIBRATION, ok.requestOpCode)
+        assertTrue(ok.isSuccess)
+    }
+
+    @Test
+    fun `status da calibracao gravada`() {
+        // Sensor real, 19/11/2026: resposta 06 A4 00 A4 00 11 D0 02 01 00 01 → status 1 = rejeitada.
+        val real = ok(Socp.parseResponse(hex("06 A4 00 A4 00 11 D0 02 01 00 01 C0 1B"))) as Socp.Response.CalibrationValue
+        assertEquals(1, real.status)
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(1), Socp.calibrationOutcome(real.status))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.RejectedBySensor(2), Socp.calibrationOutcome(2))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Pending, Socp.calibrationOutcome(4))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted, Socp.calibrationOutcome(0))
+        assertEquals(com.gluview.app.data.accuchek.AccuChekBleManager.CalibrationOutcome.Accepted, Socp.calibrationOutcome(null))
+    }
 }

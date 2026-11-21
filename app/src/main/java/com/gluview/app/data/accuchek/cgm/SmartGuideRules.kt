@@ -90,14 +90,18 @@ object SmartGuideRules {
  * com o bit de defeito (3 = 15 min). Uma leitura gravada zera a contagem. O Juggluco marca erro a
  * cada registro desses, mas mostrar notificação a cada um seria alarme falso no "LO" e em falhas
  * de um registro só.
+ *
+ * Durante o aquecimento (minuto do sensor < [warmupMinutes]) o SmartGuide manda toda medição sem
+ * valor e com o bit de defeito (visto no sensor real em 19/11/2026, F5): não conta, senão o aviso
+ * de defeito aparece aos 15 min de todo sensor novo.
  */
-class MalfunctionStreak(private val threshold: Int = 3) {
+class MalfunctionStreak(private val threshold: Int = 3, private val warmupMinutes: Int = 60) {
     var count = 0
         private set
 
     /** Registra uma leitura ao vivo; devolve true quando o defeito acabou de ficar persistente. */
-    fun onLiveRecord(stored: Boolean, malfunction: Boolean): Boolean {
-        if (stored || !malfunction) { count = 0; return false }
+    fun onLiveRecord(stored: Boolean, malfunction: Boolean, sensorMinute: Int = Int.MAX_VALUE): Boolean {
+        if (stored || !malfunction || sensorMinute < warmupMinutes) { count = 0; return false }
         count++
         return count == threshold
     }
