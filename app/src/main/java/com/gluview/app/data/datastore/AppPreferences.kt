@@ -682,6 +682,12 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     val libreBridgeMac: Flow<String>        = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_MAC]  ?: "" }
     val libreBridgeKind: Flow<String>       = dataStore.data.safeMap("") { it[KEY_LIBRE_BRIDGE_KIND] ?: "" }
 
+    /** F6.4 — leitor achado pela busca automática (MAC + tipo MIAOMIAO|BUBBLE|ATOM). */
+    suspend fun saveLibreBridge(mac: String, kind: String) = dataStore.edit {
+        it[KEY_LIBRE_BRIDGE_MAC] = mac
+        it[KEY_LIBRE_BRIDGE_KIND] = kind
+    }
+
     val accuChekMac: Flow<String>          = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_MAC]           ?: "" }
     val accuChekSerial: Flow<String>       = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_SERIAL]        ?: "" }
     val accuChekPin: Flow<String>          = dataStore.data.safeMap("") { it[KEY_ACCUCHEK_PIN]           ?: "" }

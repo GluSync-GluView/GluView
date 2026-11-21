@@ -81,22 +81,34 @@ class LibreBridgeSource @Inject constructor(
         s.launch {
             val savedMac = preferences.libreBridgeMac.first()
             val savedKind = preferences.libreBridgeKind.first()
-            if (savedKind.isNotBlank()) {
-                kind = runCatching { LibreBridgeBleManager.BridgeKind.valueOf(savedKind) }.getOrDefault(kind)
-            }
-            mac = savedMac.ifBlank { null }
-            if (savedMac.isBlank()) {
-                appLogger.error(LOG, "Nenhum MAC de leitor salvo — configure o leitor em Sensores (Sem teste)")
+            // Auditoria 21/11: antes nada salvava o MAC (não havia tela nem busca) e a fonte ficava muda
+            // para sempre; e o tipo salvo passava por cima do tipo escolhido agora. O MAC salvo só vale
+            // para o MESMO tipo de leitor; sem ele, busca por Bluetooth o primeiro leitor desse tipo
+            // (como o Dexcom G6 faz) e guarda.
+            val reuse = savedMac.isNotBlank() && (savedKind.isBlank() || savedKind == kind.name)
+            if (reuse) {
+                mac = savedMac
+                appLogger.usage(LOG, "Iniciando bridge", mapOf("tipo" to type.id, "mac" to savedMac, "kind" to kind.name, "confiavelParaAlca" to RELIABLE_FOR_LOOP))
+                ble.connect(savedMac, kind)
                 return@launch
             }
-            appLogger.usage(LOG, "Iniciando bridge", mapOf("tipo" to type.id, "mac" to savedMac, "kind" to kind.name, "confiavelParaAlca" to RELIABLE_FOR_LOOP))
-            ble.connect(savedMac, kind)
+            mac = null
+            appLogger.usage(LOG, "Buscando leitor por Bluetooth", mapOf("tipo" to type.id, "kind" to kind.name))
+            val started = ble.startScan(expected = kind) { _, found, _, foundKind ->
+                ble.stopScan()
+                if (scope !== s) return@startScan
+                mac = found
+                s.launch { preferences.saveLibreBridge(found, foundKind.name) }
+                ble.connect(found, foundKind)
+            }
+            if (!started) appLogger.error(LOG, "Bluetooth desligado ou indisponível — não deu para buscar o leitor")
         }
     }
 
     override fun stop() {
         reconnectJob?.cancel(); reconnectJob = null
         ble.setListener(null)
+        ble.stopScan()
         ble.disconnect()
         scope?.cancel(); scope = null
         activeType = null
