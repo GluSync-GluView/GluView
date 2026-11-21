@@ -15,8 +15,8 @@ project(gluviewlibre3)
 #   getLibre3Sensorptr, saveLibre3MinuteL, saveLingoMinuteL, saveLibre3fastData, saveLibre3History,
 #   saveLingoHistory, saveLingoFastData, libre3processpatchstatus, libre3EventLog, libre3ControlHistory,
 #   libre3ClinicalControl, lingoControlHistory, lingoClinicalControl, libre3EventLogControl)
-# - lingo_realtime.c: Lingo realtime parsing
 # - process/: whitebox crypto, authorization (fresh/saved auth, kAuth 149B)
+# (21/11/2026: só loadlibs.cpp + process/ entram; ver o comentário em add_library abaixo)
 
 # Aparelho 32 bits (armeabi-v7a): a ponte depende de ganchos arm64 e as bibliotecas da Abbott
 # só existem em arm64 — o app não oferece esses sensores ali (NativeSensorSupport).
@@ -30,11 +30,13 @@ endif()
 # Collect all process/ C files
 file(GLOB L3_PROCESS_SOURCES "process/*.c")
 
+# Auditoria 21/11/2026: bluetooth.cpp e nfc.cpp do Juggluco ficam FORA. Os dois estavam inteiros
+# dentro de `#ifdef LIBRE3` (nunca definido aqui), ou seja, compilavam para nada, e dependem do
+# banco de sensores do Juggluco (Sensoren/SensorGlucoseData/sendKAuth), que o GluView não tem.
+# A leitura dos pacotes, os comandos e a ativação NFC foram portados para Kotlin
+# (data/libre3/Libre3Protocol.kt, com testes); aqui fica só a criptografia da autorização.
 add_library(gluviewlibre3 SHARED
     loadlibs.cpp
-    nfc.cpp
-    bluetooth.cpp
-    lingo_realtime.c
     ${L3_PROCESS_SOURCES}
 )
 

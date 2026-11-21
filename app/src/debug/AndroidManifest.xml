@@ -3,5 +3,11 @@
      nunca no release) — liga o network_security_config_debug.xml pra testar contra GluSync local. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:networkSecurityConfig="@xml/network_security_config_debug" />
+        android:networkSecurityConfig="@xml/network_security_config_debug">
+        <!-- Autoteste da biblioteca do Libre 3 (plano 21, F6.1). Só debug; DUMP = só o adb shell dispara. -->
+        <receiver
+            android:name="com.gluview.app.debug.Libre3SelfTestReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
 </manifest>

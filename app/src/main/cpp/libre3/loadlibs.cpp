@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 
 extern "C" __attribute__((used, visibility("default")))
@@ -89,6 +90,20 @@ private:
     jbyte *data_{};
     std::size_t size_{};
     bool valid_{};
+};
+
+/* GluView (auditoria 21/11/2026): com L3_EXTERNAL_ENTROPY_ONLY o núcleo NÃO tem fonte própria de
+ * aleatoriedade — criado com config nula, a chave efêmera da autorização nova devolvia
+ * L3_SECURITY_ERR_UNSUPPORTED e nenhum sensor novo autorizava. arc4random_buf é a fonte
+ * criptográfica do bionic (Android), sem dlopen de libcrypto. */
+int gluview_l3_entropy(void *, std::uint8_t *out, std::size_t out_len) {
+    if (!out) return 0;
+    arc4random_buf(out, out_len);
+    return 1;
+}
+
+const l3_security_engine_config kGluviewL3Config = {
+    nullptr, 0u, gluview_l3_entropy, nullptr, 0u, 0u
 };
 
 [[nodiscard]] l3_sensor_security_context *security_context_from_handle(jlong handle) noexcept {
@@ -194,7 +209,7 @@ fromjava(libre3BeginSecurityHandshake)(JNIEnv *, jclass, jlong context) {
     log_l3_process_build_once();
     l3_sensor_security_context *security = security_context_from_handle(context);
     if (!security) {
-        security = l3_sensor_security_context_create(nullptr);
+        security = l3_sensor_security_context_create(&kGluviewL3Config);
         if (!security) {
 #ifndef NOLOG
             LOGGER("libre3BeginSecurityHandshake(0)=0 create failed\n");
@@ -424,4 +439,47 @@ fromjava(libre3EmulatorEncryptResponse)(JNIEnv *env, jclass, jlong context,
     return make_fixed_byte_array<60>(env, [&](std::uint8_t *out) {
         return l3_app_core_emulator_encrypt_response(&security->core, n.data(), p.data(), out);
     });
+}
+
+/* GluView (auditoria 21/11/2026): o código veio do Juggluco, onde `fromjava(x)` gera nomes
+ * Java_tk_glucodata_Natives_x. No GluView a classe é com.gluview.app.data.libre3.Libre3Native e os
+ * métodos se chamam native*, então NENHUM external ligava (UnsatisfiedLinkError na 1ª chamada).
+ * Registro explícito aqui; assinaturas conferidas uma a uma com Libre3Native.kt. */
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
+    JNIEnv *env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK || !env) return JNI_ERR;
+    jclass cls = env->FindClass("com/gluview/app/data/libre3/Libre3Native");
+    if (!cls) return JNI_ERR;
+    static const JNINativeMethod methods[] = {
+        {const_cast<char *>("nativeBeginSecurityHandshake"), const_cast<char *>("(J)J"),
+         reinterpret_cast<void *>(fromjava(libre3BeginSecurityHandshake))},
+        {const_cast<char *>("nativeFreeSecurityContext"), const_cast<char *>("(J)V"),
+         reinterpret_cast<void *>(fromjava(libre3FreeSecurityContext))},
+        {const_cast<char *>("nativeSelectAppKeyAndSavedAuthorization"), const_cast<char *>("(JI[B)I"),
+         reinterpret_cast<void *>(fromjava(libre3SelectAppKeyAndSavedAuthorization))},
+        {const_cast<char *>("nativeAcceptPatchCertificate"), const_cast<char *>("(J[B)I"),
+         reinterpret_cast<void *>(fromjava(libre3AcceptPatchCertificate))},
+        {const_cast<char *>("nativeCreateEphemeralPublicKey"), const_cast<char *>("(J)[B"),
+         reinterpret_cast<void *>(fromjava(libre3CreateEphemeralPublicKey))},
+        {const_cast<char *>("nativeDeriveAuthorizationRoot"), const_cast<char *>("(J[B)I"),
+         reinterpret_cast<void *>(fromjava(libre3DeriveAuthorizationRoot))},
+        {const_cast<char *>("nativeEncryptChallengeReply"), const_cast<char *>("(J[B[B)[B"),
+         reinterpret_cast<void *>(fromjava(libre3EncryptChallengeReply))},
+        {const_cast<char *>("nativeDecryptChallengeResponse"), const_cast<char *>("(J[B[B)[B"),
+         reinterpret_cast<void *>(fromjava(libre3DecryptChallengeResponse))},
+        {const_cast<char *>("nativeExportChallengeContext"), const_cast<char *>("(J)[B"),
+         reinterpret_cast<void *>(fromjava(libre3ExportChallengeContext))},
+        {const_cast<char *>("nativeExportSavedAuthorization"), const_cast<char *>("(J)[B"),
+         reinterpret_cast<void *>(fromjava(libre3ExportSavedAuthorization))},
+        {const_cast<char *>("nativeEmulatorDecryptReply"), const_cast<char *>("(J[B[B)[B"),
+         reinterpret_cast<void *>(fromjava(libre3EmulatorDecryptReply))},
+        {const_cast<char *>("nativeEmulatorEncryptResponse"), const_cast<char *>("(J[B[B)[B"),
+         reinterpret_cast<void *>(fromjava(libre3EmulatorEncryptResponse))},
+    };
+    if (env->RegisterNatives(cls, methods, sizeof(methods) / sizeof(methods[0])) != JNI_OK) {
+        env->ExceptionClear();
+        return JNI_ERR;
+    }
+    env->DeleteLocalRef(cls);
+    return JNI_VERSION_1_6;
 }

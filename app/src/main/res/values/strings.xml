@@ -1928,4 +1928,25 @@
     <string name="integrations_region_eu2">Europa 2</string>
     <string name="integrations_transient_error">Última tentativa falhou, o GluSync tenta de novo sozinho: %1$s</string>
     <string name="cal_rej_nosession">Recusado: o GluView não sabe quando este sensor começou (configure o sensor pelo assistente).</string>
+    <!-- Libre 3 (plano 21, F6.1 refeita em 21/11/2026) -->
+    <string name="libre3_untested_warning">O Libre 3 no GluView ainda não foi testado com um sensor de verdade. Confira com o glicosímetro antes de qualquer decisão de tratamento.</string>
+    <string name="libre3_activate_title">Ativar ou assumir o sensor</string>
+    <string name="libre3_activate_desc">Encoste o celular no Libre 3. Sensor novo é ativado pelo GluView e começa o aquecimento. Sensor já em uso em outro app só pode ser assumido com o ID da conta usada na ativação.</string>
+    <string name="libre3_unavailable_on_device">Este aparelho não consegue ler o Libre 3: ele usa um sistema de 32 bits, e a criptografia do sensor só existe para 64 bits.</string>
+    <string name="libre3_nfc_off_body">O Libre 3 é ativado encostando o celular no sensor, pelo NFC. Ligue o NFC e volte para esta tela.</string>
+    <string name="libre3_nfc_missing">Este celular não tem NFC, que é necessário para ativar o Libre 3.</string>
+    <string name="libre3_activated_title">Sensor pronto</string>
+    <string name="libre3_activated_new_body">Sensor ativado pelo GluView. O aquecimento leva %1$d minutos; as glicemias chegam pelo Bluetooth depois disso.</string>
+    <string name="libre3_taken_over_body">Sensor assumido. O GluView vai conectar pelo Bluetooth e buscar as leituras, inclusive as que faltam.</string>
+    <string name="libre3_wrong_account_title">Sensor ativado com outra conta</string>
+    <string name="libre3_wrong_account_body">Este sensor foi ativado em outro app. Para assumir, informe abaixo o número da conta usada na ativação e encoste de novo.</string>
+    <string name="libre3_ended">Este sensor já terminou ou foi desativado.</string>
+    <string name="libre3_not_libre3">Isto não respondeu como um Libre 3. Para Libre 2 ou 2 Plus, escolha esse sensor no assistente.</string>
+    <string name="libre3_lingo">O Lingo usa outra credencial e não é suportado pelo GluView.</string>
+    <string name="libre3_failed_title">Não deu para ler o sensor</string>
+    <string name="libre3_failed_body">Encoste o topo de trás do celular no sensor e segure parado por 2 a 3 segundos.</string>
+    <string name="libre3_account_id_label">ID da conta</string>
+    <string name="libre3_account_id_help">Só é preciso mudar para assumir um sensor ativado em outro app. Para sensor ativado pelo GluView, deixe como está.</string>
+    <string name="libre3_account_id_field">Número da conta</string>
+    <string name="libre3_forget_sensor">Esquecer sensor Libre 3</string>
 </resources>

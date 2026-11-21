@@ -238,7 +238,8 @@ fun AppNavigation(
             SensorSettingsScreen(
                 onSensorSetup      = { nav.navigate(Screen.SensorSetup.route) },
                 onSensorScanner    = { nav.navigate(Screen.SensorScanner.route) },
-                onLibre2Activation = { nav.navigate(Screen.Libre2Activation.route) }
+                onLibre2Activation = { nav.navigate(Screen.Libre2Activation.route) },
+                onLibre3Activation = { nav.navigate(Screen.Libre3Activation.route) }
             )
         }
         // Submenu de Ajustes — envio ao GluSync, polling, retenção, horas dos gráficos.
@@ -288,6 +289,11 @@ fun AppNavigation(
                     nav.navigate(Screen.Libre2Activation.route) {
                         popUpTo(Screen.SensorSetup.route) { inclusive = true }
                     }
+                },
+                onLibre3Activation = {
+                    nav.navigate(Screen.Libre3Activation.route) {
+                        popUpTo(Screen.SensorSetup.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -297,6 +303,9 @@ fun AppNavigation(
         composable(Screen.Libre2Activation.route) {
             // Vindo do assistente logo após o login não há tela anterior: volta à Home.
             Libre2ActivationScreen(onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Home.route) })
+        }
+        composable(Screen.Libre3Activation.route) {
+            com.gluview.app.ui.screen.libre3.Libre3ActivationScreen(onBack = { if (!nav.popBackStack()) nav.navigate(Screen.Home.route) })
         }
         // F1/T08 — Logs do app
         composable(Screen.AppLogs.route) {

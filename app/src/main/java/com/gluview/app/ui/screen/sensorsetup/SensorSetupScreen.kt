@@ -102,6 +102,7 @@ fun SensorSetupScreen(
     onDone: () -> Unit,
     onAdvanced: () -> Unit,
     onLibre2Activation: () -> Unit = {},
+    onLibre3Activation: () -> Unit = {},
     viewModel: SensorSetupViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -190,7 +191,12 @@ fun SensorSetupScreen(
         // Sibionics ("Este código não é de um sensor compatível").
         onChoose = { option ->
             viewModel.rememberVariant(option)
-            if (option.type == DataSourceType.LIBRE2_PLUS) { viewModel.cancel(); onLibre2Activation() } else viewModel.choose(option.type)
+            when (option.type) {
+                DataSourceType.LIBRE2_PLUS -> { viewModel.cancel(); onLibre2Activation() }
+                // Libre 3 também se ativa/assume por NFC (PIN e endereço Bluetooth vêm do sensor).
+                DataSourceType.LIBRE3 -> { viewModel.cancel(); onLibre3Activation() }
+                else -> viewModel.choose(option.type)
+            }
         },
         onContinue = { viewModel.readyToScan(); scanWithPermissions() },
         onSearchNearby = {

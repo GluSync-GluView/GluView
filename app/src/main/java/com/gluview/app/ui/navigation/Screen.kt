@@ -65,6 +65,7 @@ sealed class Screen(val route: String) {
     data object SensorScanner : Screen("sensor_scanner")
     // Libre 2 Plus — ativação por NFC + calibração
     data object Libre2Activation : Screen("libre2_activation")
+    data object Libre3Activation : Screen("libre3_activation")
     // F7 — Termos de uso
     data object Terms         : Screen("terms")
     // F1/T08 — Logs do app

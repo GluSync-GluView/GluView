@@ -84,6 +84,11 @@
 # AbbottNative também carrega por Class.forName. Nada aqui pode ser renomeado ou removido.
 -keep class com.abbottdiabetescare.** { *; }
 
+# ── Libre 3 (gluviewlibre3, porte GPL do Juggluco) ───────────────────────────
+# JNI_OnLoad faz FindClass("com/gluview/app/data/libre3/Libre3Native") e RegisterNatives pelos nomes
+# native*: classe e métodos nativos não podem ser renomeados.
+-keep class com.gluview.app.data.libre3.Libre3Native { native <methods>; }
+
 # ── Envio ao GluSync pelo SignalR (Gson interno do cliente SignalR) ─────────
 # Sem isto o R8 renomeia os campos e o servidor recebe "a".."e" em vez de date/sgv/direction.
 -keep class com.gluview.app.data.remote.GluSyncUploader$Entry { *; }

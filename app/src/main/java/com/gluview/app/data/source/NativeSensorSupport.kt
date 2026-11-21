@@ -43,10 +43,8 @@ object NativeSensorSupport {
         // Só GS1/GS2 usam as .so da Sibionics; o GS3 é porte Kotlin puro.
         type == DataSourceType.SIBIONICS_NACIONAL ||
             type == DataSourceType.SIBIONICS_CHINES -> BuildConfig.HAS_SIBIONICS_LIBS
-        // Auditoria 21/11 (Claude): a ponte JNI do Libre 3 está INCOMPLETA — o C copiado do Juggluco
-        // exporta `Java_tk_glucodata_Natives_*` e o Kotlin chama `Libre3Native.native*`; sem ligação,
-        // a 1ª chamada derruba o app. Indisponível até a ponte ser refeita e testada (ver F061_relatorio).
-        type == DataSourceType.LIBRE3      -> false
+        // Libre 3: a biblioteca (gluviewlibre3) é compilada do fonte GPL no próprio build — não há
+        // .so proprietária. Ponte JNI refeita em 21/11/2026 (RegisterNatives); só exige 64 bits.
         else                               -> true
     }
 }

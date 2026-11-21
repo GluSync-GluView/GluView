@@ -82,7 +82,9 @@ internal data class SensorActions(
     /** Smart 2.0: desparear (libera o sensor para outro celular). */
     val onMedLevUnpair: () -> Unit = {},
     val onSibionicsReuseTransmitterChange: (Boolean) -> Unit = {},
-    val onSibionicsGs3AccountIdChange: (String) -> Unit = {}
+    val onSibionicsGs3AccountIdChange: (String) -> Unit = {},
+    /** Libre 3: ativar/assumir por NFC. */
+    val onLibre3Activation: () -> Unit = {}
 )
 
 /**
@@ -98,6 +100,7 @@ fun SensorSettingsScreen(
     onSensorSetup: () -> Unit,
     onSensorScanner: () -> Unit,
     onLibre2Activation: () -> Unit,
+    onLibre3Activation: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val dataSource         by viewModel.dataSource.collectAsState()
@@ -123,6 +126,7 @@ fun SensorSettingsScreen(
         actions = SensorActions(viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
             onSensorSetup, onSensorScanner, onLibre2Activation,
+            onLibre3Activation = onLibre3Activation,
             onStopSensor = { confirmStopSensor = true },
             onSmartGuideRepair = {
                 viewModel.forgetSmartGuidePairing { ok ->
@@ -366,6 +370,14 @@ private fun CurrentSensorActions(ui: SensorUi, source: DataSourceType, actions: 
         source == DataSourceType.LIBRE2_PLUS && usable -> {
             // Todo Libre novo (14 dias) passa pela ativação NFC — fica como ação principal.
             Button(onClick = actions.onLibre2Activation, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_activate_sensor_nfc))
+            }
+            OutlinedButton(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.settings_change_sensor))
+            }
+        }
+        source == DataSourceType.LIBRE3 && usable -> {
+            Button(onClick = actions.onLibre3Activation, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_activate_sensor_nfc))
             }
             OutlinedButton(onClick = actions.onSensorSetup, modifier = Modifier.fillMaxWidth()) {
