@@ -1,27 +1,54 @@
 {
   "configVersion": "v3",
   "app": {
-    "appId": 20921,
+    "appId": 1100921,
     "appName": "GluView",
     "appType": "app",
-    "version": { "code": 1, "name": "1.0.0" },
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
     "icon": "icon.png",
     "vender": "gluview",
-    "description": "Glicemia do GluView via servidor local do celular (F7.3, Sem teste no simulador Zepp OS sem hardware)."
+    "description": "Glicemia do GluView no relógio Zepp OS, lida do servidor local do celular."
   },
-  "permissions": ["data:os.device.info", "device:os.local_storage", "device:os.bg_service"],
+  "permissions": ["data:os.device.info", "device:os.local_storage"],
   "runtime": {
-    "apiVersion": { "compatible": "3.0", "target": "3.0", "minVersion": "3.0" }
+    "apiVersion": {
+      "compatible": "3.0.0",
+      "target": "3.0.0",
+      "minVersion": "3.0"
+    }
   },
   "targets": {
     "common": {
       "module": {
-        "page": { "pages": ["page/index"] },
-        "app-side": { "path": "app-side/index" }
+        "page": {
+          "pages": ["page/index"]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        }
       },
-      "platforms": [{ "st": "r" }, { "st": "s" }]
+      "platforms": [
+        {
+          "st": "r",
+          "dw": 480
+        },
+        {
+          "st": "s",
+          "dw": 390
+        }
+      ]
     }
   },
-  "i18n": { "en-US": { "appName": "GluView" }, "pt-BR": { "appName": "GluView" } },
+  "i18n": {
+    "en-US": {
+      "appName": "GluView"
+    },
+    "pt-BR": {
+      "appName": "GluView"
+    }
+  },
   "defaultLanguage": "pt-BR"
 }

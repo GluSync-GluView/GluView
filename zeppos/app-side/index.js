@@ -1,41 +1,28 @@
-/* Plano 21, F7.3 (Sem teste em simulador/hardware): serviço lateral do Zepp OS.
- * Lê a glicemia do servidor web local do GluView no celular (F2), porta 17580,
- * endpoint compatível Nightscout/xDrip: /sgv.json?count=1 (só leitura).
- * Referência de dados: mirror-core LocalHttpServer.kt (/sgv.json).
- */
-import { MessageBuilder } from "../shared/message";
+// GluView no Zepp OS (plano 21, F7.3) — serviço lateral, roda dentro do app Zepp no celular.
+// Lê a glicemia do servidor web local do GluView (F2), no próprio celular, porta 17580:
+// GET /sgv.json?count=1 (formato Nightscout/xDrip, só leitura). Feito sobre o modelo oficial
+// "fetch-api" do Zeus CLI (Zepp OS 3.0, @zeppos/zml).
+import { BaseSideService } from "@zeppos/zml/base-side";
+import { parseSgv } from "../utils/glucose";
 
 const SGV_URL = "http://127.0.0.1:17580/sgv.json?count=1";
 
-AppSideService({
-  onInit() {},
-  onRun() {},
-  onDestroy() {},
-
-  onRequest(req, res) {
-    if (req && req.method === "GET_GLUCOSE") {
-      this.fetchGlucose(res);
-    }
-  },
-
-  fetchGlucose(res) {
-    try {
-      fetch({
-        url: SGV_URL,
-        method: "GET",
-        headers: { "Accept": "application/json" }
-      }).then((response) => {
-        const status = response.status || 0;
-        return response.body ? response.body : response.text();
-      }).then((data) => {
-        let body = data;
-        try { body = typeof data === "string" ? JSON.parse(data) : data; } catch (e) {}
-        res(null, { result: body });
-      }).catch((err) => {
-        res(null, { error: String(err) });
-      });
-    } catch (e) {
-      res(null, { error: String(e) });
-    }
+async function fetchGlucose(res) {
+  try {
+    const response = await fetch({ url: SGV_URL, method: "GET" });
+    res(null, parseSgv(response.body, Date.now()));
+  } catch (error) {
+    res(null, { ok: false, error: String(error) });
   }
-});
+}
+
+AppSideService(
+  BaseSideService({
+    onInit() {},
+    onRequest(req, res) {
+      if (req.method === "GET_GLUCOSE") fetchGlucose(res);
+    },
+    onRun() {},
+    onDestroy() {},
+  })
+);

@@ -1,14 +1,34 @@
 # F7.3 — Zepp OS (mini-app + serviço lateral)
 
-- **Objetivo:** mostrar glicemia do GluView no relógio Zepp OS lendo o servidor web local do celular (F2), sem nuvem.
-- **Fonte:** `http://127.0.0.1:17580/sgv.json?count=1` (compatível Nightscout/xDrip), implementado em `mirror-core` (`LocalHttpServer`, porta `DEFAULT_PORT=17580`). Campos usados: `sgv`, `direction`, `date`.
-- **Arquitetura:** `app-side/index.js` faz o fetch HTTP no lado do telefone; `page/index.js` exibe valor, direção e idade em minutos e atualiza periodicamente. Requer o servidor local do GluView ativo no celular pareado.
-- **Maturidade:** **Sem teste em simulador Zepp OS/hardware real** (simulador não disponível neste ambiente). Não publicado em loja.
-- **Prova esperada (quando houver simulador):** abrir o simulador Zepp OS, rodar o mini-app com o servidor local do GluView servindo `/sgv.json`, capturar print mostrando valor e idade; leitura velha deve aparecer com idade alta (o app mostra os minutos desde `date`).
-- **Limitações conhecidas:** acesso a `127.0.0.1:17580` depende do bridge do Zepp OS no dispositivo; pode ser necessário ajustar permissão/rede conforme firmware. O bundle `shared/message` (MessageBuilder) deve ser o do template oficial do Zeus CLI no ambiente de build do simulador.
+- **Objetivo:** mostrar a glicemia do GluView no relógio Zepp OS (Amazfit, Mi Band 7 e outros com Zepp OS 3.0+)
+  lendo o servidor web local do celular (F2), sem nuvem.
+- **Fonte:** `http://127.0.0.1:17580/sgv.json?count=1` (`LocalHttpServer`, porta 17580). Campos: `sgv`,
+  `direction`, `date`.
+- **Arquitetura (modelo oficial "fetch-api" do Zeus CLI, `@zeppos/zml`):**
+  - `app-side/index.js` — serviço lateral, roda no app Zepp do CELULAR: busca o `/sgv.json` e devolve
+    `{ok, sgv, direction, ageMs}`; a idade sai da hora do celular (relógio com hora errada não engana);
+  - `page/index.js` — página do relógio: pede a cada 60 s, redesenha a idade a cada 30 s;
+  - `utils/glucose.js` — lógica pura (`parseSgv`, `display`), testada com Node;
+  - setas em imagem (`assets/common.{r,s}/arrow/*.png`, geradas por `tools/make_arrows.py`): não dá para
+    garantir que a fonte do relógio tenha →↗↘ (no Garmin a seta em texto saía "◆?").
+- **Regra de segurança:** leitura com 20 min ou mais, ou falha na busca → "Sem sinal" (valor some).
+- **appId 1100921** (conta de desenvolvedor Zepp criada pelo Felipe em 21/11/2026). Não publicado em loja.
 
-## Auditoria 21/11/2026 (Claude)
-- **O projeto ainda NÃO monta:** `app.js` e `app-side/index.js` importam `shared/message` (o `MessageBuilder`
-  dos exemplos da Zepp), que não está no repositório. Para montar: trazer esse arquivo (verificar a licença)
-  ou trocar por `@zeppos/zml` (`BaseApp`/`BasePage`/`BaseSideService`) e testar no simulador Zepp OS.
-- Leitura com 20 min ou mais, ou falha na busca, agora mostra "Sem sinal" (antes o valor velho ficava na tela).
+## Como montar e testar
+
+```powershell
+$env:Path = "C:\claude\_tools\node\node-v26.13.1-win-x64;C:\claude\_tools\node\npm-global;$env:Path"
+cd C:\claude\GluView\zeppos
+npm install            # só na primeira vez
+node --test test/      # lógica (8 testes)
+zeus build             # gera dist/*.zab
+zeus dev               # manda para o simulador (precisa do simulador logado e com um relógio baixado)
+```
+
+## Estado em 21/11/2026 (Claude)
+- `zeus build` monta (página compilada, 7 setas convertidas, serviço lateral com o módulo).
+- `node --test test/`: 8/8, incluindo a resposta REAL do GluView do emulador (`115`, `2 min`, seta estável).
+- **Falta o simulador:** o Zepp OS Simulator 2.1.2 está instalado, mas precisa do login do Felipe
+  (senha, não digitada pelo Claude) e de baixar um relógio virtual (ex.: Amazfit Balance ou Active 2);
+  ao abrir, o Windows pergunta sobre o Firewall — decisão do Felipe. Depois disso: `zeus dev`.
+- Falta: relógio Zepp de verdade.
