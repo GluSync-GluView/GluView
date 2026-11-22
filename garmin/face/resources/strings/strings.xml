@@ -1,0 +1,7 @@
+<strings>
+    <string id="AppName">GluView Face</string>
+    <string id="StyleTitle">Style</string>
+    <string id="StyleClassic">Classic (big chart)</string>
+    <string id="StyleFocus">Glucose in focus</string>
+    <string id="StyleComplete">Complete</string>
+</strings>

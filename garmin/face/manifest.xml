@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- Mostrador GluView para Garmin (plano 21, F7.5; pedido do Felipe em 21/11/2026: gráfico igual ao da
+     Mi Band e 3 estilos desenhados no código). Busca em segundo plano a cada 5 min (mínimo do Garmin
+     para mostradores) no servidor local do GluView; o estilo é escolhido nos ajustes do app no
+     Garmin Connect. Mesmos produtos do app (pasta acima). -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application id="5974528f54cf4661bf8ad7aaf23644f9" type="watchface" name="@Strings.AppName"
+        entry="GluFaceApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+        <iq:products>
+            <iq:product id="venu3"/>
+            <iq:product id="venu3s"/>
+            <iq:product id="vivoactive5"/>
+            <iq:product id="fenix7"/>
+            <iq:product id="fr965"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Background"/>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+            <iq:language>por</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>

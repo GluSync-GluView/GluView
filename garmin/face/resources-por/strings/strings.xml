@@ -1,0 +1,7 @@
+<strings>
+    <string id="AppName">GluView Mostrador</string>
+    <string id="StyleTitle">Estilo</string>
+    <string id="StyleClassic">Clássico (gráfico grande)</string>
+    <string id="StyleFocus">Glicemia em destaque</string>
+    <string id="StyleComplete">Completo</string>
+</strings>

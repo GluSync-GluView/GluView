@@ -1,52 +1,108 @@
 // Testes da lógica do GluView no Zepp OS. Rodar na pasta zeppos: node --test test/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseSgv, display, STALE_MIN, ARROW_IMAGES } from "../utils/glucose.js";
-import { existsSync } from "node:fs";
+import {
+  parseWatch, display, chartOps, layout, valueGroup, arrowPoly, arrowOf, zoneColor, usableW,
+  clockText, dateText, STALE_MIN, C,
+} from "../utils/glucose.js";
 
-const PHONE_NOW = 1_800_000_000_000;
+const json = {
+  now: 1_800_000_000_000, unit: "MG_DL", th: { ul: 55, l: 70, h: 180, uh: 250 },
+  sgv: 132, txt: "132", age: 2, dir: "FortyFiveUp", dtxt: "+3",
+  pts: [178, 150, 120, 60, 90, 75, 60, 200, 2, 132],
+};
+const ok = { ok: true, json };
 
-test("parseSgv usa a hora do celular para a idade", () => {
-  const body = JSON.stringify([{ sgv: 132, direction: "FortyFiveUp", date: PHONE_NOW - 3 * 60000 }]);
-  assert.deepEqual(parseSgv(body, PHONE_NOW), { ok: true, sgv: 132, direction: "FortyFiveUp", ageMs: 180000 });
+test("parseWatch aceita o /watch.json e recusa o resto", () => {
+  assert.deepEqual(parseWatch(JSON.stringify(json)), { ok: true, json });
+  assert.equal(parseWatch("[]").ok, false);
+  assert.equal(parseWatch({ sgv: 1 }).ok, false);
 });
 
-test("parseSgv aceita corpo já em objeto e recusa lista vazia ou campos errados", () => {
-  assert.equal(parseSgv([{ sgv: 90, date: PHONE_NOW }], PHONE_NOW).ok, true);
-  assert.equal(parseSgv("[]", PHONE_NOW).ok, false);
-  assert.equal(parseSgv([{ sgv: "90", date: PHONE_NOW }], PHONE_NOW).ok, false);
-  assert.equal(parseSgv({ status: [] }, PHONE_NOW).ok, false);
+test("display: valor, seta, cor da faixa e idade pela diferença do relógio", () => {
+  const rx = 5_000; // relógio com hora absurda: só a diferença conta
+  const d = display(ok, rx, rx + 60_000);
+  assert.equal(d.fresh, true);
+  assert.equal(d.value, "132");
+  assert.equal(d.deltaAge, "+3  ·  3 min");
+  assert.equal(d.dir, "FortyFiveUp");
+  assert.equal(d.color, C.IN);
 });
 
-test("parseSgv não deixa idade negativa (hora do GluView à frente)", () => {
-  assert.equal(parseSgv([{ sgv: 90, date: PHONE_NOW + 5000 }], PHONE_NOW).ageMs, 0);
+test("display: 20 min ou mais vira Sem sinal, com a idade", () => {
+  const d = display(ok, 0, (STALE_MIN - 2) * 60_000);
+  assert.equal(d.value, "Sem sinal");
+  assert.equal(d.deltaAge, `${STALE_MIN} min`);
+  assert.equal(d.dir, null);
 });
 
-test("display ignora a hora absoluta do relógio (só a diferença conta)", () => {
-  const data = { ok: true, sgv: 132.4, direction: "Flat", ageMs: 2 * 60000 };
-  const watchWrong = 5_000; // relógio com hora absurda
-  assert.deepEqual(display(data, watchWrong, watchWrong + 60000), { value: "132", age: "3 min", arrow: "arrow/flat.png" });
+test("display: falha na busca some com o valor; sem nada = Sem dados", () => {
+  assert.equal(display({ ok: false, json }, 0, 0).value, "Sem sinal");
+  assert.equal(display(null, 0, 0).value, "Sem dados");
 });
 
-test("display: leitura de 20 min ou mais vira Sem sinal, com idade visível", () => {
-  const data = { ok: true, sgv: 100, direction: "Flat", ageMs: (STALE_MIN - 1) * 60000 };
-  assert.equal(display(data, 0, 0).value, "100");
-  assert.deepEqual(display(data, 0, 60000), { value: "Sem sinal", age: `${STALE_MIN} min`, arrow: null });
+test("cores iguais às do visor da Mi Band (o limite conta como fora)", () => {
+  assert.equal(zoneColor(55, json), C.URGENT);
+  assert.equal(zoneColor(70, json), C.OUT);
+  assert.equal(zoneColor(71, json), C.IN);
+  assert.equal(zoneColor(180, json), C.OUT);
+  assert.equal(zoneColor(250, json), C.URGENT);
 });
 
-test("display: falha na busca não mantém valor antigo", () => {
-  assert.deepEqual(display(null, 0, 0), { value: "Sem sinal", age: "", arrow: null });
-  assert.deepEqual(display({ ok: false, error: "x" }, 0, 0), { value: "Sem sinal", age: "", arrow: null });
+test("gráfico: faixa de urgência, limiares, linha quebrada no buraco e último ponto maior", () => {
+  const box = { x: 40, y: 100, w: 400, h: 200 };
+  const ops = chartOps(ok, 0, 0, box, 1, true);
+  const rects = ops.filter((o) => o.t === "rect");
+  assert.equal(rects[1].c, C.BAND);
+  assert.ok(ops.some((o) => o.t === "text" && o.s === "70") && ops.some((o) => o.t === "text" && o.s === "180"));
+  const dots = ops.filter((o) => o.t === "circle");
+  assert.equal(dots.length, 5);
+  assert.deepEqual(dots.map((o) => o.c), [C.IN, C.OUT, C.IN, C.OUT, C.IN]); // 150, 60, 75, 200, 132
+  assert.ok(dots[4].r > dots[3].r);
+  assert.equal(dots[4].x, 440 - Math.round((400 * 2) / 180));
+  // 178→120 e 120→90 têm buracos > 15 min: só 90→60? (30) não; 60→2 não. Nenhuma linha cinza.
+  assert.equal(ops.filter((o) => o.t === "line" && o.c === C.LINE).length, 0);
+  const dense = { ok: true, json: { ...json, pts: [15, 100, 10, 110, 5, 120, 0, 130] } };
+  assert.equal(chartOps(dense, 0, 0, box).filter((o) => o.t === "line" && o.c === C.LINE).length, 3);
 });
 
-test("display: direção desconhecida fica sem seta", () => {
-  assert.equal(display({ ok: true, sgv: 80, direction: "NOT COMPUTABLE", ageMs: 0 }, 0, 0).arrow, null);
+test("gráfico: pontos saem pela esquerda depois de 3 h, contando o tempo desde a chegada", () => {
+  const ops = chartOps(ok, 0, 5 * 60_000, { x: 0, y: 0, w: 180, h: 100 });
+  assert.equal(ops.filter((o) => o.t === "circle").length, 4); // o de 178 min passou de 180
 });
 
-test("toda seta tem imagem nos dois alvos", () => {
-  for (const src of Object.values(ARROW_IMAGES)) {
-    for (const target of ["common.r", "common.s"]) {
-      assert.ok(existsSync(new URL(`../assets/${target}/${src}`, import.meta.url)), `${target}/${src}`);
+test("layout dos 3 estilos cabe na tela redonda e na quadrada, sem sobrepor", () => {
+  for (const [W, H, round] of [[480, 480, true], [390, 450, false], [454, 454, true]]) {
+    for (const st of [0, 1, 2]) {
+      const L = layout(st, W, H, round);
+      const blocks = [L.date, L.time, L.value, L.deltaAge].filter(Boolean).map((b) => [b.y, b.y + b.h]);
+      blocks.push([L.chart.y, L.chart.y + L.chart.h]);
+      blocks.sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < blocks.length; i++) assert.ok(blocks[i][0] >= blocks[i - 1][1] - 1, `estilo ${st} ${W}x${H}`);
+      assert.ok(blocks[blocks.length - 1][1] <= H * 0.86, `estilo ${st} cabe embaixo`);
+      assert.ok(L.chart.w > W * 0.4 && L.chart.x >= 0 && L.chart.x + L.chart.w <= W);
+      if (round) {
+        assert.ok(L.chart.w <= usableW(W, H, true, L.chart.y) && L.chart.w <= usableW(W, H, true, L.chart.y + L.chart.h));
+      }
     }
   }
+});
+
+test("seta: polígono fechado, dupla tem 2 centros e o grupo fica centrado", () => {
+  assert.deepEqual(arrowOf("DoubleDown"), { deg: -90, count: 2 });
+  assert.equal(arrowOf("NOT COMPUTABLE"), null);
+  const p = arrowPoly(100, 100, 40, 0);
+  assert.deepEqual(p[0], p[p.length - 1]);
+  assert.equal(Math.max(...p.map((q) => q.x)), 120);
+  const lv = { y: 100, h: 100, size: 80 };
+  const g = valueGroup("132", lv, 480, "DoubleUp");
+  assert.equal(g.centers.length, 2);
+  assert.ok(g.dx > 0);
+  assert.equal(valueGroup("132", lv, 480, "").dx, 0);
+});
+
+test("hora e data em português", () => {
+  const d = new Date(2026, 10, 21, 9, 5);
+  assert.equal(clockText(d), "09:05");
+  assert.equal(dateText(d), "SAB 21/11");
 });
