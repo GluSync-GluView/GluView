@@ -31,6 +31,8 @@ interface DebugDeps {
     fun repository(): com.gluview.app.data.repository.GlucoseRepository
     fun appLogger(): com.gluview.app.util.AppLogger
     fun appLogDao(): com.gluview.app.data.local.dao.AppLogDao
+    fun miBandPusher(): com.gluview.app.watchface.miband.MiBandWatchFacePusher
+    fun miBandUploader(): com.gluview.app.watchface.miband.MiBandUploader
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -77,6 +79,36 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                 }
                 Log.i(tag, "LIBRE2_EU $sb")
                 resultData = sb.toString()
+                return
+            }
+            // F7.1/F7.2: envio de visor à pulseira Huami virtual (tools/virtual-sensors/huami.py). Procura o
+            // MAC por até 8 s (o Android aprende o tipo de endereço do anúncio), grava o par de TESTE
+            // (mac + key da pulseira virtual) e chama o MESMO MiBandWatchFacePusher.send do app.
+            "miband" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                val mac = intent.getStringExtra("mac") ?: return
+                val key = intent.getStringExtra("key") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val lines = StringBuilder()
+                    try {
+                        lines.append("visto=").append(scanFor(context, mac)).append(" | ")
+                        deps.preferences().saveMiBandPairing(mac, key)
+                        val log: (String) -> Unit = { m -> Log.i(tag, "MIBAND $m"); lines.append(m).append(" | ") }
+                        val ok = if (intent.getStringExtra("synthetic") == "1") {
+                            // App de teste sem leituras: mesmo gerador e mesmo uploader, com leitura sintética.
+                            val bin = com.gluview.app.watchface.miband.MiBandWatchFaceGenerator(context).generate(
+                                com.gluview.app.watchface.miband.MiBandWatchData(bgValue = "123", delta = "+2", timeText = "10:30",
+                                    arrowName = com.gluview.app.util.ArrowMapper.toAssetName("→"), isHigh = false, isLow = false,
+                                    isStale = false, graph = null))
+                            log("Visor sintético gerado: ${bin.size} bytes")
+                            deps.miBandUploader().connectAndUpload(mac, unhex(key), bin, log)
+                        } else deps.miBandPusher().send(logger = log)
+                        pending.resultData = "ok=$ok | $lines"
+                    } catch (e: Exception) {
+                        pending.resultData = "ERRO ${e.message} | $lines"
+                    } finally { pending.finish() }
+                }
                 return
             }
             // Escolhe a fonte de dados (id do DataSourceType) e, para os leitores, esquece o leitor salvo.
@@ -205,6 +237,22 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
     }
 
     private fun bytes(n: Int) = ByteArray(n).also { rnd.nextBytes(it) }
+    @android.annotation.SuppressLint("MissingPermission")
+    private suspend fun scanFor(context: Context, mac: String): Boolean {
+        val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager).adapter
+        val scanner = adapter?.bluetoothLeScanner ?: return false
+        val seen = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val cb = object : android.bluetooth.le.ScanCallback() {
+            override fun onScanResult(type: Int, r: android.bluetooth.le.ScanResult) {
+                if (r.device.address.equals(mac, ignoreCase = true)) seen.complete(true)
+            }
+        }
+        return try {
+            scanner.startScan(cb)
+            kotlinx.coroutines.withTimeoutOrNull(8_000) { seen.await() } ?: false
+        } finally { runCatching { scanner.stopScan(cb) } }
+    }
+
     private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
     private fun unhex(s: String) = ByteArray(s.length / 2) { s.substring(2 * it, 2 * it + 2).toInt(16).toByte() }
 

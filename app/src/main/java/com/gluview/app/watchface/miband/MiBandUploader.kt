@@ -68,11 +68,19 @@ class MiBandUploader @Inject constructor(
     private val authNotify = Channel<ByteArray>(Channel.UNLIMITED)
     private val fwNotify = Channel<ByteArray>(Channel.UNLIMITED)
     private val disposables = CompositeDisposable()
+    /** Completa quando a conexão cai depois de conectada: quem espera resposta desiste na hora. */
+    @Volatile private var dropped = CompletableDeferred<Unit>()
 
     private fun emit(m: String) { Log.i(tag, m); log(m) }
 
     suspend fun connectAndUpload(mac: String, key: ByteArray, fw: ByteArray, logger: (String) -> Unit): Boolean {
         log = logger
+        // Achado no simulador (tools/virtual-sensors/huami.py, 21/11/2026): as filas são do singleton e
+        // sobrevivem entre envios — uma resposta atrasada de um envio que falhou seria lida como resposta
+        // do próximo. Esvazia antes de começar.
+        while (authNotify.tryReceive().isSuccess) { /* descarta */ }
+        while (fwNotify.tryReceive().isSuccess) { /* descarta */ }
+        dropped = CompletableDeferred()
         val device = try { rxClient.getBleDevice(mac) } catch (e: Exception) { emit("MAC inválido: ${e.message}"); return false }
 
         val connDeferred = CompletableDeferred<RxBleConnection>()
@@ -81,7 +89,7 @@ class MiBandUploader @Inject constructor(
                 { conn -> if (!connDeferred.isCompleted) connDeferred.complete(conn) },
                 { err ->
                     if (!connDeferred.isCompleted) connDeferred.completeExceptionally(err)
-                    else emit("⚠️ Desconectado: ${err.message}")
+                    else { emit("⚠️ Desconectado: ${err.message}"); dropped.complete(Unit) }
                 }
             )
         )
@@ -228,11 +236,11 @@ class MiBandUploader @Inject constructor(
         val authFlags: Byte = 0x00
         val cryptFlags: Byte = 0x80.toByte()
         fireWrite(connection, CH_AUTH, byteArrayOf((cryptFlags.toInt() or 0x02).toByte(), authFlags, 0x02, 0x01, 0x00))
-        val rnd = withTimeoutOrNull(8000) { authNotify.receive() } ?: return fail("sem número aleatório")
+        val rnd = awaitOn(authNotify, 8000) ?: return fail("sem número aleatório")
         if (!(rnd[0] == RESPONSE && (rnd[1].toInt() and 0x0f) == 0x02)) return fail("auth random inesperado: ${hex(rnd)}")
         val enc = aesEcb(rnd.copyOfRange(3, rnd.size), key)
         fireWrite(connection, CH_AUTH, byteArrayOf((0x03 or cryptFlags.toInt()).toByte(), authFlags) + enc)
-        val res = withTimeoutOrNull(8000) { authNotify.receive() } ?: return fail("sem confirmação de auth")
+        val res = awaitOn(authNotify, 8000) ?: return fail("sem confirmação de auth")
         if (!(res[0] == RESPONSE && (res[1].toInt() and 0x0f) == 0x03 && res[2].toInt() == 0x01)) return fail("auth recusada: ${hex(res)}")
         emit("Autenticado.")
         return true
@@ -241,7 +249,15 @@ class MiBandUploader @Inject constructor(
     private fun aesEcb(data: ByteArray, key: ByteArray): ByteArray =
         Cipher.getInstance("AES/ECB/NoPadding").apply { init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES")) }.doFinal(data)
 
-    private suspend fun awaitFw(): ByteArray? = withTimeoutOrNull(15000) { fwNotify.receive() }
+    private suspend fun awaitFw(): ByteArray? = awaitOn(fwNotify, 15000)
+
+    /** Próxima notificação do canal, ou null por tempo esgotado OU queda da conexão (sem esperar à toa). */
+    private suspend fun awaitOn(channel: Channel<ByteArray>, timeoutMs: Long): ByteArray? = withTimeoutOrNull(timeoutMs) {
+        kotlinx.coroutines.selects.select<ByteArray?> {
+            channel.onReceive { it }
+            dropped.onAwait { null }
+        }
+    }
 
     @SuppressLint("CheckResult")
     private fun subscribeNotify(connection: RxBleConnection, uuid: UUID, channel: Channel<ByteArray>?) {

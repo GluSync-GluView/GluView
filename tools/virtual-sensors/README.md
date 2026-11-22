@@ -72,3 +72,23 @@ Cenários em `control-dexcom.txt`:
 | `badcrc` | próxima glicemia com CRC errado |
 | `unbond` | o transmissor esquece o pareamento (o app refaz KeepAlive + BondRequest) |
 | `normal` | sessão em andamento de novo (3 dias) |
+
+## Pulseira Huami virtual (Mi Band 6 e família) — `huami.py` (plano 21, F7.1/F7.2, 21/11/2026)
+
+Lado da pulseira do caminho que o GluView usa com a Mi Band 6 real (`MiBandUploader`, porte do
+WatchDrip): autenticação Huami com chave (flags da Mi Band 6) e envio de visor em pedaços (d0/d2/d3,
+acks d4, d5 com CRC32, d6). MTU 247 como a pulseira real. O visor recebido vai para
+`huami-recebido-<n>.bin` (cabeçalho `UIHH` = Mi Band 4/5/6). Chave de TESTE, nunca a de uma pulseira real.
+
+```
+./.venv/Scripts/python.exe -u huami.py            # anuncia "Mi Smart Band 6" em F3:22:33:44:66:06
+adb -s emulator-5554 shell am broadcast -n com.gluview.app.l3test/com.gluview.app.debug.Libre3SelfTestReceiver \
+  --es op miband --es mac F3:22:33:44:66:06 --es key 00112233445566778899aabbccddeeff --es synthetic 1
+```
+(app de debug lado a lado: `assembleDebug -Pgluview.applicationIdSuffix=.l3test`; sem `synthetic` usa a
+leitura do banco pelo `MiBandWatchFacePusher`.) Cenários em `control-huami.txt`: `wrongkey`, `dropmid`, `slow`.
+
+Resultado em 21/11: envio completo (92.584 bytes, CRC32 confere); chave errada recusada com mensagem
+clara; queda no meio falha e a nova tentativa instala. Achados e corrigidos no `MiBandUploader`: filas
+de resposta reaproveitadas entre envios (agora esvaziadas a cada envio) e espera de 15 s depois de a
+conexão cair (agora desiste na hora).

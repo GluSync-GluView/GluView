@@ -9,3 +9,6 @@ control-medlev.txt
 libre3-*-estado.json
 control-libre3.txt
 control-bridge.txt
+huami-recebido-*.bin
+huami.out
+huami.log
