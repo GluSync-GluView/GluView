@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plano 21, F7.1 — alertas no pulso e no relógio, com a vibração de cada alerta configurável. -->
+<resources>
+    <string name="wearable_alerts_title">Alertas no pulso e no relógio</string>
+    <string name="wearable_alerts_nav_subtitle">Vibração de cada alerta na pulseira ou no relógio</string>
+    <string name="wearable_alerts_intro">Os alertas do GluView também podem vibrar na pulseira ou no relógio, cada um com o padrão que você escolher. É sempre um aviso a mais: o alerta do celular continua igual.</string>
+    <string name="wearable_alerts_snooze_section">Soneca pelo pulso</string>
+    <string name="wearable_alerts_snooze_desc">Na Mi Band e na Amazfit, o alerta \"Chamada\" toca até você recusar. Recusar silencia os alertas (no celular também) por este tempo.</string>
+    <string name="wearable_alerts_minutes">%1$d min</string>
+    <string name="wearable_alerts_ready">Pareado</string>
+    <string name="wearable_alerts_not_paired">Não pareado</string>
+    <string name="wearable_alerts_enabled">Levar os alertas a este aparelho</string>
+    <string name="wearable_alerts_enabled_desc">Escolha abaixo quais alertas vão e como cada um vibra.</string>
+    <string name="wearable_alerts_test">Testar</string>
+    <string name="wearable_alerts_find">Encontrar</string>
+    <string name="wearable_alerts_test_title">GluView: teste</string>
+    <string name="wearable_alerts_test_body">Alerta de teste com a vibração da glicose baixa.</string>
+    <string name="wearable_alerts_test_ok">Alerta de teste entregue.</string>
+    <string name="wearable_alerts_find_ok">A pulseira está vibrando.</string>
+    <string name="wearable_alerts_test_fail">Não chegou. Confira se o aparelho está perto, ligado e pareado.</string>
+
+    <string name="wearable_family_huami">Mi Band 4 a 7 e Amazfit</string>
+    <string name="wearable_family_huami_hint">Usa o pareamento da tela da Mi Band. Única com \"Chamada\": toca até você recusar no pulso.</string>
+    <string name="wearable_family_xiaomi">Mi Band 8 e Mi Band 9 Active</string>
+    <string name="wearable_family_xiaomi_hint">Usa o pareamento da Xiaomi nova, na tela da Mi Band. Chega como notificação e vibra no padrão escolhido.</string>
+    <string name="wearable_family_wearos">Relógio Wear OS</string>
+    <string name="wearable_family_wearos_hint">Galaxy Watch, Pixel Watch e outros com o app do GluView instalado no relógio.</string>
+    <string name="wearable_family_garmin">Garmin</string>
+    <string name="wearable_family_garmin_hint">Vibra quando o app do GluView está aberto no relógio (ele busca os dados a cada minuto).</string>
+    <string name="wearable_family_zepp">Amazfit com Zepp OS</string>
+    <string name="wearable_family_zepp_hint">Vibra quando o app do GluView está aberto no relógio (ele busca os dados a cada minuto).</string>
+
+    <string name="wearable_kind_urgent_low">Hipo urgente</string>
+    <string name="wearable_kind_low">Glicose baixa</string>
+    <string name="wearable_kind_high">Glicose alta</string>
+    <string name="wearable_kind_urgent_high">Hiper urgente</string>
+    <string name="wearable_kind_quick_drop">Queda rápida</string>
+    <string name="wearable_kind_stale">Sem sinal do sensor</string>
+    <string name="wearable_kind_predictive">Hipo prevista</string>
+
+    <string name="vibration_off">Sem vibrar</string>
+    <string name="vibration_short">Curta</string>
+    <string name="vibration_double">Dupla</string>
+    <string name="vibration_triple">Tripla</string>
+    <string name="vibration_long">Longa</string>
+    <string name="vibration_insistent">Insistente</string>
+    <string name="vibration_call">Chamada</string>
+</resources>

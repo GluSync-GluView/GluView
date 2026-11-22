@@ -183,3 +183,27 @@ export function dateText(d) {
   const days = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
   return days[d.getDay()] + " " + String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
 }
+
+// ---- Plano 21, F7.1 — alerta do celular com a vibração escolhida (`alert` no /watch.json?app=zepp).
+
+// Alerta NOVO (id diferente do último já vibrado) ou null. segments = liga, pausa, … em ms.
+export function newAlert(json, lastId) {
+  const a = json && json.alert;
+  if (!a || typeof a !== "object" || a.id === undefined || a.id === null) return null;
+  const id = String(a.id);
+  if (id === String(lastId)) return null;
+  const segments = Array.isArray(a.v) ? a.v.filter((n) => typeof n === "number" && n >= 0).slice(0, 24) : [];
+  return { id, title: typeof a.t === "string" && a.t ? a.t : "GluView", body: typeof a.b === "string" ? a.b : "", segments };
+}
+
+// O Zepp OS 3 só toca cenas prontas: cada "liga" vira a cena mais próxima (DURATION = 600 ms,
+// LONG = 1000 ms), disparada no instante em que começaria. [{at, scene}] em ms desde o início.
+export function vibePlan(segments) {
+  const out = [];
+  let at = 0;
+  (segments || []).forEach((ms, i) => {
+    if (i % 2 === 0 && ms > 0) out.push({ at, scene: ms > 800 ? "LONG" : "DURATION" });
+    at += ms;
+  });
+  return out;
+}

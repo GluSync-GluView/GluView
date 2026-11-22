@@ -40,6 +40,12 @@ class LocalHttpServer(
         fun unit(): String
         fun name(): String = "GluView"
         fun version(): String = ""
+        /**
+         * Plano 21, F7.1 — alerta pendente para o app de relógio [app] ("garmin", "zepp"): mapa com id, tipo,
+         * título, texto e a vibração escolhida (`v` = liga, pausa, … ms), ou null. O relógio vibra quando vê
+         * um id novo. Sem `app` na URL (app de relógio antigo): nada.
+         */
+        fun watchAlert(app: String): Map<String, Any?>? = null
     }
 
     data class RequestLog(val atMs: Long, val remote: String, val path: String, val status: Int)
@@ -119,7 +125,7 @@ class LocalHttpServer(
             "/status.json", "/api/v1/status", "/api/v1/status.json" -> json(status())
             "/pebble" -> json(pebble(query["count"]?.toIntOrNull()?.coerceIn(1, 10) ?: 1))
             "/watch.json" -> json(watch(query["minutes"]?.toIntOrNull()?.coerceIn(30, 720) ?: 180,
-                query["step"]?.toIntOrNull()?.coerceIn(1, 15) ?: 5))
+                query["step"]?.toIntOrNull()?.coerceIn(1, 15) ?: 5, query["app"]))
             "/" -> Response(200, "text/html", page())
             else -> Response(404, "application/json", Json.write(mapOf("status" to 404, "message" to "Not found")))
         }
@@ -177,7 +183,7 @@ class LocalHttpServer(
      * sempre com a mais nova), em `pts` = [idadeMin, mg/dL, idadeMin, mg/dL, ...] do mais velho ao
      * mais novo. Idades pela hora do CELULAR: relógio com hora errada não engana o "há X min".
      */
-    private fun watch(minutes: Int, step: Int): Map<String, Any?> {
+    private fun watch(minutes: Int, step: Int, app: String? = null): Map<String, Any?> {
         val now = clock()
         val since = now - minutes * 60_000L
         val list = data.readings(1000, since).filter { it.epochMs in (since + 1)..(now + 60_000L) }.sortedByDescending { it.epochMs }
@@ -197,7 +203,7 @@ class LocalHttpServer(
         }
         val t = data.thresholds()
         val delta = latest?.let { l -> prev?.takeIf { l.epochMs - it.epochMs <= 15 * 60_000L }?.let { l.sgvMgDl - it.sgvMgDl } ?: l.deltaMgDl?.toDouble() }
-        return linkedMapOf(
+        return linkedMapOf<String, Any?>(
             "now" to now,
             "unit" to data.unit(),
             "th" to linkedMapOf("ul" to Math.round(t.urgentLow).toInt(), "l" to Math.round(t.low).toInt(),
@@ -210,7 +216,10 @@ class LocalHttpServer(
                 if (mmol) String.format(java.util.Locale.US, "%+.1f", d / 18.0) else (if (d >= 0) "+" else "") + Math.round(d)
             },
             "pts" to pts
-        )
+        ).also { m ->
+            // Só aparece quando há alerta: mantém a resposta curta (limite do Garmin em segundo plano).
+            app?.takeIf { it.isNotBlank() }?.let { a -> runCatching { data.watchAlert(a) }.getOrNull()?.let { m["alert"] = it } }
+        }
     }
 
     private fun trend(d: String) = when (d) {

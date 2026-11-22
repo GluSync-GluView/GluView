@@ -35,6 +35,11 @@ interface DebugDeps {
     fun miBandUploader(): com.gluview.app.watchface.miband.MiBandUploader
     fun miBandClient(): com.gluview.app.watchface.apply.MiBandClient
     fun xiaomiBandClient(): com.gluview.app.wearables.xiaomi.XiaomiBandClient
+    fun huamiAlertSender(): com.gluview.app.wearables.huami.HuamiAlertSender
+    fun wearablesHub(): com.gluview.app.wearables.hub.WearablesHub
+    fun alertManager(): com.gluview.app.alert.AlertManager
+    fun mirrorManager(): com.gluview.app.mirror.MirrorManager
+    fun mirrorStore(): com.gluview.app.mirror.MirrorStore
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -132,14 +137,88 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                     val lines = StringBuilder()
                     try {
                         lines.append("visto=").append(scanFor(context, mac)).append(" | ")
-                        val ok = deps.xiaomiBandClient().sendNotification(mac, key,
-                            intent.getStringExtra("title") ?: "GluView", intent.getStringExtra("body") ?: "Teste") { m ->
+                        // F7.1: com `style`, manda também a vibração personalizada (VibrationTest).
+                        val style = com.gluview.wearables.core.VibrationStyle.fromId(intent.getStringExtra("style"))
+                        val ok = deps.xiaomiBandClient().alert(mac, key,
+                            intent.getStringExtra("title") ?: "GluView", intent.getStringExtra("body") ?: "Teste", style) { m ->
                             Log.i(tag, "XIAOMI $m"); lines.append(m).append(" | ") }
                         pending.resultData = "ok=$ok | $lines"
                     } catch (e: Exception) {
                         pending.resultData = "ERRO ${e.message} | $lines"
                     } finally { pending.finish() }
                 }
+                return
+            }
+            // F7.1: alerta direto na pulseira Huami virtual com o estilo escolhido (inclui "call" + recusa).
+            "huami_alert" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                val mac = intent.getStringExtra("mac") ?: return
+                val key = intent.getStringExtra("key") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val lines = StringBuilder()
+                    try {
+                        lines.append("visto=").append(scanFor(context, mac)).append(" | ")
+                        val profile = com.gluview.app.wearables.huami.HuamiLegacyModel.fromId(intent.getStringExtra("model") ?: "mi_band_6")
+                            ?.let { com.gluview.app.watchface.miband.HuamiProfile.of(it) } ?: com.gluview.app.watchface.miband.HuamiProfile.MI_BAND_6
+                        val style = com.gluview.wearables.core.VibrationStyle.fromId(intent.getStringExtra("style"))
+                            ?: com.gluview.wearables.core.VibrationStyle.TRIPLE
+                        val r = deps.huamiAlertSender().alert(mac, unhex(key), profile,
+                            intent.getStringExtra("title") ?: "GluView", intent.getStringExtra("body") ?: "Teste", style,
+                            callTimeoutMs = intent.getStringExtra("timeout")?.toLongOrNull() ?: 30_000L) { m ->
+                            Log.i(tag, "HUAMI_ALERT $m"); lines.append(m).append(" | ") }
+                        pending.resultData = "ok=${r.ok} call=${r.call} | $lines"
+                    } catch (e: Exception) {
+                        pending.resultData = "ERRO ${e.message} | $lines"
+                    } finally { pending.finish() }
+                }
+                return
+            }
+            // F7.1: caminho inteiro do hub — grava pareamento/ajustes de TESTE e dispara como o AlertManager.
+            //   family=huami|xiaomi|wearos|garmin|zepp settings=<encode> kind=LOW title= body=
+            //   (mac/key/model gravam o pareamento da família; silenced=1 devolve o estado da soneca do celular)
+            "hub_alert" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val hub = deps.wearablesHub()
+                        val am = deps.alertManager()   // cria o AlertManager (ele escuta a soneca do pulso)
+                        if (intent.getStringExtra("silenced") == "1") {
+                            pending.resultData = "silenced=${am.isSilenced()}"
+                            return@launch
+                        }
+                        if (intent.getStringExtra("clear") == "1") am.clearSilence()
+                        val family = com.gluview.app.wearables.hub.WearableFamily.entries.first { it.id == (intent.getStringExtra("family") ?: "huami") }
+                        val mac = intent.getStringExtra("mac"); val key = intent.getStringExtra("key")
+                        if (mac != null && key != null) when (family) {
+                            com.gluview.app.wearables.hub.WearableFamily.HUAMI -> {
+                                deps.preferences().saveMiBandPairing(mac, key)
+                                deps.preferences().saveMiBandModel(intent.getStringExtra("model") ?: "mi_band_6")
+                            }
+                            com.gluview.app.wearables.hub.WearableFamily.XIAOMI -> deps.preferences().saveXiaomiBand(mac, key)
+                            else -> Unit
+                        }
+                        mac?.let { scanFor(context, it) }
+                        intent.getStringExtra("settings")?.let {
+                            hub.save(family, com.gluview.wearables.core.WearableAlertSettings.decode(it, family.supportsCall))
+                        }
+                        val kind = com.gluview.wearables.core.WearableAlertKind.valueOf(intent.getStringExtra("kind") ?: "LOW")
+                        hub.alert(kind, intent.getStringExtra("title") ?: "GluView", intent.getStringExtra("body") ?: "Teste")
+                        pending.resultData = "enfileirado ${family.id} $kind configurado=${hub.configured(family)}"
+                    } catch (e: Exception) {
+                        pending.resultData = "ERRO ${e.message}"
+                    } finally { pending.finish() }
+                }
+                return
+            }
+            // F7.1: liga o servidor web local só no aparelho (porta 17580, sem senha) para ler o /watch.json.
+            "http_on" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                deps.mirrorStore().update { it.copy(httpEnabled = true, httpOnWifi = false) }
+                @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+                deps.mirrorManager().start(kotlinx.coroutines.GlobalScope)
+                resultData = "http ligado"
                 return
             }
             // Escolhe a fonte de dados (id do DataSourceType) e, para os leitores, esquece o leitor salvo.

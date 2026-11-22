@@ -338,6 +338,9 @@ fun AppNavigation(
         composable(Screen.MiBand.route) {
             MiBandScreen(onBack = { nav.popBackStack() })
         }
+        composable(Screen.WearableAlerts.route) {
+            com.gluview.app.ui.screen.wearables.WearableAlertsScreen(onBack = { nav.popBackStack() })
+        }
         composable(Screen.WatchFaces.route) {
             WatchFaceManagerScreen(
                 onBack = { nav.popBackStack() },
@@ -360,7 +363,8 @@ fun AppNavigation(
             AlertSettingsScreen(
                 onBack     = { nav.popBackStack() },
                 onIfttt    = { nav.navigate(Screen.AlertIfttt.route) },
-                onPushover = { nav.navigate(Screen.AlertPushover.route) }
+                onPushover = { nav.navigate(Screen.AlertPushover.route) },
+                onWearables = { nav.navigate(Screen.WearableAlerts.route) }
             )
         }
         composable(Screen.AlertIfttt.route) {

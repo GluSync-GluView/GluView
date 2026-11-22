@@ -3,12 +3,15 @@
 // Tocar na tela troca o estilo, que fica salvo. Pede os dados ao serviço lateral a cada 60 s e
 // redesenha a cada 30 s (a idade anda). Leitura com 20 min ou mais, ou falha na busca: "Sem sinal"
 // (o histórico continua no gráfico, cada ponto na sua hora). Lógica em utils/glucose.js (testada).
+// F7.1: alerta novo do celular → vibra no padrão escolhido (aproximado pelas cenas do Zepp OS) e mostra
+// a faixa com o título por 2 min; o id já vibrado fica salvo (reabrir o app não vibra de novo).
 import * as hmUI from "@zos/ui";
 import { localStorage } from "@zos/storage";
+import { Vibrator, VIBRATOR_SCENE_DURATION, VIBRATOR_SCENE_DURATION_LONG } from "@zos/sensor";
 import { BasePage } from "@zeppos/zml/base-page";
 import { ROUND } from "zosLoader:./index.[pf].layout.js";
 import { DEVICE_WIDTH as W, DEVICE_HEIGHT as H } from "../utils/config/device";
-import { display, chartOps, layout, valueGroup, arrowPoly, clockText, dateText, C, STYLES } from "../utils/glucose";
+import { display, chartOps, layout, valueGroup, arrowPoly, clockText, dateText, C, STYLES, newAlert, vibePlan } from "../utils/glucose";
 
 let canvas = null;
 let texts = {};
@@ -17,6 +20,21 @@ let drawTimer = null;
 let last = null;      // {ok, json}: última resposta (json fica mesmo após falha, para o histórico)
 let lastRx = 0;
 let style = 0;
+let alertText = null;
+let alertUntil = 0;
+let vibeTimers = [];
+
+function vibrate(segments) {
+  vibeTimers.forEach((t) => clearTimeout(t));
+  vibeTimers = [];
+  let v = null;
+  try { v = new Vibrator(); } catch (e) { return; }
+  for (const p of vibePlan(segments)) {
+    vibeTimers.push(setTimeout(() => {
+      try { v.stop(); v.start({ mode: p.scene === "LONG" ? VIBRATOR_SCENE_DURATION_LONG : VIBRATOR_SCENE_DURATION }); } catch (e) { /* sem motor */ }
+    }, p.at));
+  }
+}
 
 function text(key, box, color) {
   if (texts[key]) hmUI.deleteWidget(texts[key]);
@@ -53,6 +71,8 @@ Page(
       drawTimer = setInterval(() => this.draw(), 30000);
     },
     onDestroy() {
+      vibeTimers.forEach((t) => clearTimeout(t));
+      vibeTimers = [];
       if (fetchTimer) clearInterval(fetchTimer);
       if (drawTimer) clearInterval(drawTimer);
       fetchTimer = null;
@@ -63,6 +83,7 @@ Page(
       text("time", L.time, C.WHITE);
       text("value", L.value, C.WHITE);
       text("deltaAge", L.deltaAge, C.GREY);
+      text("alert", { y: 0, h: Math.round(H * 0.16), size: Math.round(H * 0.06) }, C.WHITE);
       if (L.date) text("date", L.date, C.GREY);
       else if (texts.date) { hmUI.deleteWidget(texts.date); delete texts.date; }
       this.draw();
@@ -73,7 +94,18 @@ Page(
         .catch(() => this.receive(null));
     },
     receive(data) {
-      if (data && data.ok) { last = data; lastRx = Date.now(); }
+      if (data && data.ok) {
+        last = data; lastRx = Date.now();
+        let lastId = null;
+        try { lastId = localStorage.getItem("alertId", null); } catch (e) { lastId = null; }
+        const a = newAlert(data.json, lastId);
+        if (a) {
+          try { localStorage.setItem("alertId", a.id); } catch (e) { /* segue */ }
+          alertText = a.title;
+          alertUntil = Date.now() + 120000;
+          vibrate(a.segments);
+        }
+      }
       else last = last ? { ok: false, json: last.json } : null;
       this.draw();
     },
@@ -91,6 +123,9 @@ Page(
         text_size: d.fresh ? L.value.size : Math.round(L.value.size * 0.45) });
       texts.deltaAge.setProperty(hmUI.prop.TEXT, d.deltaAge);
       if (texts.date) texts.date.setProperty(hmUI.prop.TEXT, dateText(now));
+      const showAlert = alertText && now.getTime() < alertUntil;
+      if (showAlert) canvas.drawRect({ x1: 0, y1: 0, x2: W, y2: Math.round(H * 0.16), color: C.URGENT });
+      texts.alert.setProperty(hmUI.prop.TEXT, showAlert ? alertText : "");
     },
   })
 );

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -121,6 +122,7 @@ fun AlertSettingsScreen(
     onBack: () -> Unit,
     onIfttt: () -> Unit,
     onPushover: () -> Unit,
+    onWearables: () -> Unit = {},
     viewModel: AlertSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -156,6 +158,7 @@ fun AlertSettingsScreen(
             }),
         onIfttt = onIfttt,
         onPushover = onPushover,
+        onWearables = onWearables,
         onBack = onBack,
         snackbarHostState = snackbar
     )
@@ -179,7 +182,8 @@ internal fun AlertsContent(
     onIfttt: () -> Unit,
     onPushover: () -> Unit,
     onBack: () -> Unit,
-    snackbarHostState: SnackbarHostState? = null
+    snackbarHostState: SnackbarHostState? = null,
+    onWearables: () -> Unit = {}
 ) {
     val unit = ctx.unit
     var showZoneTypesHelp by remember { mutableStateOf(false) }
@@ -385,6 +389,11 @@ internal fun AlertsContent(
         GluSection(stringResource(R.string.settings_integrations_title)) {
             GluCard {
                 RowGroup(buildList {
+                    // Plano 21, F7.1 — pulseiras e relógios, cada alerta com a sua vibração.
+                    add {
+                        NavRow(stringResource(R.string.wearable_alerts_title), onWearables, icon = Icons.Default.Watch,
+                            subtitle = stringResource(R.string.wearable_alerts_nav_subtitle))
+                    }
                     add {
                         NavRow(stringResource(R.string.alertsettings_ifttt_section), onIfttt, icon = Icons.Default.Link,
                             subtitle = stringResource(if (state.iftttEnabled) R.string.common_on else R.string.common_off))

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseWatch, display, chartOps, layout, valueGroup, arrowPoly, arrowOf, zoneColor, usableW,
-  clockText, dateText, STALE_MIN, C,
+  clockText, dateText, STALE_MIN, C, newAlert, vibePlan,
 } from "../utils/glucose.js";
 
 const json = {
@@ -105,4 +105,18 @@ test("hora e data em português", () => {
   const d = new Date(2026, 10, 21, 9, 5);
   assert.equal(clockText(d), "09:05");
   assert.equal(dateText(d), "SAB 21/11");
+});
+
+test("alerta novo vibra uma vez só, e o plano segue os trechos", () => {
+  const j = { ...json, alert: { id: 1764000000000, k: "LOW", t: "Glicose baixa", b: "62 mg/dL", v: [500, 200, 500, 200, 500] } };
+  const a = newAlert(j, null);
+  assert.equal(a.id, "1764000000000");
+  assert.equal(a.title, "Glicose baixa");
+  assert.deepEqual(a.segments, [500, 200, 500, 200, 500]);
+  assert.equal(newAlert(j, "1764000000000"), null);   // já vibrado
+  assert.equal(newAlert(json, null), null);            // sem alerta
+  assert.equal(newAlert({ ...json, alert: { t: "x" } }, null), null);
+  assert.deepEqual(vibePlan(a.segments), [{ at: 0, scene: "DURATION" }, { at: 700, scene: "DURATION" }, { at: 1400, scene: "DURATION" }]);
+  assert.deepEqual(vibePlan([1500]), [{ at: 0, scene: "LONG" }]);
+  assert.deepEqual(vibePlan([]), []);
 });

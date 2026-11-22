@@ -33,6 +33,12 @@ class DebugReceiver : BroadcastReceiver() {
                 ))
                 Log.i("GluViewWear", "DEBUG: token definido para ${intent.getStringExtra("baseUrl")}")
             }
+            "com.gluview.wear.DEBUG_ALERT" -> {
+                val segs = intent.getStringExtra("segments").orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }
+                com.gluview.wear.data.AlertNotifier.show(context, com.gluview.wear.contract.WearAlert(
+                    System.currentTimeMillis(), intent.getStringExtra("kind") ?: "LOW",
+                    intent.getStringExtra("title") ?: "Teste", intent.getStringExtra("body") ?: "", segs))
+            }
             "com.gluview.wear.DEBUG_FETCH" -> {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {

@@ -38,10 +38,17 @@ class XiaomiBandSession(
     private val link: XiaomiLink,
     private val secretKey: ByteArray,
     private val log: (String) -> Unit = {},
-    private val random: SecureRandom = SecureRandom()
+    private val random: SecureRandom = SecureRandom(),
+    /** V1 = Mi Band 8 e afins (0051/0052, AES-CCM); V2 = Mi Band 9 Active (005E/005F, AES-CTR). */
+    private val protocol: Protocol = Protocol.V1
 ) {
+    enum class Protocol { V1, V2 }
+
     private var session: XiaomiSession? = null
     private var index = 1
+    private var seq = 0
+    private var rx = ByteArray(0)
+    private val pending = ArrayDeque<XiaomiV2Frames.Packet>()
 
     sealed interface Result {
         data object Ok : Result
@@ -49,6 +56,14 @@ class XiaomiBandSession(
     }
 
     suspend fun authenticate(apiLevel: Int, phoneName: String, region: String): Result {
+        if (protocol == Protocol.V2) {
+            // XiaomiBleProtocolV2.initializeDevice: abre a sessão antes do aperto de mão.
+            // O pedido de sessão vai com sequência 0 e o contador dos dados também começa em 0.
+            seq = 0
+            link.write(XiaomiV2Frames.TX, XiaomiV2Frames.startSession(0))
+            nextV2(5_000) { it.type == XiaomiV2Frames.TYPE_SESSION }
+                ?: return Result.Failed("a pulseira não abriu a sessão (V2)")
+        }
         val phoneNonce = ByteArray(16).also { random.nextBytes(it) }
         log("Autenticando (passo 1)…")
         sendCommand(XiaomiMessages.nonceCommand(phoneNonce), encrypted = false)?.let { return it }
@@ -72,14 +87,55 @@ class XiaomiBandSession(
     }
 
     /** Notificação na pulseira (vibra conforme o ajuste dela). Precisa de [authenticate] antes. */
-    suspend fun notify(id: Int, title: String, body: String, whenMs: Long): Result {
+    suspend fun notify(id: Int, title: String, body: String, whenMs: Long): Result =
+        sendEncrypted(XiaomiMessages.notificationCommand(id, title, body, whenMs))
+
+    /** Vibra o padrão [segmentsMs] (liga, pausa, …) — "teste de vibração" do protocolo. */
+    suspend fun vibrate(segmentsMs: LongArray): Result =
+        if (segmentsMs.isEmpty()) Result.Ok else sendEncrypted(XiaomiMessages.vibrationCommand(segmentsMs))
+
+    private suspend fun sendEncrypted(command: ByteArray): Result {
         val s = session ?: return Result.Failed("sem autenticação")
+        if (protocol == Protocol.V2) return sendV2(s.encryptV2(command), XiaomiV2Frames.OPCODE_ENCRYPTED) ?: Result.Ok
         val i = index++
-        return sendCommand(s.encrypt(XiaomiMessages.notificationCommand(id, title, body, whenMs), i), encrypted = true, i) ?: Result.Ok
+        return sendCommand(s.encrypt(command, i), encrypted = true, i) ?: Result.Ok
+    }
+
+    // ---- V2
+    /**
+     * Próximo pacote V2 que satisfaz [want]. Os de dados recebem confirmação na hora; os que chegam fora
+     * de hora (ex.: a resposta antes da confirmação) ficam guardados para quem pedir depois.
+     */
+    private suspend fun nextV2(timeoutMs: Long, want: (XiaomiV2Frames.Packet) -> Boolean): XiaomiV2Frames.Packet? {
+        pending.firstOrNull(want)?.let { pending.remove(it); return it }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            while (true) {
+                val (p, used) = XiaomiV2Frames.take(rx)
+                if (used == 0) break
+                rx = rx.copyOfRange(used, rx.size)
+                if (p == null) continue
+                if (p.type == XiaomiV2Frames.TYPE_DATA) link.write(XiaomiV2Frames.TX, XiaomiV2Frames.ack(p.seq))
+                if (want(p)) return p
+                if (p.type == XiaomiV2Frames.TYPE_DATA) pending.addLast(p)
+            }
+            val left = deadline - System.currentTimeMillis()
+            if (left <= 0) return null
+            rx += link.receive(XiaomiV2Frames.RX, left) ?: return null
+        }
+    }
+
+    private suspend fun sendV2(payload: ByteArray, opcode: Int): Result? {
+        val frame = XiaomiV2Frames.data(seq++, opcode, payload)
+        frame.toList().chunked(link.maxWrite).forEach { link.write(XiaomiV2Frames.TX, it.toByteArray()) }
+        // O Gadgetbridge não espera a confirmação; aqui esperamos um pouco só para pegar uma recusa (NACK).
+        val r = nextV2(2_000) { it.type == XiaomiV2Frames.TYPE_ACK || it.type == XiaomiV2Frames.TYPE_NACK }
+        return if (r?.type == XiaomiV2Frames.TYPE_NACK) Result.Failed("a pulseira recusou o pacote (V2)") else null
     }
 
     /** Escreve um comando em 0052 e espera a confirmação; null = ok, senão a falha. */
     private suspend fun sendCommand(payload: ByteArray, encrypted: Boolean, index: Int = 0): Result? {
+        if (protocol == Protocol.V2) return sendV2(payload, if (encrypted) XiaomiV2Frames.OPCODE_ENCRYPTED else XiaomiV2Frames.OPCODE_PLAIN)
         val w = XiaomiV1Frames.COMMAND_WRITE
         if (XiaomiV1Frames.fitsSingle(payload.size, link.maxWrite)) {
             link.write(w, XiaomiV1Frames.single(payload, encrypted, index))
@@ -105,6 +161,10 @@ class XiaomiBandSession(
 
     /** Lê um comando da pulseira em 0051 (curto ou em pedaços), confirma e decifra se preciso. */
     private suspend fun readCommand(): ByteArray? {
+        if (protocol == Protocol.V2) {
+            val p = nextV2(8_000) { it.type == XiaomiV2Frames.TYPE_DATA && it.channel == XiaomiV2Frames.CHANNEL_PROTOBUF } ?: return null
+            return if (p.opcode == XiaomiV2Frames.OPCODE_ENCRYPTED) session?.decryptV2(p.body) else p.body
+        }
         val r = XiaomiV1Frames.COMMAND_READ
         when (val first = link.receive(r, 8_000)?.let(XiaomiV1Frames::parse) ?: return null) {
             is XiaomiV1Frames.Incoming.Command -> {

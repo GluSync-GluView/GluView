@@ -5,7 +5,8 @@
 import { BaseSideService } from "@zeppos/zml/base-side";
 import { parseWatch } from "../utils/glucose";
 
-const WATCH_URL = "http://127.0.0.1:17580/watch.json?minutes=180&step=3";
+// app=zepp: o servidor junta o alerta pendente para o Zepp (F7.1), com a vibração escolhida no celular.
+const WATCH_URL = "http://127.0.0.1:17580/watch.json?minutes=180&step=3&app=zepp";
 
 async function fetchWatch(res) {
   try {

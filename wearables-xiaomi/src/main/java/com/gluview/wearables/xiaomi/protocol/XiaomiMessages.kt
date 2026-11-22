@@ -35,6 +35,8 @@ object XiaomiMessages {
     const val AUTH_CONFIRM = 27
     const val TYPE_NOTIFICATION = 7
     const val NOTIFICATION_SEND = 0
+    const val TYPE_SYSTEM = 2
+    const val VIBRATION_TEST = 59
 
     // ---- escrita (proto2: só o que foi definido)
     class Writer {
@@ -102,6 +104,20 @@ object XiaomiMessages {
         val auth = c.msg(3)
         val dv = auth?.msg(31)
         return Command(c.num(1) ?: -1, c.num(2) ?: -1, dv?.bytes(1), dv?.bytes(2), c.num(100) ?: auth?.num(8))
+    }
+
+    // ---- vibração (XiaomiVibrationManager / wear_system.proto: System.vibrationTestCustom = 41)
+    /** [segmentsMs] = liga, pausa, liga, … em ms; força em % (0–100) nos trechos que vibram. */
+    fun vibrationCommand(segmentsMs: LongArray, strengthPercent: Int = 100): ByteArray {
+        val test = Writer()
+        segmentsMs.forEachIndexed { i, ms ->
+            val on = i % 2 == 0
+            val v = Writer().uint(1, if (on) 1L else 0L).uint(2, ms.coerceIn(0L, 60_000L))
+            if (on) v.uint(3, strengthPercent.coerceIn(1, 100).toLong())
+            test.bytes(1, v.build())
+        }
+        val system = Writer().bytes(41, test.build()).build()
+        return Writer().uint(1, TYPE_SYSTEM.toLong()).uint(2, VIBRATION_TEST.toLong()).bytes(4, system).build()
     }
 
     // ---- notificação (XiaomiNotificationService.onNotification)

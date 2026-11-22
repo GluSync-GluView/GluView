@@ -86,7 +86,9 @@ class MirrorManager @Inject constructor(
     private val preferences: AppPreferences,
     private val repository: GlucoseRepository,
     private val notifications: NotificationHelper,
-    private val appLogger: AppLogger
+    private val appLogger: AppLogger,
+    /** F7.1 — alertas para os apps de relógio que buscam o /watch.json (Garmin, Zepp OS). */
+    private val watchAlerts: com.gluview.app.wearables.hub.WatchAlertBoard
 ) {
     private class Followed(@Volatile var cfg: FollowedPatient, val client: MirrorClient) {
         val state = FollowerState()
@@ -426,6 +428,7 @@ class MirrorManager @Inject constructor(
         override fun thresholds(): MirrorThresholds = runBlocking { meta().thresholds }
         override fun unit(): String = runBlocking { preferences.glucoseUnit.first() }
         override fun version(): String = BuildConfig.VERSION_NAME
+        override fun watchAlert(app: String): Map<String, Any?>? = watchAlerts.forApp(app)
     }
 
     // ---- rede local

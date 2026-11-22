@@ -45,7 +45,7 @@ class AlertManager @Inject constructor(
     private val glucoseRepository: GlucoseRepository,
     private val alertLogDao: AlertLogDao,
     private val iftttClient: IftttWebhookClient,
-    private val wristband: com.gluview.app.wearables.xiaomi.WristbandAlertForwarder,
+    private val wearables: com.gluview.app.wearables.hub.WearablesHub,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
 ) {
@@ -68,6 +68,15 @@ class AlertManager @Inject constructor(
         scope.launch {
             runCatching { preferences.alertSilencedUntilMs.first() }.getOrNull()
                 ?.let { saved -> if (saved > silencedUntil) silencedUntil = saved }
+            if (silencedUntil > System.currentTimeMillis()) wearables.silenceUntil(silencedUntil)
+        }
+        // F7.1 — soneca pedida no pulso (recusou a "chamada" na pulseira): o celular também para de tocar.
+        scope.launch {
+            wearables.snoozeRequests.collect { minutes ->
+                silenceForMinutes(minutes)
+                notificationHelper.cancelAllAlerts()
+                appLogger.usage("ALERT", "Soneca pedida na pulseira", mapOf("min" to minutes))
+            }
         }
     }
 
@@ -76,15 +85,19 @@ class AlertManager @Inject constructor(
         scope.launch { mutex.withLock { evaluateInternal(reading) } }
     }
 
-    fun silenceFor(hours: Int) {
-        silencedUntil = System.currentTimeMillis() + TimeUnit.HOURS.toMillis(hours.toLong())
+    fun silenceFor(hours: Int) = silenceForMinutes(hours * 60)
+
+    fun silenceForMinutes(minutes: Int) {
+        silencedUntil = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(minutes.toLong())
         val until = silencedUntil
+        wearables.silenceUntil(until)
         scope.launch { runCatching { preferences.saveAlertSilencedUntilMs(until) } }
     }
 
     fun isSilenced() = System.currentTimeMillis() < silencedUntil
     fun clearSilence() {
         silencedUntil = 0L
+        wearables.clearSilence()
         scope.launch { runCatching { preferences.saveAlertSilencedUntilMs(0L) } }
     }
 
@@ -181,8 +194,9 @@ class AlertManager @Inject constructor(
 
         if (!fired) return
 
-        // F7.1/F7.4: também no pulso (pulseira Xiaomi nova), em paralelo — nunca atrasa o alerta acima.
-        wristband.forward(title, message)
+        // F7.1: também no pulso/relógio (Huami, Xiaomi, Wear OS, Garmin, Zepp), cada um com a vibração
+        // escolhida para esta zona — em paralelo, nunca atrasa o alerta acima.
+        wearables.alert(zone.wearableKind(), title, message)
 
         if (decision.outcome != DndOutcome.NORMAL) {
             appLogger.usage("ALERT", "Alerta com Não Perturbe ligado",
@@ -241,7 +255,7 @@ class AlertManager @Inject constructor(
             alertType = AlertType.ALARM.name.lowercase()
         ))
         runCatching { iftttClient.triggerPredictive(reading, minutesToHypo) }
-        wristband.forward("Hipo prevista em ~$minutesToHypo min", msg)
+        if (!isSilenced()) wearables.alert(com.gluview.wearables.core.WearableAlertKind.PREDICTIVE, "Hipo prevista em ~$minutesToHypo min", msg)
     }
 
     // ── S16 — Ligação ─────────────────────────────────────────────────────────
@@ -345,4 +359,15 @@ class AlertManager @Inject constructor(
         GlucoseZone.QUICK_DROP  -> "queda rápida"
         GlucoseZone.NORMAL      -> "normal"
     }
+}
+
+/** F7.1 — zona do GluView → tipo de alerta dos vestíveis (mesmos nomes). */
+internal fun GlucoseZone.wearableKind(): com.gluview.wearables.core.WearableAlertKind = when (this) {
+    GlucoseZone.URGENT_LOW -> com.gluview.wearables.core.WearableAlertKind.URGENT_LOW
+    GlucoseZone.LOW -> com.gluview.wearables.core.WearableAlertKind.LOW
+    GlucoseZone.NORMAL -> com.gluview.wearables.core.WearableAlertKind.NORMAL
+    GlucoseZone.HIGH -> com.gluview.wearables.core.WearableAlertKind.HIGH
+    GlucoseZone.URGENT_HIGH -> com.gluview.wearables.core.WearableAlertKind.URGENT_HIGH
+    GlucoseZone.QUICK_DROP -> com.gluview.wearables.core.WearableAlertKind.QUICK_DROP
+    GlucoseZone.STALE -> com.gluview.wearables.core.WearableAlertKind.STALE
 }

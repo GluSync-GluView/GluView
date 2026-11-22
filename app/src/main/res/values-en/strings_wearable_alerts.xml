@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wearable_alerts_title">Wrist and watch alerts</string>
+    <string name="wearable_alerts_nav_subtitle">Vibration of each alert on your band or watch</string>
+    <string name="wearable_alerts_intro">GluView alerts can also vibrate on your band or watch, each with the pattern you choose. It is always an extra warning: the phone alert stays the same.</string>
+    <string name="wearable_alerts_snooze_section">Snooze from the wrist</string>
+    <string name="wearable_alerts_snooze_desc">On Mi Band and Amazfit, the \"Call\" alert rings until you decline it. Declining silences alerts (on the phone too) for this long.</string>
+    <string name="wearable_alerts_minutes">%1$d min</string>
+    <string name="wearable_alerts_ready">Paired</string>
+    <string name="wearable_alerts_not_paired">Not paired</string>
+    <string name="wearable_alerts_enabled">Send alerts to this device</string>
+    <string name="wearable_alerts_enabled_desc">Choose below which alerts go and how each one vibrates.</string>
+    <string name="wearable_alerts_test">Test</string>
+    <string name="wearable_alerts_find">Find</string>
+    <string name="wearable_alerts_test_title">GluView: test</string>
+    <string name="wearable_alerts_test_body">Test alert with the low glucose vibration.</string>
+    <string name="wearable_alerts_test_ok">Test alert delivered.</string>
+    <string name="wearable_alerts_find_ok">The band is vibrating.</string>
+    <string name="wearable_alerts_test_fail">It did not arrive. Check that the device is nearby, on and paired.</string>
+
+    <string name="wearable_family_huami">Mi Band 4 to 7 and Amazfit</string>
+    <string name="wearable_family_huami_hint">Uses the pairing from the Mi Band screen. The only one with \"Call\": it rings until you decline it on the wrist.</string>
+    <string name="wearable_family_xiaomi">Mi Band 8 and Mi Band 9 Active</string>
+    <string name="wearable_family_xiaomi_hint">Uses the new Xiaomi pairing on the Mi Band screen. Arrives as a notification and vibrates with the chosen pattern.</string>
+    <string name="wearable_family_wearos">Wear OS watch</string>
+    <string name="wearable_family_wearos_hint">Galaxy Watch, Pixel Watch and others with the GluView app installed on the watch.</string>
+    <string name="wearable_family_garmin">Garmin</string>
+    <string name="wearable_family_garmin_hint">Vibrates while the GluView app is open on the watch (it fetches data every minute).</string>
+    <string name="wearable_family_zepp">Amazfit with Zepp OS</string>
+    <string name="wearable_family_zepp_hint">Vibrates while the GluView app is open on the watch (it fetches data every minute).</string>
+
+    <string name="wearable_kind_urgent_low">Urgent low</string>
+    <string name="wearable_kind_low">Low glucose</string>
+    <string name="wearable_kind_high">High glucose</string>
+    <string name="wearable_kind_urgent_high">Urgent high</string>
+    <string name="wearable_kind_quick_drop">Fast drop</string>
+    <string name="wearable_kind_stale">No sensor signal</string>
+    <string name="wearable_kind_predictive">Predicted low</string>
+
+    <string name="vibration_off">No vibration</string>
+    <string name="vibration_short">Short</string>
+    <string name="vibration_double">Double</string>
+    <string name="vibration_triple">Triple</string>
+    <string name="vibration_long">Long</string>
+    <string name="vibration_insistent">Insistent</string>
+    <string name="vibration_call">Call</string>
+</resources>

@@ -1,4 +1,5 @@
 using Toybox.Application;
+using Toybox.Attention;
 using Toybox.Application.Storage;
 using Toybox.WatchUi;
 using Toybox.Graphics;
@@ -17,6 +18,10 @@ using Toybox.Timer;
 // Histórico da auditoria/testes de 21/11/2026: busca periódica, "Sem sinal" com leitura de 20 min ou
 // mais ou falha na busca, idade sem estouro de 32 bits, seta desenhada (a fonte não tem →↗↘) e
 // layout pela altura das fontes (no Venu 3 as linhas se sobrepunham).
+//
+// Plano 21, F7.1 (22/11/2026): pede `app=garmin`; quando o /watch.json traz um `alert` de id novo, vibra no
+// padrão escolhido no celular (`v` = liga, pausa, … ms; até 8 trechos, limite do Attention.vibrate) e mostra
+// a faixa vermelha com o título por 2 min. O id visto fica salvo: reabrir o app não vibra de novo.
 
 class GluViewView extends WatchUi.View {
     var _json = null;      // último /watch.json (Dictionary)
@@ -24,11 +29,16 @@ class GluViewView extends WatchUi.View {
     var _linkOk = false;   // a última busca deu certo
     var _style = 0;
     var _timer = null;
+    var _alertId = null;     // id do último alerta já vibrado (texto)
+    var _alertText = null;
+    var _alertUntil = 0;     // s do relógio até quando a faixa aparece
 
     function initialize() {
         View.initialize();
         var s = Storage.getValue("style");
         _style = (s instanceof Lang.Number) ? s % GluDraw.STYLE_COUNT : 0;
+        var a = Storage.getValue("alertId");
+        _alertId = (a instanceof Lang.String) ? a : null;
     }
 
     function onLayout(dc as Graphics.Dc) as Void { }
@@ -53,10 +63,47 @@ class GluViewView extends WatchUi.View {
 
     function onUpdate(dc as Graphics.Dc) as Void {
         GluDraw.drawFace(dc, _style, _json, _rxSec, _linkOk);
+        if (_alertText != null && Time.now().value() < _alertUntil) {
+            var w = dc.getWidth();
+            var h = dc.getHeight();
+            var bh = h * 18 / 100;
+            dc.setColor(GluDraw.C_HIPO, GluDraw.C_HIPO);
+            dc.fillRectangle(0, 0, w, bh);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, bh * 62 / 100, Graphics.FONT_XTINY, _alertText, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+    }
+
+    // F7.1: alerta novo no /watch.json → vibra no padrão escolhido e mostra a faixa.
+    function handleAlert(data as Lang.Dictionary) as Void {
+        var a = data["alert"];
+        if (!(a instanceof Lang.Dictionary) || a["id"] == null) { return; }
+        var id = a["id"].toString();
+        if (id.equals(_alertId)) { return; }
+        _alertId = id;
+        Storage.setValue("alertId", id);
+        var t = a["t"];
+        _alertText = (t instanceof Lang.String) ? t : "GluView";
+        _alertUntil = Time.now().value() + 120;
+        System.println("GluView alerta " + id + " " + _alertText);
+        vibrate(a["v"]);
+    }
+
+    function vibrate(v) as Void {
+        if (!(Attention has :vibrate) || !(v instanceof Lang.Array) || v.size() == 0) { return; }
+        var n = v.size() < 8 ? v.size() : 8;
+        var profiles = [];
+        for (var i = 0; i < n; i++) {
+            var ms = GluDraw.num(v[i]);
+            if (ms == null) { ms = 0; }
+            profiles.add(new Attention.VibeProfile(i % 2 == 0 ? 100 : 0, ms));
+        }
+        Attention.vibrate(profiles);
+        System.println("GluView vibra " + n + " trechos");
     }
 
     function requestGlucose() as Void {
-        var params = { "minutes" => "180", "step" => "3" };
+        var params = { "minutes" => "180", "step" => "3", "app" => "garmin" };
         var options = { :method => Communications.HTTP_REQUEST_METHOD_GET, :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON };
         Communications.makeWebRequest(GluDraw.URL, params, options, method(:onReceive));
     }
@@ -67,6 +114,7 @@ class GluViewView extends WatchUi.View {
             _json = data;
             _rxSec = Time.now().value();
             _linkOk = true;
+            handleAlert(data);
         } else {
             // Falha: o valor some ("Sem sinal"); o histórico fica no gráfico, cada ponto na sua hora.
             _linkOk = false;

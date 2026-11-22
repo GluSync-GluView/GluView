@@ -146,6 +146,20 @@ class LocalHttpServerTest {
         assertTrue(pts[0] > pts[pts.size - 2])
     }
 
+    @Test fun watchJsonLevaOAlertaSoParaQuemPede() {
+        val comAlerta = object : LocalHttpServer.DataSource by data {
+            override fun watchAlert(app: String) = if (app == "garmin")
+                mapOf("id" to 7L, "k" to "LOW", "t" to "Glicose baixa", "b" to "62 mg/dL", "v" to listOf(500L, 200L, 500L)) else null
+        }
+        val s = LocalHttpServer(0, true, null, comAlerta) { now }
+        val g = Json.parse(s.route("GET", "/watch.json?app=garmin", emptyMap()).body) as Map<*, *>
+        val a = g["alert"] as Map<*, *>
+        assertEquals(7L, a["id"]); assertEquals("Glicose baixa", a["t"])
+        assertEquals(listOf(500L, 200L, 500L), (a["v"] as List<*>).map { (it as Number).toLong() })
+        assertTrue("alert" !in (Json.parse(s.route("GET", "/watch.json?app=zepp", emptyMap()).body) as Map<*, *>))
+        assertTrue("alert" !in (Json.parse(s.route("GET", "/watch.json", emptyMap()).body) as Map<*, *>))
+    }
+
     @Test fun watchJsonSemLeituraEEmMmol() {
         val vazio = object : LocalHttpServer.DataSource {
             override fun readings(count: Int, sinceMs: Long?) = emptyList<MirrorReading>()

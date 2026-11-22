@@ -54,4 +54,7 @@ object WearPaths {
 
     /** celular → relógio: [WearDayInfo] — resumo do dia, próximo lembrete, avisos e cadastros. */
     const val DAY_INFO = "/gluview/day"
+
+    /** celular → relógio: [WearAlert] — alerta com a vibração escolhida para o tipo (plano 21, F7.1; mensagem). */
+    const val ALERT = "/gluview/alert"
 }

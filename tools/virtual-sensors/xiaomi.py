@@ -1,4 +1,4 @@
-"""Pulseira Xiaomi nova virtual (Mi Band 8 e afins, enquadramento BLE V1 cifrado) — plano 21, F7.4 — Bumble + netsim.
+"""Pulseira Xiaomi nova virtual (Mi Band 8 = BLE V1, Mi Band 9 Active = BLE V2) — plano 21, F7.4 — Bumble + netsim.
 
 Lado da PULSEIRA, escrito aqui de forma independente do código Kotlin do app (que vem do Gadgetbridge):
   serviço FE95; o app escreve em 0052 (a pulseira confirma em 0052) e a pulseira manda em 0051 (o app
@@ -14,8 +14,14 @@ Lado da PULSEIRA, escrito aqui de forma independente do código Kotlin do app (q
   (0..15 decifra do app, 16..31 cifra do app, 32..35 nonce de decifra, 36..39 nonce de cifra).
   Depois: comandos cifrados AES-CCM (tag 4), nonce = nonceCifra‖0‖índice. Notificação = tipo 7 subtipo 0.
 
+BLE V2 (`--proto v2`, Mi Band 9 Active): o app escreve em 005F e a pulseira notifica em 005E. Pacote =
+  A5 A5, tipo (0 nack, 1 ack, 2 sessão, 3 dados), sequência, u16 tamanho, u16 CRC-16/ARC do conteúdo, conteúdo.
+  Sessão: o app pede (opcode 1), a pulseira responde (opcode 2). Dados = canal (1 protobuf) + opcode
+  (1 claro, 2 cifrado AES-CTR com IV = chave de cifra do app) + Command protobuf; quem recebe dados confirma.
+Vibração personalizada (os dois): Command tipo 2 subtipo 59, System(4).vibrationTestCustom(41).vibration*.
+
 Chave de TESTE (`--key`). Cenários (control-xiaomi.txt): `wrongkey` (a pulseira passa a usar outra chave),
-`refuse` (recusa a confirmação), `drop` (cai depois da autenticação). Só dados sintéticos. GPLv3.
+`refuse` (recusa a confirmação), `drop` (cai depois da autenticação), `nack` (V2: recusa o próximo pacote de dados). Só dados sintéticos. GPLv3.
 """
 from __future__ import annotations
 
@@ -28,6 +34,7 @@ import struct
 
 from bumble.att import Attribute
 from bumble.gatt import Characteristic, CharacteristicValue, Service
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 from base import hexs, log, run_peripheral, setup_logging
@@ -39,6 +46,28 @@ CMD_READ = "00000051-0000-1000-8000-00805F9B34FB"    # pulseira → app
 CMD_WRITE = "00000052-0000-1000-8000-00805F9B34FB"   # app → pulseira
 ACT = "00000053-0000-1000-8000-00805F9B34FB"
 UPL = "00000055-0000-1000-8000-00805F9B34FB"
+V2_RX = "0000005E-0000-1000-8000-00805F9B34FB"      # pulseira → app (notifica)
+V2_TX = "0000005F-0000-1000-8000-00805F9B34FB"      # app → pulseira (escreve)
+PRE = bytes([0xA5, 0xA5])
+
+
+def crc16_arc(data: bytes) -> int:
+    """CRC-16/ARC na forma refletida clássica (polinômio 0xA001)."""
+    crc = 0
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+    return crc
+
+
+def v2_frame(kind: int, seq: int, payload: bytes) -> bytes:
+    return PRE + bytes([kind & 0xF, seq & 0xFF]) + struct.pack("<HH", len(payload), crc16_arc(payload)) + payload
+
+
+def aes_ctr(key: bytes, data: bytes) -> bytes:
+    c = Cipher(algorithms.AES(key), modes.CTR(key)).decryptor()
+    return c.update(data) + c.finalize()
 
 
 # ---- protobuf mínimo
@@ -119,8 +148,17 @@ class Band:
         self.refuse = False
         self.drop = False
         self.notifications = 0
+        self.vibrations = 0
+        self.v2 = args.proto == "v2"
+        self.rx = b""
+        self.band_seq = 0
+        self.nack = False
 
     def services(self) -> list[Service]:
+        if self.v2:
+            self.v2rx = Characteristic(V2_RX, P.NOTIFY | P.READ, RW, b"")
+            self.v2tx = Characteristic(V2_TX, P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW, CharacteristicValue(write=self.on_v2_write))
+            return [Service(SVC, [self.v2rx, self.v2tx])]
         self.read = Characteristic(CMD_READ, P.NOTIFY | P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW,
                                    CharacteristicValue(write=self.on_read_write))
         self.write = Characteristic(CMD_WRITE, P.NOTIFY | P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW,
@@ -132,6 +170,54 @@ class Band:
     async def notify(self, ch, value: bytes) -> None:
         await self.device.notify_subscribers(ch, value)
         await asyncio.sleep(0.01)
+
+    # ---- V2: tudo chega em 005F, em pedaços do tamanho do MTU
+    def on_v2_write(self, _conn, value: bytes) -> None:
+        self.rx += bytes(value)
+        while len(self.rx) >= 8:
+            if self.rx[:2] != PRE:
+                i = self.rx.find(PRE[:1], 1)
+                self.rx = self.rx[i:] if i > 0 else b""
+                continue
+            kind, seq = self.rx[2] & 0xF, self.rx[3]
+            n, crc = struct.unpack_from("<HH", self.rx, 4)
+            if len(self.rx) < 8 + n:
+                return
+            payload, self.rx = self.rx[8:8 + n], self.rx[8 + n:]
+            if crc16_arc(payload) != crc:
+                log.info("APP(V2) pacote com CRC ERRADO (seq %d): descartado", seq)
+                continue
+            asyncio.get_event_loop().create_task(self.handle_v2(kind, seq, payload))
+
+    async def handle_v2(self, kind: int, seq: int, payload: bytes) -> None:
+        if kind == 2:
+            log.info("APP(V2) pede sessão: %s", hexs(payload))
+            self.band_seq = 0   # sessão nova: a numeração da pulseira recomeça
+            if payload[:1] == bytes([1]):
+                await self.notify(self.v2rx, v2_frame(2, 0, bytes([2, 1, 3, 0, 1, 0, 0, 2, 2, 0, 0, 0xFC])))
+        elif kind == 1:
+            log.info("APP(V2) confirma o pacote %d", seq)
+            self.app_acks.put_nowait(seq)
+        elif kind == 0:
+            log.info("APP(V2) recusou o pacote %d", seq)
+        elif kind == 3:
+            if self.nack:
+                self.nack = False
+                log.info("Recusando (NACK) o pacote %d do app", seq)
+                await self.notify(self.v2rx, v2_frame(0, seq, b""))
+                return
+            await self.notify(self.v2rx, v2_frame(1, seq, b""))
+            channel, opcode, body = payload[0] & 0xF, payload[1], payload[2:]
+            log.info("APP(V2) -> dados seq %d canal %d %s", seq, channel, "cifrado" if opcode == 2 else "claro")
+            if opcode == 2:
+                if not self.keys:
+                    log.info("Comando cifrado ANTES da autenticação: recusado")
+                    return
+                body = aes_ctr(self.keys[16:32], body)
+            try:
+                await self.process(body)
+            except Exception as e:  # noqa: BLE001
+                log.info("Comando ilegível (%s): chave/cifra errada?", e)
 
     # ---- confirmações do app chegam em 0051
     def on_read_write(self, _conn, value: bytes) -> None:
@@ -187,13 +273,22 @@ class Band:
             return None
 
     async def send_command(self, payload: bytes) -> None:
-        """Pulseira → app em 0051 (claro); espera a confirmação 00 00 03 00 do app."""
+        """Pulseira → app em claro (V1: 0051, espera 00 00 03 00; V2: 005E, espera o ACK do pacote)."""
         while not self.app_acks.empty():
             self.app_acks.get_nowait()
-        await self.notify(self.read, bytes([0, 0, 2, 2]) + payload)
+        if self.v2:
+            seq, self.band_seq = self.band_seq, (self.band_seq + 1) & 0xFF
+            frame = v2_frame(3, seq, bytes([1, 1]) + payload)
+            mtu = 20
+            for conn in self.device.connections.values():
+                mtu = max(20, conn.att_mtu - 3)
+            for i in range(0, len(frame), mtu):
+                await self.notify(self.v2rx, frame[i:i + mtu])
+        else:
+            await self.notify(self.read, bytes([0, 0, 2, 2]) + payload)
         try:
             ack = await asyncio.wait_for(self.app_acks.get(), 5)
-            log.info("Confirmação do app: %s", hexs(ack))
+            log.info("Confirmação do app: %s", f"pacote {ack}" if isinstance(ack, int) else hexs(ack))
         except asyncio.TimeoutError:
             log.info("App NÃO confirmou o comando da pulseira")
 
@@ -229,6 +324,15 @@ class Band:
                 self.drop = False
                 for conn in list(self.device.connections.values()):
                     await conn.disconnect()
+        elif ctype == 2 and sub == 59:
+            test = pb_parse(pb_parse(c[4][0])[41][0])
+            parts = []
+            for raw in test.get(1, []):
+                v = pb_parse(raw)
+                on, ms = v.get(1, [0])[0], v.get(2, [0])[0]
+                parts.append(f"{'vibra' if on else 'pausa'} {ms} ms" + (f" ({v[3][0]}%)" if on and 3 in v else ""))
+            self.vibrations += 1
+            log.info("VIBRAÇÃO personalizada: %s", ", ".join(parts))
         elif ctype == 7 and sub == 0:
             n3 = pb_parse(pb_parse(pb_parse(c[9][0])[3][0])[1][0])
             self.notifications += 1
@@ -253,16 +357,23 @@ class Band:
                     self.refuse = True
                 elif c == "drop":
                     self.drop = True
+                elif c == "nack":
+                    self.nack = True
 
 
 async def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--address", default="F3:22:33:44:77:08")
-    ap.add_argument("--name", default="Smart Band 8 S")  # nome curto: o anúncio tem de caber em 31 bytes
+    ap.add_argument("--proto", choices=["v1", "v2"], default="v1", help="v1 = Mi Band 8; v2 = Mi Band 9 Active")
+    ap.add_argument("--address", default=None)
+    ap.add_argument("--name", default=None)  # nome curto: o anúncio tem de caber em 31 bytes
     ap.add_argument("--key", default="00112233445566778899aabbccddeeff", help="chave de TESTE (16 bytes em hex)")
     ap.add_argument("--mtu", type=int, default=247)
     ap.add_argument("--transport", default="android-netsim")
     args = ap.parse_args()
+    if args.address is None:
+        args.address = "F3:22:33:44:77:09" if args.proto == "v2" else "F3:22:33:44:77:08"
+    if args.name is None:
+        args.name = "Band 9 Active S" if args.proto == "v2" else "Smart Band 8 S"
     setup_logging("xiaomi")
     band = Band(args)
 

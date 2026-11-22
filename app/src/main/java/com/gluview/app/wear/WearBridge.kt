@@ -148,6 +148,22 @@ class WearBridge @Inject constructor(
     }
 
     /** (id, nome) dos relógios conectados que anunciam o GluView; null se a API não existe aqui. */
+    /**
+     * Plano 21, F7.1 — alerta no relógio, com a vibração escolhida (mensagem: chega na hora ou não chega;
+     * alerta velho entregue depois engana). true = entregue a pelo menos um relógio com o app.
+     */
+    suspend fun sendAlert(alert: com.gluview.wear.contract.WearAlert): Boolean = runCatching {
+        val nodes = watchNodesWithApp().orEmpty()
+        if (nodes.isEmpty()) return false
+        val bytes = com.gluview.wear.contract.WearAlert.encode(alert)
+        var ok = false
+        nodes.forEach { (id, _) ->
+            ok = runCatching { withTimeoutOrNull(10_000) { messageClient.sendMessage(id, WearPaths.ALERT, bytes).await() } != null }
+                .getOrDefault(false) || ok
+        }
+        ok
+    }.getOrDefault(false)
+
     private suspend fun watchNodesWithApp(): List<Pair<String, String>>? = runCatching {
         val info = withTimeoutOrNull(5_000) {
             capabilityClient.getCapability(WearPaths.CAPABILITY, CapabilityClient.FILTER_REACHABLE).await()

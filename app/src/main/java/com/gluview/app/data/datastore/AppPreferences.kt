@@ -345,6 +345,10 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         val KEY_XIAOMI_MAC            = stringPreferencesKey("xiaomi_band_mac")
         val KEY_XIAOMI_KEY            = stringPreferencesKey("xiaomi_band_key")
         val KEY_XIAOMI_ALERTS         = booleanPreferencesKey("xiaomi_band_alerts")
+        /** F7.1: soneca (min) quando a pessoa a pede na pulseira/relógio (ex.: recusa a "chamada"). */
+        val KEY_WEARABLE_SNOOZE_MIN   = intPreferencesKey("wearable_snooze_min")
+        /** F7.1: ajustes de alerta de cada tipo de aparelho (WearableAlertSettings.encode). */
+        fun keyWearableAlerts(family: String) = stringPreferencesKey("wearable_alerts_$family")
         val KEY_MIBAND_AUTO_SEND      = booleanPreferencesKey("miband_auto_send")
         // Agendamento do envio automático — período especial (ex.: madrugada) com intervalo
         // próprio; fora dele usa o intervalo padrão. Horários em minutos desde 00:00 (permite
@@ -787,6 +791,9 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     val xiaomiBandMac: Flow<String>         = dataStore.data.safeMap("") { it[KEY_XIAOMI_MAC] ?: "" }
     val xiaomiBandKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_XIAOMI_KEY] ?: "" }
     val xiaomiAlertsEnabled: Flow<Boolean>  = dataStore.data.safeMap(false) { it[KEY_XIAOMI_ALERTS] ?: false }
+    val wearableSnoozeMinutes: Flow<Int>    = dataStore.data.safeMap(30) { it[KEY_WEARABLE_SNOOZE_MIN] ?: 30 }
+    /** Texto salvo dos ajustes de alerta do tipo de aparelho [family]; null = nunca configurado. */
+    fun wearableAlerts(family: String): Flow<String?> = dataStore.data.safeMap(null) { it[keyWearableAlerts(family)] }
     val miBandAutoSend: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_MIBAND_AUTO_SEND] ?: false }
     // Agendamento: dia = intervalo curto (padrão 5 min); noite = intervalo mais espaçado
     // (padrão 30 min, das 22h às 7h) — configurável pelo usuário na tela do Mi Band.
@@ -1016,6 +1023,9 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     }
 
     suspend fun saveXiaomiAlerts(enabled: Boolean) = dataStore.edit { it[KEY_XIAOMI_ALERTS] = enabled }
+
+    suspend fun saveWearableAlerts(family: String, encoded: String) = dataStore.edit { it[keyWearableAlerts(family)] = encoded }
+    suspend fun saveWearableSnoozeMinutes(minutes: Int) = dataStore.edit { it[KEY_WEARABLE_SNOOZE_MIN] = minutes.coerceIn(5, 240) }
 
     suspend fun saveMiBandAutoSend(enabled: Boolean) = dataStore.edit {
         it[KEY_MIBAND_AUTO_SEND] = enabled

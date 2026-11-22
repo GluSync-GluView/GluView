@@ -75,6 +75,8 @@ sealed class Screen(val route: String) {
     data object InsulinPump   : Screen("insulin_pump")
     // F8 — Mi Band (pareamento + teste de conexão/autenticação Huami)
     data object MiBand        : Screen("miband")
+    // Plano 21, F7.1 — alertas no pulso/relógio com a vibração de cada alerta configurável
+    data object WearableAlerts : Screen("wearable_alerts")
     // F5 — API Keys (integração)
     data object ApiKeys       : Screen("api_keys")
     // Integrações externas (Dexcom Share, LibreLinkUp)

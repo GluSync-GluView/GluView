@@ -15,7 +15,7 @@ class WearableCommandQueue {
     fun enqueue(cmd: WearableCommand) {
         when (cmd) {
             is WearableCommand.SendGlucose -> latestGlucose = cmd
-            is WearableCommand.Vibrate, is WearableCommand.SnoozeAlerts -> high.addLast(cmd)
+            is WearableCommand.Vibrate, is WearableCommand.SnoozeAlerts, is WearableCommand.Alert, is WearableCommand.Find -> high.addLast(cmd)
             else -> normal.addLast(cmd)
         }
     }

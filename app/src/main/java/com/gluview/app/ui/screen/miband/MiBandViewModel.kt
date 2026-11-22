@@ -20,6 +20,7 @@ enum class MiBandOutcome { CONNECTED, SENT, FAILED, TIMEOUT }
 @HiltViewModel
 class MiBandViewModel @Inject constructor(
     private val xiaomiClient: com.gluview.app.wearables.xiaomi.XiaomiBandClient,
+    private val wearables: com.gluview.app.wearables.hub.WearablesHub,
     private val client: MiBandClient,
     private val pusher: MiBandWatchFacePusher,
     private val prefs: AppPreferences
@@ -87,7 +88,7 @@ class MiBandViewModel @Inject constructor(
             _model.value = prefs.miBandModel.first()
             _xiaomiMac.value = prefs.xiaomiBandMac.first()
             _xiaomiKey.value = prefs.xiaomiBandKey.first()
-            _xiaomiAlerts.value = prefs.xiaomiAlertsEnabled.first()
+            _xiaomiAlerts.value = wearables.currentSettings(com.gluview.app.wearables.hub.WearableFamily.XIAOMI).enabled
             _autoSend.value = prefs.miBandAutoSend.first()
             _updateEveryReading.value = prefs.miBandUpdateEveryReading.first()
             _dayIntervalMin.value = prefs.miBandDayIntervalMin.first().toString()
@@ -103,7 +104,12 @@ class MiBandViewModel @Inject constructor(
     fun onXiaomiKey(v: String) { _xiaomiKey.value = v }
     fun onXiaomiAlerts(on: Boolean) {
         _xiaomiAlerts.value = on
-        viewModelScope.launch { prefs.saveXiaomiBand(_xiaomiMac.value, _xiaomiKey.value); prefs.saveXiaomiAlerts(on) }
+        viewModelScope.launch {
+            prefs.saveXiaomiBand(_xiaomiMac.value, _xiaomiKey.value)
+            // F7.1: o liga/desliga daqui é o mesmo da tela "Alertas no pulso e no relógio".
+            val f = com.gluview.app.wearables.hub.WearableFamily.XIAOMI
+            wearables.save(f, wearables.currentSettings(f).copy(enabled = on))
+        }
     }
     fun sendXiaomiTest(title: String, body: String) {
         if (_xiaomiRunning.value) return

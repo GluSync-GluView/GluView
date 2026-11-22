@@ -80,4 +80,43 @@ class XiaomiProtocolTest {
         assertTrue(!inc.encrypted); assertArrayEquals(hex("aabb"), inc.payload)
         assertTrue(XiaomiV1Frames.fitsSingle(238, 244)); assertTrue(!XiaomiV1Frames.fitsSingle(239, 244))
     }
+
+    // ---- V2 (Mi Band 9 Active): vetores do simulador Python (crc16 refletido 0xA001, cryptography AES-CTR)
+    @Test fun crcDoV2EhCrc16Arc() {
+        assertEquals(0xbb3d, XiaomiV2Frames.checksum("123456789".toByteArray()))
+    }
+
+    @Test fun enquadramentoV2() {
+        assertArrayEquals(hex("a5a5020016001d4d0101030001000002020000fc03020020000402001027"), XiaomiV2Frames.startSession(0))
+        val f = XiaomiV2Frames.data(7, XiaomiV2Frames.OPCODE_ENCRYPTED, "abc".toByteArray())
+        assertArrayEquals(hex("a5a50307050004ef0102616263"), f)
+        // Lixo antes, pacote completo, pedaço incompleto depois.
+        val buf = hex("0011") + f + f.copyOf(5)
+        val (junk, skip) = XiaomiV2Frames.take(buf)
+        assertNull(junk); assertEquals(2, skip)
+        val (p, used) = XiaomiV2Frames.take(buf.copyOfRange(2, buf.size))
+        assertEquals(f.size, used)
+        assertEquals(XiaomiV2Frames.TYPE_DATA, p!!.type); assertEquals(7, p.seq)
+        assertEquals(1, p.channel); assertEquals(2, p.opcode); assertArrayEquals("abc".toByteArray(), p.body)
+        assertEquals(0, XiaomiV2Frames.take(f.copyOf(5)).second)
+        // CRC errado: descarta o pacote inteiro.
+        val bad = f.copyOf().also { it[it.size - 1] = 0 }
+        assertEquals(null to bad.size, XiaomiV2Frames.take(bad).let { it.first to it.second })
+    }
+
+    @Test fun ctrDoV2IgualAoPython() {
+        val s = XiaomiSession.fromWatch(secret, phone, watch, watchHmac)!!
+        assertArrayEquals(hex("9fab7913b10bc365d02252c1a604341f57"), s.encryptV2("GluView 123 mg/dL".toByteArray()))
+        assertEquals("GluView 123 mg/dL", String(s.decryptV2(hex("7f6768fafabf7deb1352a901d8342ffd79"))))
+    }
+
+    @Test fun vibracaoPersonalizada() {
+        val c = XiaomiMessages.parse(XiaomiMessages.vibrationCommand(longArrayOf(400, 250, 400), 80))
+        assertEquals(2L, c[1]!!.first()); assertEquals(59L, c[2]!!.first())
+        val test = XiaomiMessages.parse(XiaomiMessages.parse(c[4]!!.first() as ByteArray)[41]!!.first() as ByteArray)
+        val parts = test[1]!!.map { XiaomiMessages.parse(it as ByteArray) }
+        assertEquals(3, parts.size)
+        assertEquals(1L, parts[0][1]!!.first()); assertEquals(400L, parts[0][2]!!.first()); assertEquals(80L, parts[0][3]!!.first())
+        assertEquals(0L, parts[1][1]!!.first()); assertEquals(250L, parts[1][2]!!.first()); assertNull(parts[1][3])
+    }
 }

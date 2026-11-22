@@ -144,6 +144,15 @@ class XiaomiSession private constructor(
         }
     }
 
+    /** V2 (Mi Band 9 Active): AES-CTR com IV = chave (encryptV2 do Gadgetbridge). */
+    fun encryptV2(payload: ByteArray): ByteArray = ctr(encryptionKey, payload)
+    fun decryptV2(payload: ByteArray): ByteArray = ctr(decryptionKey, payload)
+    private fun ctr(key: ByteArray, data: ByteArray): ByteArray =
+        javax.crypto.Cipher.getInstance("AES/CTR/NoPadding").run {
+            init(javax.crypto.Cipher.ENCRYPT_MODE, javax.crypto.spec.SecretKeySpec(key, "AES"), javax.crypto.spec.IvParameterSpec(key))
+            doFinal(data)
+        }
+
     /** encryptedNonces do AppConfirm. */
     fun confirmNonces(phoneNonce: ByteArray, watchNonce: ByteArray): ByteArray = hmacSha256(encryptionKey, phoneNonce, watchNonce)
 }

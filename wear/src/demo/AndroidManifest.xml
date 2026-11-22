@@ -8,6 +8,7 @@
             <intent-filter>
                 <action android:name="com.gluview.wear.DEBUG_SET_TOKEN" />
                 <action android:name="com.gluview.wear.DEBUG_FETCH" />
+                <action android:name="com.gluview.wear.DEBUG_ALERT" />
             </intent-filter>
         </receiver>
     </application>

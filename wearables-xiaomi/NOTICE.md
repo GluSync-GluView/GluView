@@ -42,10 +42,11 @@ AGPL original (Copyright (C) 2023-2024 José Rebelo, Yoran Vulker e colaboradore
 
 | Arquivo | Origem no Gadgetbridge |
 |---|---|
-| `XiaomiCrypto.kt` | `service/devices/xiaomi/XiaomiAuthService.java` (derivação "miwear-auth", AES-CCM de 32 bits) |
-| `XiaomiMessages.kt` | `GBProtobufGenerator/src/main/proto/xiaomi.proto`, `xiaomi/wear_account.proto`, `xiaomi/wear_notification.proto`, `XiaomiAuthService.java`, `services/XiaomiNotificationService.java` |
+| `XiaomiCrypto.kt` | `service/devices/xiaomi/XiaomiAuthService.java` (derivação "miwear-auth", AES-CCM de 32 bits; AES-CTR do V2) |
+| `XiaomiMessages.kt` | `GBProtobufGenerator/src/main/proto/xiaomi.proto`, `xiaomi/wear_account.proto`, `xiaomi/wear_notification.proto`, `xiaomi/wear_system.proto` (teste de vibração), `XiaomiAuthService.java`, `services/XiaomiNotificationService.java` |
 | `XiaomiV1Frames.kt` | `service/devices/xiaomi/XiaomiCharacteristicV1.java`, `XiaomiUuids.java` |
-| `XiaomiBandSession.kt` | `XiaomiBleProtocolV1.java`, `XiaomiCharacteristicV1.java`, `XiaomiAuthService.java` |
+| `XiaomiBandSession.kt` | `XiaomiBleProtocolV1.java`, `XiaomiCharacteristicV1.java`, `XiaomiBleProtocolV2.java`, `XiaomiAuthService.java` |
+| `XiaomiV2Frames.kt` | `service/devices/xiaomi/XiaomiSppPacketV2.java`, `XiaomiBleProtocolV2.java`, `XiaomiUuids.java` (Mi Band 9 Active, BLE V2) |
 
 Os testes (`src/test/.../protocol/XiaomiProtocolTest.kt`) usam vetores gerados de forma independente em
 Python; a pulseira virtual (`tools/virtual-sensors/xiaomi.py`, GPLv3) implementa o lado da pulseira.

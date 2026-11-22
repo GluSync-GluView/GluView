@@ -1978,8 +1978,8 @@
     </string-array>
     <string name="miband_model_label">Band model</string>
     <string name="miband_model_help">Mi Band 6 was tested with a real band; the other models only with the virtual band.</string>
-    <string name="xiaomi_band_section">Mi Band 8 (new Xiaomi): alerts on the wrist</string>
-    <string name="xiaomi_band_desc">GluView alerts (low, high, urgent and predicted low) reach the band as a notification and it vibrates. The authentication key comes from Mi Fitness or Gadgetbridge. Tested only with the virtual band.</string>
+    <string name="xiaomi_band_section">Mi Band 8 and 9 Active (new Xiaomi): alerts on the wrist</string>
+    <string name="xiaomi_band_desc">GluView alerts (low, high, urgent and predicted low) reach the band as a notification and it vibrates with the pattern chosen in Alerts → Wrist and watch alerts. The authentication key comes from Mi Fitness or Gadgetbridge. Tested only with the virtual band.</string>
     <string name="xiaomi_band_alerts">Send alerts to the band</string>
     <string name="xiaomi_band_alerts_desc">Alongside the phone alert, which stays the same.</string>
     <string name="xiaomi_band_test">Send test notification</string>

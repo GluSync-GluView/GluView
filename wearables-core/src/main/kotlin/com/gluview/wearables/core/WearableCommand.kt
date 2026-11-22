@@ -17,6 +17,11 @@ data class GlucosePayload(
 sealed interface WearableCommand {
     data class SendGlucose(val payload: GlucosePayload) : WearableCommand
     data class Vibrate(val kind: WearableAlertKind, val patternMs: LongArray = longArrayOf(0, 400, 200, 400)) : WearableCommand
+    /** F7.1: alerta do GluView no aparelho — texto + vibração no estilo configurado para este tipo. */
+    data class Alert(val kind: WearableAlertKind, val title: String, val body: String, val style: VibrationStyle,
+                     val attempt: Int = 0) : WearableCommand
+    /** F7.1: "achar a pulseira" — vibra para a pessoa encontrar. */
+    data object Find : WearableCommand
     data object SnoozeAlerts : WearableCommand
     data object RequestBattery : WearableCommand
     data object Ping : WearableCommand

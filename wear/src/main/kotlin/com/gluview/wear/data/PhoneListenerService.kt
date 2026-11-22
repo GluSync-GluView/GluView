@@ -53,6 +53,12 @@ class PhoneListenerService : WearableListenerService() {
     }
 
     override fun onMessageReceived(event: MessageEvent) {
+        // Plano 21, F7.1 — alerta com a vibração escolhida no celular.
+        if (event.path == WearPaths.ALERT) {
+            com.gluview.wear.contract.WearAlert.decode(event.data)?.let { AlertNotifier.show(this, it) }
+                ?: Log.w(tag, "Alerta recusado (formato inválido)")
+            return
+        }
         if (event.path == WearPaths.DIARY_ACK) {
             DiaryStore.acked(this, event.data.toString(Charsets.UTF_8))
             return

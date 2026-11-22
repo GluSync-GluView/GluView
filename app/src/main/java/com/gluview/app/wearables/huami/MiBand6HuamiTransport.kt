@@ -69,7 +69,9 @@ class MiBand6HuamiTransport(
             connected = ok || connected
             ok
         }
-        is WearableCommand.Vibrate, is WearableCommand.SnoozeAlerts, is WearableCommand.RequestBattery, is WearableCommand.Ping -> false
+        // Alertas e "encontrar" vão pelo HuamiAlertTransport do hub (F7.1), não por aqui.
+        is WearableCommand.Vibrate, is WearableCommand.SnoozeAlerts, is WearableCommand.RequestBattery, is WearableCommand.Ping,
+        is WearableCommand.Alert, is WearableCommand.Find -> false
     }
 }
 

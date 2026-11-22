@@ -51,6 +51,11 @@ CH_EVENT = "00000010" + BASE
 CH_AUTH = "00000009" + BASE
 CH_FW = "00001531" + BASE
 CH_FW_DATA = "00001532" + BASE
+CH_CHUNKED = "00000020" + BASE
+SVC_IMMEDIATE = "00001802-0000-1000-8000-00805F9B34FB"
+CH_ALERT_LEVEL = "00002A06-0000-1000-8000-00805F9B34FB"
+SVC_ALERT_NOTIF = "00001811-0000-1000-8000-00805F9B34FB"
+CH_NEW_ALERT = "00002A46-0000-1000-8000-00805F9B34FB"
 
 
 # id do modelo (HuamiLegacyModel) → protocolo, authFlags, cryptFlags, cabeçalho esperado, A0, bytes sem compressão
@@ -164,6 +169,8 @@ class Band:
         self.model = args.model
         self.proto, self.auth_flags, self.crypt_flags, self.signature, self.a0, self.compressed_head = MODELS[args.model]
         self.syncs = 0
+        self.call_answer = None   # "reject" | "ignore" | None (cenário da próxima chamada)
+        self.alerts = 0
         self.chunk_len = args.chunk
         self.device = None
         self.random = b""
@@ -188,7 +195,15 @@ class Band:
                                  CharacteristicValue(write=self.on_fw))
         self.fw_data = Characteristic(CH_FW_DATA, P.WRITE_WITHOUT_RESPONSE | P.WRITE, RW,
                                       CharacteristicValue(write=self.on_data))
-        return [Service(SVC_MIBAND, [self.config, self.event]),
+        self.chunked = Characteristic(CH_CHUNKED, P.WRITE | P.WRITE_WITHOUT_RESPONSE | P.NOTIFY, RW,
+                                      CharacteristicValue(write=self.on_chunked))
+        self.alert_level = Characteristic(CH_ALERT_LEVEL, P.WRITE_WITHOUT_RESPONSE | P.WRITE, RW,
+                                          CharacteristicValue(write=self.on_alert_level))
+        self.new_alert = Characteristic(CH_NEW_ALERT, P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW,
+                                        CharacteristicValue(write=self.on_new_alert))
+        return [Service(SVC_MIBAND, [self.config, self.event, self.chunked]),
+                Service(SVC_IMMEDIATE, [self.alert_level]),
+                Service(SVC_ALERT_NOTIF, [self.new_alert]),
                 Service(SVC_AUTH, [self.auth]),
                 Service(SVC_FW, [self.fw, self.fw_data])]
 
@@ -226,6 +241,36 @@ class Band:
             self.authed = ok
             log.info("Autenticação %s", "ACEITA" if ok else "RECUSADA")
             await self.notify(self.auth, bytes([0x10, v[0], 0x01 if ok else 0x04]))
+
+    # ---- alertas (F7.1): texto em 2A46, vibração em 2A06, encerrar chamada em 0020
+    def on_new_alert(self, _conn, value: bytes) -> None:
+        v = bytes(value)
+        if not self.authed:
+            log.info("ALERTA sem autenticação: ignorado")
+            return
+        cat = {3: "CHAMADA", 5: "SMS"}.get(v[0], f"categoria {v[0]}")
+        self.alerts += 1
+        log.info("ALERTA na pulseira [%s]: %s", cat, v[2:].decode("utf-8", "replace"))
+        if v[0] == 3 and self.call_answer:
+            answer, self.call_answer = self.call_answer, None
+            code = 0x07 if answer == "reject" else 0x09
+            async def respond():
+                await asyncio.sleep(1.0)
+                log.info("Pessoa %s a chamada (evento %02x)", "RECUSOU" if code == 7 else "IGNOROU", code)
+                await self.notify(self.event, bytes([code]))
+            asyncio.get_event_loop().create_task(respond())
+
+    def on_alert_level(self, _conn, value: bytes) -> None:
+        v = bytes(value)
+        if v[:1] == b"\xff" and len(v) >= 6:
+            on, off = struct.unpack_from("<HH", v, 1)
+            log.info("VIBRAÇÃO: %d vez(es), %d ms ligada / %d ms pausa", v[5], on, off)
+        else:
+            log.info("VIBRAÇÃO nível %s", hexs(v))
+
+    def on_chunked(self, _conn, value: bytes) -> None:
+        v = bytes(value)
+        log.info("CHUNKED <- %s%s", hexs(v), " (encerra a chamada)" if v[:2] == b"\x00\xc0" else "")
 
     def on_config(self, _conn, value: bytes) -> None:
         log.info("CONFIG <- %s", hexs(bytes(value)))
@@ -373,6 +418,8 @@ class Band:
                     self.drop_mid = True
                 elif c == "slow":
                     self.slow = not self.slow
+                elif c in ("reject", "ignore"):
+                    self.call_answer = c
 
 
 async def main() -> None:
