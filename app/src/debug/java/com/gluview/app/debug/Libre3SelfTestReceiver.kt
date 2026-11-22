@@ -79,6 +79,21 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                 resultData = sb.toString()
                 return
             }
+            // Escolhe a fonte de dados (id do DataSourceType) e, para os leitores, esquece o leitor salvo.
+            "source" -> {
+                val prefs = dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    context.applicationContext, DebugDeps::class.java).preferences()
+                val id = intent.getStringExtra("id") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        prefs.saveDataSource(id)
+                        if (id.startsWith("LIBRE_BRIDGE")) prefs.saveLibreBridge("", "")
+                        pending.resultData = "OK $id"
+                    } finally { pending.finish() }
+                }
+                return
+            }
             // Últimas linhas do log do app (AppLogger), filtradas por etiqueta — para os cenários dos simuladores.
             "logs" -> {
                 val dao = dagger.hilt.android.EntryPointAccessors.fromApplication(

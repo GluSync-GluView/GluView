@@ -167,4 +167,27 @@ class LibreBridgeProtocolTest {
         assertTrue(r.hasError)
         assertEquals("NO_SENSOR_FOUND", r.errorMessage)
     }
+
+    /**
+     * Memória REAL de sensor (xDrip NFCReaderXTest.data_libre1, patchInfo 9D 08 30 08 1A 24), extraída
+     * byte a byte por script: prova o porte do CRC-16 (LibreUtils.computeCRC16) e da leitura do estado e
+     * da idade com dados de sensor de verdade, não só com memória montada pelo próprio teste.
+     */
+    @Test
+    fun realSensorFram_fromXdrip_passesCrcAndGivesStatusAndAge() {
+        val hex = "4599081b03000000000000000000000000000000000000004624000cd30400009d80b80400005d80c10400109d80ce0400009d80" +
+            "d20400e89c80c90400dc5c80c30400c49c80c804008c5c80cb0400645c80cf0400405c80ea0400f85b80280500a85b803c0500805b8048" +
+            "05009c5b80320500ec9b802b0500e05b80680400b057804a0300f49b80fd0200d09b80000300145c80420300585b80a00300fc9c802304" +
+            "00785d80ca0400949d80f804006c9d80780400d49d807204005c5c80c60400009d80860400089d80580400e09d80310400389e80330400" +
+            "e85b80b70400cc5a80a40400185a80dc0400fc5a80e10400905a808b0400d05980180400845980c203002459805b03009c58805b030070" +
+            "58807f0300405880e303009c5880ae0400bc58805d0500c41880a50500205880140500bc1780880400fc5780811301004f6a30084b0b58" +
+            "51140396805a00cda6147e1a0000f3c86b"
+        val fram = ByteArray(hex.length / 2) { hex.substring(2 * it, 2 * it + 2).toInt(16).toByte() }
+        assertEquals(344, fram.size)
+        assertTrue(LibreBridgeUtils.verifyLibre1Frame(fram))
+        assertTrue(LibreBridgeUtils.isSensorReady(fram[4]))
+        assertEquals(4993, LibreBridgeUtils.sensorTimeMinutes(fram))
+        val bad = fram.copyOf().also { it[100] = (it[100].toInt() xor 1).toByte() }
+        assertFalse(LibreBridgeUtils.verifyLibre1Frame(bad))
+    }
 }

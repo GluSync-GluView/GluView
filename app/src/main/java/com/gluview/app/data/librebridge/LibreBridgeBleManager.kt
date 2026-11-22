@@ -120,6 +120,7 @@ class LibreBridgeBleManager @Inject constructor(
         val a = adapter ?: return
         gatt?.let { runCatching { it.close() } }
         gatt = null; writeChar = null; notifyChar = null
+        clearWrites()
         targetMac = mac; detectedKind = kind
         val device = runCatching { a.getRemoteDevice(mac) }.getOrNull() ?: return
         appLogger.usage(LOG, "Conectando", mapOf("mac" to mac, "kind" to (kind?.name ?: "?")))
@@ -133,19 +134,45 @@ class LibreBridgeBleManager @Inject constructor(
         listener?.onConnectionChanged(false)
     }
 
-    @SuppressLint("MissingPermission")
+    /**
+     * Fila de escrita (achado com o simulador, 21/11/2026): o Android só aceita UMA operação GATT
+     * pendente. A fonte mandava 2–3 comandos seguidos ([D1 05] [F0]; [D3 01] [D1 05] [F0]) e todos
+     * depois do primeiro falhavam — o MiaoMiao nunca começava a ler. Agora cada escrita espera o
+     * onCharacteristicWrite da anterior (como a fila do xDrip/Juggluco).
+     */
+    private val writeQueue = ArrayDeque<ByteArray>()
+    private var writing = false
+
     fun write(bytes: ByteArray): Boolean {
-        val g = gatt ?: return false
-        val ch = writeChar ?: return false
-        val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(ch, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
+        synchronized(writeQueue) { writeQueue.addLast(bytes.copyOf()) }
+        pumpWrites()
+        return true
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun pumpWrites() {
+        val next: ByteArray
+        synchronized(writeQueue) {
+            if (writing) return
+            next = writeQueue.firstOrNull() ?: return
+            writing = true
+        }
+        val g = gatt
+        val ch = writeChar
+        val ok = if (g == null || ch == null) false
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(ch, next, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothGatt.GATT_SUCCESS
         } else {
             @Suppress("DEPRECATION")
-            run { ch.value = bytes; ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT; g.writeCharacteristic(ch) }
+            run { ch.value = next; ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT; g.writeCharacteristic(ch) }
         }
-        if (!ok) appLogger.error(LOG, "Falha write BLE", mapOf("len" to bytes.size))
-        return ok
+        if (!ok) {
+            appLogger.error(LOG, "Falha write BLE", mapOf("len" to next.size))
+            synchronized(writeQueue) { writeQueue.clear(); writing = false }
+        }
     }
+
+    private fun clearWrites() = synchronized(writeQueue) { writeQueue.clear(); writing = false }
 
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
@@ -156,6 +183,7 @@ class LibreBridgeBleManager @Inject constructor(
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 runCatching { g.close() }
                 gatt = null; writeChar = null; notifyChar = null
+                clearWrites()
                 listener?.onConnectionChanged(false)
             }
         }
@@ -200,6 +228,15 @@ class LibreBridgeBleManager @Inject constructor(
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             appLogger.usage(LOG, "CCCD escrito", mapOf("status" to status))
             listener?.onReady(detectedKind ?: BridgeKind.MIAOMIAO)
+        }
+
+        override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            synchronized(writeQueue) {
+                if (writeQueue.isNotEmpty()) writeQueue.removeFirst()
+                writing = false
+            }
+            if (status != BluetoothGatt.GATT_SUCCESS) appLogger.error(LOG, "Escrita BLE recusada pelo leitor", mapOf("status" to status))
+            pumpWrites()
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
