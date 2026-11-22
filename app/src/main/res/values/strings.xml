@@ -720,7 +720,7 @@
 
     <!-- Mi Band -->
     <string name="miband_title">Mi Band</string>
-    <string name="miband_intro">Mostre a sua glicemia no visor da Mi Band 6. Para parear, o app precisa do endereço da band e da chave de autenticação, que você obtém no Zepp, no Mi Fitness ou no Gadgetbridge.</string>
+    <string name="miband_intro">Mostre a sua glicemia no visor da Mi Band (4, 5 ou 6) ou do Amazfit (Band 5, Bip, GTR, GTS 2, T-Rex Pro). Para parear, o app precisa do endereço da band e da chave de autenticação, que você obtém no Zepp, no Mi Fitness ou no Gadgetbridge.</string>
     <string name="miband_mac_label">Endereço da band (MAC)</string>
     <string name="miband_authkey_label">Chave de autenticação</string>
     <string name="miband_connecting">Conectando…</string>
@@ -1984,4 +1984,6 @@
         <item>minha glicemia</item>
         <item>açúcar no sangue</item>
     </string-array>
+    <string name="miband_model_label">Modelo da pulseira</string>
+    <string name="miband_model_help">A Mi Band 6 foi testada com pulseira de verdade; os outros modelos só na pulseira virtual.</string>
 </resources>

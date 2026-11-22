@@ -27,7 +27,7 @@ enum class HuamiLegacyModel(
     AMAZFIT_BIP_S_LITE("amazfit_bip_s_lite", "Amazfit Bip S Lite", "bip_s", false, true),
     AMAZFIT_GTR_47("amazfit_gtr_47", "Amazfit GTR 47mm", "amazfit_gtr", false, true),
     AMAZFIT_GTR_42("amazfit_gtr_42", "Amazfit GTR 42mm", "amazfit_gtr42", false, true),
-    AMAZFIT_GTS("amazfit_gts", "Amazfit GTS", "verge", false, true),
+    AMAZFIT_GTS("amazfit_gts", "Amazfit GTS", "verge", false, false), // sem modelo de visor nem no WatchDrip+
     AMAZFIT_GTR2("amazfit_gtr2", "Amazfit GTR 2/2e", "amazfit_gtr2", true, true),
     AMAZFIT_GTS2("amazfit_gts2", "Amazfit GTS 2/2e", "amazfit_gts2", true, true),
     AMAZFIT_GTS2_MINI("amazfit_gts2_mini", "Amazfit GTS 2 mini", "amazfit_gts2_mini", true, true),

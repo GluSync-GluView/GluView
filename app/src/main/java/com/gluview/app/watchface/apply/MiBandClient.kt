@@ -42,7 +42,9 @@ class MiBandClient @Inject constructor(
     suspend fun connectAndAuthenticate(
         mac: String,
         key: ByteArray,
-        log: (String) -> Unit
+        log: (String) -> Unit,
+        /** F7.2: byte de autenticação do modelo (Mi Band 4/5/6 e afins 0x00, o de sempre; Bip 0x08). */
+        authFlags: Byte = 0x00
     ): Boolean = suspendCancellableCoroutine { cont ->
         fun emit(msg: String) { Log.i(tag, msg); log(msg) }
 
@@ -94,7 +96,7 @@ class MiBandClient @Inject constructor(
                     emit("Número aleatório recebido (${random.size} bytes), cifrando…")
                     try {
                         val enc = aesEncrypt(random, key)
-                        writeAuth(g, ch, byteArrayOf(0x03, 0x00) + enc)
+                        writeAuth(g, ch, byteArrayOf(0x03, authFlags) + enc)
                     } catch (e: Exception) {
                         emit("Erro ao cifrar (key tem 16 bytes?): ${e.message}")
                         finish(false)
@@ -156,7 +158,7 @@ class MiBandClient @Inject constructor(
 
             override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
                 emit("Notificações habilitadas (status=$status). Pedindo número aleatório…")
-                authChar?.let { writeAuth(g, it, byteArrayOf(0x02, 0x00)) }
+                authChar?.let { writeAuth(g, it, byteArrayOf(0x02, authFlags)) }
             }
 
             override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {

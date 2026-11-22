@@ -32,7 +32,7 @@
       "x": 0,
       "y": 132
     },
-    "text_pattern": "$value at $time",
+    "text_pattern": "$value · $time",
     "outdated_text_pattern": "$value $time ago",
     "text_settings": {
       "font_family": "Roboto-Regular",
@@ -65,7 +65,7 @@
       "x": 0,
       "y": 151
     },
-    "text_pattern": "$value at $time",
+    "text_pattern": "$value · $time",
     "outdated_text_pattern": "$value $time ago",
     "text_settings": {
       "font_family": "Roboto-Regular",
@@ -78,7 +78,7 @@
       "x": 0,
       "y": 70
     },
-    "text_pattern": "No data",
+    "text_pattern": "Sem dados",
     "text_settings": {
       "font_family": "Roboto-Regular",
       "font_size": 30,
@@ -90,7 +90,7 @@
       "x": 0,
       "y": 133
     },
-    "text_pattern": "at $time",
+    "text_pattern": "· $time",
     "text_settings": {
       "font_family": "Roboto-Regular",
       "font_size": 18,

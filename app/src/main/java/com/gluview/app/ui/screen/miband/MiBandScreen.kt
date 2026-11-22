@@ -60,6 +60,7 @@ import java.util.Locale
 /** Tudo o que a tela mostra (vem dos flows do [MiBandViewModel]). */
 internal data class MiBandUi(
     val mac: String = "",
+    val model: String = "mi_band_6",
     val key: String = "",
     val macError: Int? = null,
     val keyError: Int? = null,
@@ -77,6 +78,7 @@ internal data class MiBandUi(
 
 internal class MiBandActions(
     val onBack: () -> Unit = {},
+    val onModel: (String) -> Unit = {},
     val onMac: (String) -> Unit = {},
     val onKey: (String) -> Unit = {},
     val onTest: () -> Unit = {},
@@ -97,6 +99,7 @@ fun MiBandScreen(
 ) {
     val ui = MiBandUi(
         mac = vm.mac.collectAsState().value,
+        model = vm.model.collectAsState().value,
         key = vm.key.collectAsState().value,
         macError = vm.macError.collectAsState().value,
         keyError = vm.keyError.collectAsState().value,
@@ -114,6 +117,7 @@ fun MiBandScreen(
     MiBandContent(ui, rememberChartAppearance().timeFormat, MiBandActions(
         onBack = onBack,
         onMac = vm::onMacChange,
+        onModel = vm::onModelChange,
         onKey = vm::onKeyChange,
         onTest = vm::testConnection,
         onSend = vm::sendCurrentWatchFace,
@@ -143,6 +147,7 @@ internal fun MiBandContent(ui: MiBandUi, timeFormat: TimeFormat, actions: MiBand
 
         GluSection(stringResource(R.string.miband_pairing_section)) {
             GluCard {
+                ModelPicker(ui.model, enabled = !ui.running, onPick = actions.onModel)
                 OutlinedTextField(
                     value = ui.mac,
                     onValueChange = actions.onMac,
@@ -295,6 +300,40 @@ private fun TimePickerField(
                         }) { Text(stringResource(R.string.common_ok)) }
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/**
+ * F7.2: modelo da pulseira. Só aparecem os que recebem visor (HuamiProfile.of != null); a Mi Band 6 é
+ * a testada com pulseira real, os outros na pulseira virtual (tools/virtual-sensors/huami.py).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelPicker(selected: String, enabled: Boolean, onPick: (String) -> Unit) {
+    val models = com.gluview.app.wearables.huami.HuamiLegacyModel.entries
+        .filter { com.gluview.app.watchface.miband.HuamiProfile.of(it) != null }
+    val current = models.firstOrNull { it.id == selected } ?: com.gluview.app.wearables.huami.HuamiLegacyModel.MI_BAND_6
+    var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.material3.ExposedDropdownMenuBox(expanded = open, onExpandedChange = { if (enabled) open = it }) {
+        OutlinedTextField(
+            value = current.displayName,
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(stringResource(R.string.miband_model_label)) },
+            supportingText = { Text(stringResource(R.string.miband_model_help)) },
+            trailingIcon = { androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            modifier = Modifier.menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            models.forEach { m ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(m.displayName) },
+                    onClick = { onPick(m.id); open = false }
+                )
             }
         }
     }

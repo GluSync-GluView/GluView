@@ -16,6 +16,16 @@ import com.gluview.app.watchface.miband.firmware.WatchFaceParts.ConfigPOJO.TextS
 import com.gluview.app.watchface.miband.firmware.WatchFaceParts.ConfigPOJO.WatchfaceConfig
 import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Header.HeaderMiBand5
 import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageMiBandPalette
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageInterface
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageBipPalette
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageRGB
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageTransparentRGB
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Image.ImageRGB_GTS2Mini
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Header.HeaderMiBand4
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Header.HeaderAmazfitVerge
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Header.HeaderAmazfitVerge2
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Header.HeaderAmazfitGTS2Mini
+import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Utils.QuickLZ
 import com.gluview.app.watchface.miband.firmware.WatchFaceParts.Parameter
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -44,10 +54,14 @@ data class MiBandWatchData(
  *
  * Camada 3 do envio de visor. A camada 2 (upload BLE) consome o byte[] retornado por [generate].
  */
-class MiBandWatchFaceGenerator(private val context: Context) {
+class MiBandWatchFaceGenerator(
+    private val context: Context,
+    /** F7.2: modelo da pulseira (cabeçalho, imagem, compressão). Padrão = Mi Band 6, o caminho de sempre. */
+    private val profile: HuamiProfile = HuamiProfile.MI_BAND_6
+) {
 
     private val tag = "MiBandWFGen"
-    private val assetDir = "miband_watchface_parts/miband6/"
+    private val assetDir = "miband_watchface_parts/${profile.assetPrefix}/"
     private val arrowsDir = "miband_watchface_parts/arrows/"
 
     private val template: ByteArray =
@@ -80,9 +94,15 @@ class MiBandWatchFaceGenerator(private val context: Context) {
             }
         }
 
-        // codifica a tela no formato de imagem Huami (paleta)
+        // codifica a tela no formato de imagem do modelo (WatchDrip+ WatchFaceGenerator.genWatchFace)
         val baos = ByteArrayOutputStream()
-        val enc = ImageMiBandPalette(baos)
+        val enc: ImageInterface = when (profile.image) {
+            HuamiImage.MIBAND_PALETTE -> ImageMiBandPalette(baos)
+            HuamiImage.BIP_PALETTE -> ImageBipPalette(baos)
+            HuamiImage.RGB -> ImageRGB(baos)
+            HuamiImage.TRANSPARENT_RGB -> ImageTransparentRGB(baos)
+            HuamiImage.RGB_GTS2_MINI -> ImageRGB_GTS2Mini(baos)
+        }
         enc.setImageMask(null)
         val prepared = enc.prepareImage(screen)
         enc.write(prepared)
@@ -96,12 +116,41 @@ class MiBandWatchFaceGenerator(private val context: Context) {
         parsed.resources[idx] = baos.toByteArray()
         Log.d(tag, "Imagem ${idx} substituída (${parsed.resources[idx].size} bytes)")
 
-        return writeBin(parsed)
+        val bin = writeBin(parsed)
+        return if (profile.compress) compress(bin) else bin
+    }
+
+    /**
+     * QuickLZ em blocos de 4 KB, como o WatchDrip+ (família Verge): o último bloco incompleto vai sem
+     * comprimir; no Verge 2 / T-Rex Pro os primeiros [HuamiProfile.uncompressedHead] bytes também.
+     */
+    private fun compress(data: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        var pos = 0
+        if (profile.uncompressedHead > 0) {
+            out.write(data, 0, profile.uncompressedHead)
+            pos = profile.uncompressedHead
+        }
+        val block = 0x1000
+        while (pos < data.size) {
+            val n = minOf(block, data.size - pos)
+            if (n == block) out.write(QuickLZ.compress(data.copyOfRange(pos, pos + n), 3))
+            else out.write(data, pos, n)
+            pos += n
+        }
+        Log.d(tag, "Compressão QuickLZ: ${data.size} → ${out.size()} bytes")
+        return out.toByteArray()
     }
 
     // ---- parse do template (header UIHH + parâmetros + tabela de offsets + recursos) ----
     private fun parseTemplate(): Parsed {
-        val header = HeaderMiBand5().readFrom(ByteArrayInputStream(template))
+        val header = when (profile.header) {
+            HuamiHeader.MIBAND4 -> HeaderMiBand4()
+            HuamiHeader.MIBAND5 -> HeaderMiBand5()
+            HuamiHeader.VERGE -> HeaderAmazfitVerge()
+            HuamiHeader.VERGE2 -> HeaderAmazfitVerge2()
+            HuamiHeader.GTS2_MINI -> HeaderAmazfitGTS2Mini()
+        }.readFrom(ByteArrayInputStream(template))
         require(header.isValid) { "Formato de watchface inválido (assinatura)" }
         val headerSize = header.headerSize
         val parametersSize = header.parametersSize

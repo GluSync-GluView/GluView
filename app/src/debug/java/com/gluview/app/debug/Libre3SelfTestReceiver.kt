@@ -33,6 +33,7 @@ interface DebugDeps {
     fun appLogDao(): com.gluview.app.data.local.dao.AppLogDao
     fun miBandPusher(): com.gluview.app.watchface.miband.MiBandWatchFacePusher
     fun miBandUploader(): com.gluview.app.watchface.miband.MiBandUploader
+    fun miBandClient(): com.gluview.app.watchface.apply.MiBandClient
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -94,15 +95,24 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                     try {
                         lines.append("visto=").append(scanFor(context, mac)).append(" | ")
                         deps.preferences().saveMiBandPairing(mac, key)
+                        val modelId = intent.getStringExtra("model") ?: "mi_band_6"
+                        deps.preferences().saveMiBandModel(modelId)
+                        val profile = com.gluview.app.wearables.huami.HuamiLegacyModel.fromId(modelId)
+                            ?.let { com.gluview.app.watchface.miband.HuamiProfile.of(it) } ?: com.gluview.app.watchface.miband.HuamiProfile.MI_BAND_6
                         val log: (String) -> Unit = { m -> Log.i(tag, "MIBAND $m"); lines.append(m).append(" | ") }
-                        val ok = if (intent.getStringExtra("synthetic") == "1") {
+                        val ok = if (intent.getStringExtra("auth") == "1") {
+                            // Botão "Testar conexão" da tela: só conecta e autentica (MiBandClient).
+                            kotlinx.coroutines.withTimeoutOrNull(25_000) {
+                                deps.miBandClient().connectAndAuthenticate(mac, unhex(key), log, profile.authFlags)
+                            } ?: false
+                        } else if (intent.getStringExtra("synthetic") == "1") {
                             // App de teste sem leituras: mesmo gerador e mesmo uploader, com leitura sintética.
-                            val bin = com.gluview.app.watchface.miband.MiBandWatchFaceGenerator(context).generate(
+                            val bin = com.gluview.app.watchface.miband.MiBandWatchFaceGenerator(context, profile).generate(
                                 com.gluview.app.watchface.miband.MiBandWatchData(bgValue = "123", delta = "+2", timeText = "10:30",
                                     arrowName = com.gluview.app.util.ArrowMapper.toAssetName("→"), isHigh = false, isLow = false,
                                     isStale = false, graph = null))
                             log("Visor sintético gerado: ${bin.size} bytes")
-                            deps.miBandUploader().connectAndUpload(mac, unhex(key), bin, log)
+                            deps.miBandUploader().connectAndUpload(mac, unhex(key), bin, log, profile)
                         } else deps.miBandPusher().send(logger = log)
                         pending.resultData = "ok=$ok | $lines"
                     } catch (e: Exception) {

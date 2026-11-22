@@ -713,7 +713,7 @@
 
     <!-- Mi Band -->
     <string name="miband_title">Mi Band</string>
-    <string name="miband_intro">Show your glucose on the Mi Band 6 face. To pair, the app needs the band address and the authentication key, which you get from Zepp, Mi Fitness or Gadgetbridge.</string>
+    <string name="miband_intro">Show your glucose on your Mi Band (4, 5 or 6) or Amazfit (Band 5, Bip, GTR, GTS 2, T-Rex Pro) face. To pair, the app needs the band address and the authentication key, which you get from Zepp, Mi Fitness or Gadgetbridge.</string>
     <string name="miband_mac_label">Band address (MAC)</string>
     <string name="miband_authkey_label">Authentication key</string>
     <string name="miband_connecting">Connecting…</string>
@@ -1976,4 +1976,6 @@
         <item>my glucose</item>
         <item>my blood sugar</item>
     </string-array>
+    <string name="miband_model_label">Band model</string>
+    <string name="miband_model_help">Mi Band 6 was tested with a real band; the other models only with the virtual band.</string>
 </resources>

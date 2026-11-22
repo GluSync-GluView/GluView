@@ -4,6 +4,14 @@ package com.gluview.app.watchface.miband.firmware;
 public final class BinUtils {
     private BinUtils() {}
 
+    public static byte fromUint8(int v) {
+        return (byte) (v & 0xff);
+    }
+
+    public static byte[] fromUint24(int v) {
+        return new byte[]{(byte) (v & 0xff), (byte) ((v >> 8) & 0xff), (byte) ((v >> 16) & 0xff)};
+    }
+
     public static byte[] fromUint16(int v) {
         return new byte[]{(byte) (v & 0xff), (byte) ((v >> 8) & 0xff)};
     }

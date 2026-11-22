@@ -44,6 +44,10 @@ class MiBandViewModel @Inject constructor(
     private val _key = MutableStateFlow("")
     val key = _key.asStateFlow()
 
+    /** F7.2: modelo da pulseira (id do HuamiLegacyModel). */
+    private val _model = MutableStateFlow("mi_band_6")
+    val model = _model.asStateFlow()
+
     private val _autoSend = MutableStateFlow(false)
     val autoSend = _autoSend.asStateFlow()
 
@@ -67,6 +71,7 @@ class MiBandViewModel @Inject constructor(
         viewModelScope.launch {
             _mac.value = prefs.miBandMac.first()
             _key.value = prefs.miBandAuthKey.first()
+            _model.value = prefs.miBandModel.first()
             _autoSend.value = prefs.miBandAutoSend.first()
             _updateEveryReading.value = prefs.miBandUpdateEveryReading.first()
             _dayIntervalMin.value = prefs.miBandDayIntervalMin.first().toString()
@@ -77,6 +82,7 @@ class MiBandViewModel @Inject constructor(
     }
 
     fun onMacChange(v: String) { _mac.value = v; _macError.value = null }
+    fun onModelChange(id: String) { _model.value = id; viewModelScope.launch { prefs.saveMiBandModel(id) } }
     fun onKeyChange(v: String) { _key.value = v; _keyError.value = null }
 
     /** Valida MAC e chave; marca o campo culpado. */
@@ -126,7 +132,9 @@ class MiBandViewModel @Inject constructor(
             prefs.saveMiBandPairing(mac, keyStr)
             val keyBytes = parseHex(keyStr)
             val ok = withTimeoutOrNull(25_000L) {
-                client.connectAndAuthenticate(mac, keyBytes) { append(it) }
+                val profile = com.gluview.app.wearables.huami.HuamiLegacyModel.fromId(_model.value)
+                    ?.let { com.gluview.app.watchface.miband.HuamiProfile.of(it) } ?: com.gluview.app.watchface.miband.HuamiProfile.MI_BAND_6
+                client.connectAndAuthenticate(mac, keyBytes, { append(it) }, profile.authFlags)
             }
             if (ok == null) {
                 append("⏱️ Tempo esgotado (25s). Confirme que a band está ligada, próxima e com Bluetooth ativo.")

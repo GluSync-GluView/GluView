@@ -339,6 +339,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         // F8 — pareamento da Mi Band para envio do visor (auth key Huami + MAC)
         val KEY_MIBAND_MAC            = stringPreferencesKey("miband_mac")
         val KEY_MIBAND_AUTH_KEY       = stringPreferencesKey("miband_auth_key")
+        /** F7.2: modelo Huami/Amazfit (id do HuamiLegacyModel); vazio = Mi Band 6, o de sempre. */
+        val KEY_MIBAND_MODEL          = stringPreferencesKey("miband_model")
         val KEY_MIBAND_AUTO_SEND      = booleanPreferencesKey("miband_auto_send")
         // Agendamento do envio automático — período especial (ex.: madrugada) com intervalo
         // próprio; fora dele usa o intervalo padrão. Horários em minutos desde 00:00 (permite
@@ -777,6 +779,7 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     // F8 — Mi Band: MAC e auth key (hex de 32 chars) para o envio do visor via BLE Huami
     val miBandMac: Flow<String>             = dataStore.data.safeMap("") { it[KEY_MIBAND_MAC]      ?: "" }
     val miBandAuthKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_MIBAND_AUTH_KEY] ?: "" }
+    val miBandModel: Flow<String>           = dataStore.data.safeMap("mi_band_6") { it[KEY_MIBAND_MODEL] ?: "mi_band_6" }
     val miBandAutoSend: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_MIBAND_AUTO_SEND] ?: false }
     // Agendamento: dia = intervalo curto (padrão 5 min); noite = intervalo mais espaçado
     // (padrão 30 min, das 22h às 7h) — configurável pelo usuário na tela do Mi Band.
@@ -997,6 +1000,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         it[KEY_MIBAND_MAC]      = mac.trim()
         it[KEY_MIBAND_AUTH_KEY] = authKey.trim().lowercase().removePrefix("0x")
     }
+
+    suspend fun saveMiBandModel(modelId: String) = dataStore.edit { it[KEY_MIBAND_MODEL] = modelId }
 
     suspend fun saveMiBandAutoSend(enabled: Boolean) = dataStore.edit {
         it[KEY_MIBAND_AUTO_SEND] = enabled

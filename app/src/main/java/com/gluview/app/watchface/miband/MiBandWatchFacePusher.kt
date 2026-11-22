@@ -134,9 +134,12 @@ class MiBandWatchFacePusher @Inject constructor(
             val isStale = staleOverrideText != null ||
                 reading.isStale || reading.zone == GlucoseZone.STALE || ageSec / 60 >= noSignalMin
 
-            logger("Gerando visor ($bgValue $delta)…")
+            // F7.2: modelo escolhido (padrão Mi Band 6, o caminho de sempre).
+            val model = com.gluview.app.wearables.huami.HuamiLegacyModel.fromId(prefs.miBandModel.first())
+            val profile = model?.let { HuamiProfile.of(it) } ?: HuamiProfile.MI_BAND_6
+            logger("Gerando visor ($bgValue $delta) para ${profile.model.displayName}…")
             val bin = withContext(Dispatchers.Default) {
-                val generator = MiBandWatchFaceGenerator(context)
+                val generator = MiBandWatchFaceGenerator(context, profile)
                 // 3 h fixas, a mesma janela do editor de visor (L14; antes as horas do widget).
                 val graphHours = MIBAND_GRAPH_HOURS
                 val calFactor = prefs.sibionicsCalFactor.first()
@@ -165,7 +168,7 @@ class MiBandWatchFacePusher @Inject constructor(
             logger("Visor gerado: ${bin.size} bytes. Enviando por BLE…")
             val ok = withTimeoutOrNull(180_000L) {
                 withContext(Dispatchers.IO) {
-                    uploader.connectAndUpload(mac, parseHex(keyStr), bin, logger)
+                    uploader.connectAndUpload(mac, parseHex(keyStr), bin, logger, profile)
                 }
             }
             if (ok != true) logger("Falha/timeout no envio do visor.")
