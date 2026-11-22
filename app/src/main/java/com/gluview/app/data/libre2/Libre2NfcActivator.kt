@@ -78,8 +78,8 @@ class Libre2NfcActivator @Inject constructor(
                 appLogger.usage(LOG, "NFC tag connected",
                     mapOf("uid" to uidHex, "patchInfo" to patchInfo.toHex(),
                           "gen" to gen, "fam" to fam, "serial" to serial))
-                // Gen1 = Libre 2/2 Plus europeu: protocolo ainda não implementado (mensagem própria).
-                if (gen == 1) throw LibreGen1NotSupportedException()
+                // Gen1 = Libre 2/2 Plus europeu (inclui a família 7F): caminho EU do Juggluco (F6.2).
+                if (gen == 1) return Result.success(activateEu(tag, uid, patchInfo, serial))
                 if (gen != 2) error("Unsupported Libre sensor generation: $gen")
                 // Região de comercialização pelo patchInfo: ajusta a variante mostrada na lista
                 // (ex.: "FreeStyle Libre 2 Plus NA" → "SA"), sem mudar o código de leitura.
@@ -152,6 +152,7 @@ class Libre2NfcActivator @Inject constructor(
                     streamingEnabled = true
                     Libre2Native.usEnabledStreaming(uid, patchInfo, auth, address)
                     Libre2Native.setSensorStart(sensorStartMs / 1000L)
+                    preferences.saveLibre2Eu(gen = 2, blueStartSec = 0L)
                     appLogger.usage(LOG, "Streaming enabled and stored natively",
                         mapOf("auth" to streamingAuthHex, "mac" to bleMac))
                 }
@@ -176,6 +177,82 @@ class Libre2NfcActivator @Inject constructor(
                 mapOf("error" to (e.message ?: e::class.simpleName.orEmpty())))
             Result.failure(e)
         }
+    }
+
+    /**
+     * Libre 2 / 2 Plus EUROPEU ("Gen1", inclui a família 7F) — plano 21, F6.2. Porte fiel do Juggluco:
+     * `AlgNfcV.readpatchdata` (leitura comum `02 23`, sem o patch dos EUA) → `processScan` da Abbott
+     * → se o sensor ainda não começou (FRAM[4] == 1), `AlgNfcV.activate` (`02 <cmd> 07 <payload>` de
+     * getActivationCommand/getActivationPayload) → `EUenableStreaming` (`02 A1 07 <payload>` de
+     * getEnableStreamingPayload; a resposta, sem o 1º byte, é o endereço Bluetooth de 6 bytes).
+     * A hora usada no enable vira a base do desbloqueio de cada conexão (guardada com saveLibre2Eu).
+     * Sem sensor EU no projeto: "Sem teste com sensor real"; funções nativas conferidas no M20.
+     */
+    private suspend fun activateEu(tag: Tag, uid: ByteArray, patchInfo: ByteArray, serial: String): Libre2Session {
+        val uidHex = uid.toHex()
+        LibrePatchInfo.detectedVariantId(patchInfo, preferences.sensorVariantId.first())?.let {
+            appLogger.usage(LOG, "Variante detectada (EU)", mapOf("variante" to it, "regiao" to LibrePatchInfo.regionByte(patchInfo)))
+            preferences.saveSensorVariantId(it)
+        }
+        val fram = withNfcV(tag, "read sensor memory (EU)") { readOnceData(it, FRAM_START, FRAM_LEN) }
+            ?: error("Could not read sensor memory; keep the phone against the sensor and try again")
+        val scanResult = Libre2Native.processScan(uid, patchInfo, fram)
+            ?: error("Abbott processScan could not process the NFC reading (EU)")
+        if (scanResult.status == Libre2ScanResult.STATUS_FAILED) error("Abbott processScan rejected the NFC reading (EU)")
+        val calibration = Libre2Calibration.fromFram(fram)
+        val state = fram[4].toInt() and 0xFF
+        appLogger.usage(LOG, "EU: FRAM/processScan", mapOf("estado" to state,
+            "status" to scanResult.status, "mgdl" to (scanResult.reading?.mgdl ?: 0)))
+
+        if (state == 1) {
+            val cmd = Libre2Native.euActivationCommand(patchInfo) ?: error("EU: activation command unavailable")
+            val payload = Libre2Native.euActivationPayload(uid, patchInfo) ?: error("EU: activation payload unavailable")
+            val ok = withNfcV(tag, "activate the sensor (EU)") {
+                goodnfc(issuenfc(it, byteArrayOf(0x02, cmd.toByte(), 0x07) + payload))
+            }
+            appLogger.usage(LOG, "EU: ativação", mapOf("ok" to ok, "cmd" to "%02x".format(cmd)))
+            if (!ok) error("Sensor did not confirm activation (EU)")
+        }
+
+        val blueStartSec = System.currentTimeMillis() / 1000L
+        val enablePayload = Libre2Native.euEnableStreamingPayload(uid, patchInfo, blueStartSec)
+            ?: error("This sensor has no Bluetooth streaming (Libre 1?) — the library returned no payload")
+        val resp = withNfcV(tag, "enable Bluetooth streaming (EU)") {
+            issuenfc(it, byteArrayOf(0x02, 0xA1.toByte(), 0x07) + enablePayload)
+        }
+        if (!goodnfc(resp) || resp == null || resp.size < 7) error("Sensor did not enable Bluetooth streaming (EU)")
+        val address = resp.copyOfRange(1, 7)
+        val bleMac = bytesToMac(address)
+        // Sessão para o processTooth (o EU não tem streamingAuthenticationData do Gen2).
+        Libre2Native.usEnabledStreaming(uid, patchInfo, ByteArray(0), address)
+        val startMs = scanResult.sensorStartMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+        Libre2Native.setSensorStart(startMs / 1000L)
+        preferences.saveLibre2Eu(gen = 1, blueStartSec = blueStartSec)
+        appLogger.usage(LOG, "EU: Bluetooth ligado", mapOf("mac" to bleMac, "blueStart" to blueStartSec))
+        return Libre2Session(
+            serial = serial, uidHex = uidHex, patchInfoHex = patchInfo.toHex(), streamingAuthHex = "",
+            bleMac = bleMac, calibration = calibration, framHex = fram.toHex(), sensorStartMs = startMs,
+            streamingEnabled = true, scanReading = scanResult.reading
+        )
+    }
+
+    /** Juggluco `readoncedata`: leitura NFC comum, até 3 blocos de 8 bytes por comando `02 23 <bloco> <n-1>`. */
+    private fun readOnceData(nfc: NfcV, start: Int, len: Int): ByteArray? {
+        val startInBlocks = start / 8
+        val startBlock = start % 8
+        val totLen = len + startBlock
+        val blocks = (totLen + 7) / 8
+        val buf = ByteArray(blocks * 8)
+        var iter = 0
+        while (iter < blocks) {
+            val cur = startInBlocks + iter
+            val min = minOf(3, blocks - iter)
+            val r = issuenfc(nfc, byteArrayOf(0x02, 0x23, cur.toByte(), (min - 1).toByte()))
+            if (!goodnfc(r) || r == null || r.size < min * 8 + 1) return null
+            System.arraycopy(r, 1, buf, iter * 8, minOf(r.size - 1, buf.size - iter * 8))
+            iter += min
+        }
+        return buf.copyOfRange(startBlock, totLen)
     }
 
     private companion object {

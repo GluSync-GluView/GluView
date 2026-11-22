@@ -41,7 +41,8 @@ object LibrePatchInfo {
      * desconhecida). [currentVariantId] preserva o modelo escolhido (Libre 2 × 2 Plus).
      */
     fun detectedVariantId(info: ByteArray, currentVariantId: String?): String? {
-        if (generation(info) != 2) return null
+        // F6.2 (21/11/2026): Gen1 (europeu, inclui a família 7F) também é lido; região pelo byte 3.
+        if (generation(info) !in 1..2) return null
         val region = region(info) ?: return null
         val plus = SensorVariantCatalog.byId(currentVariantId)?.modelRes != R.string.sensor_model_libre2
         return SensorVariantCatalog.libreVariant(region, plus)?.id

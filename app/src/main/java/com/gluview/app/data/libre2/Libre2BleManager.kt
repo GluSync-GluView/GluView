@@ -224,6 +224,14 @@ class Libre2BleManager @Inject constructor(
 
     fun setListener(l: Listener?) { listener = l }
 
+    /**
+     * Libre 2 / 2 Plus EUROPEU (F6.2, Juggluco "security generation 1"): quando definido, cada conexão
+     * escreve em f001 a chave de desbloqueio que esta função devolve (getStreamingUnlockPayload com a
+     * hora do enable + contador) e, confirmada a escrita, liga a notificação de f002. Os pacotes de
+     * 46 bytes vão crus para o processTooth (só o Gen2 decifra com V2(773) antes). null = Gen2.
+     */
+    @Volatile var euUnlock: (() -> ByteArray?)? = null
+
     // ── Scan (descoberta por nome "ABBOTT…"; MAC salvo evita o scan) ────────────
     private var scanCallback: ScanCallback? = null
     private val seenDevices = HashSet<String>()
@@ -461,6 +469,18 @@ class Libre2BleManager @Inject constructor(
             listener?.onConnectionChanged(true)
             g.readRemoteRssi()
 
+            // m2831x (Gen1/EU): conphase=5, escreve a chave de desbloqueio em f001.
+            euUnlock?.let { unlock ->
+                val key = unlock() ?: run {
+                    appLogger.error(LOG, "EU: sem chave de desbloqueio (biblioteca devolveu null)"); disconnect(); return
+                }
+                conphase = 5
+                val ok = writeChar(loginChar!!, key)
+                appLogger.usage(LOG, "EU: chave de desbloqueio escrita em f001", mapOf("ok" to ok, "bytes" to key.size))
+                if (ok) armWatchdog("confirmação da chave de desbloqueio (EU)", 12_000L) else disconnect()
+                return
+            }
+
             // m2831x (Gen2): conphase=1, habilita notify em f001 → onDescriptorWrite dispara o [0x20].
             conphase = 1
             val ok = enableNotify(g, loginChar!!)
@@ -503,6 +523,19 @@ class Libre2BleManager @Inject constructor(
 
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
             appLogger.usage(LOG, "onCharacteristicWrite", mapOf("uuid" to ch.uuid, "status" to status, "fase" to conphase))
+            // EU (Juggluco onCharacteristicWrite, sensorgen != 2): chave aceita → notify em f002.
+            if (ch.uuid == LOGIN_UUID && conphase == 5) {
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    appLogger.error(LOG, "EU: escrita da chave de desbloqueio falhou", mapOf("status" to status))
+                    disconnect(); return
+                }
+                val ch2 = dataChar ?: run { disconnect(); return }
+                conphase = 4
+                pack1 = false; pack2 = false
+                dataNotifyAttempt = 0
+                requestDataNotify(g, ch2)
+                return
+            }
             if (ch.uuid == LOGIN_UUID && pendingAuthResponse != null) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     pendingAuthResponse = null
@@ -680,8 +713,10 @@ class Libre2BleManager @Inject constructor(
                 System.arraycopy(value, 0, packet, 38, 8)
                 val atMs = System.currentTimeMillis()
                 val packetCopy = packet.copyOf()
-                // Descriptografa o pacote de 46B com a chave de sessão via V2(773) — lib da Abbott.
-                val decrypted = Libre2Native.v2(OP_DECRYPT_PACKET, tovalue, packetCopy, null)
+                // Gen2: descriptografa o pacote de 46B com a chave de sessão via V2(773) — lib da Abbott.
+                // EU (Gen1): o pacote vai cru; o processStream da biblioteca trata (Juggluco linha 462).
+                val decrypted = if (euUnlock != null) packetCopy
+                    else Libre2Native.v2(OP_DECRYPT_PACKET, tovalue, packetCopy, null)
                 if (decrypted == null) {
                     appLogger.error(LOG, "Decrypt do pacote retornou null — sessão inválida?"); return
                 }

@@ -156,6 +156,24 @@ object Libre2Native {
         if (available) nativeResetBluetooth() else pending("resetBluetooth")
     }
 
+    // ── Libre 2 / 2 Plus europeu ("Gen1", inclui a família 7F) — plano 21, F6.2 ────────────
+    // Porte do Juggluco (AlgNfcV.activate / EUenableStreaming, libre2.cpp unlockKeySensor).
+
+    /** Byte de comando NFC da ativação (`02 <cmd> 07 <payload>`), ou null. */
+    fun euActivationCommand(patchInfo: ByteArray): Int? =
+        if (available) nativeEuActivationCommand(patchInfo).takeIf { it in 0..255 } else null
+
+    fun euActivationPayload(uid: ByteArray, patchInfo: ByteArray, person: Int = 0): ByteArray? =
+        if (available) nativeEuActivationPayload(uid, patchInfo, person) else null
+
+    /** Payload do comando NFC `02 A1 07` que liga o Bluetooth; [epochSec] tem de ser guardado (desbloqueio). */
+    fun euEnableStreamingPayload(uid: ByteArray, patchInfo: ByteArray, epochSec: Long): ByteArray? =
+        if (available) nativeEuEnableStreamingPayload(uid, patchInfo, epochSec) else null
+
+    /** Chave de desbloqueio de cada conexão BLE (mesmos patchInfo/hora do enable; [unlockCount] sobe 1 a cada uso). */
+    fun euStreamingUnlockPayload(uid: ByteArray, patchInfo: ByteArray, blueStartEpochSec: Long, unlockCount: Int): ByteArray? =
+        if (available) nativeEuStreamingUnlockPayload(uid, patchInfo, blueStartEpochSec, unlockCount) else null
+
     private fun pending(op: String) {
         if (!warned) {
             warned = true
@@ -180,6 +198,10 @@ object Libre2Native {
     private external fun nativeHistoryDebug(): IntArray?
     private external fun nativeHistoryRawDetail(): String?
     private external fun nativeResetBluetooth()
+    private external fun nativeEuActivationCommand(patchInfo: ByteArray): Int
+    private external fun nativeEuActivationPayload(uid: ByteArray, patchInfo: ByteArray, person: Int): ByteArray?
+    private external fun nativeEuEnableStreamingPayload(uid: ByteArray, patchInfo: ByteArray, epochSec: Long): ByteArray?
+    private external fun nativeEuStreamingUnlockPayload(uid: ByteArray, patchInfo: ByteArray, blueStartEpochSec: Long, unlockCount: Int): ByteArray?
 }
 
 data class Libre2ScanResult(

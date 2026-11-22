@@ -35,9 +35,16 @@ class SensorVariantTest {
     @Test fun `Libre 2 sem variante SA cai no Libre 2 Plus SA`() =
         assertEquals("LIBRE2PLUS_SA", LibrePatchInfo.detectedVariantId(hex("2B0A3A081FE1"), "LIBRE2_NA"))
 
-    @Test fun `gen1 ou regiao desconhecida nao afirmam nada`() {
-        assertNull(LibrePatchInfo.detectedVariantId(hex("9D0830010000"), ""))
+    @Test fun `regiao desconhecida ou geracao desconhecida nao afirmam nada`() {
+        assertNull(LibrePatchInfo.detectedVariantId(hex("9D0830000000"), ""))   // gen1 sem região conhecida
         assertNull(LibrePatchInfo.detectedVariantId(hex("2B0A3A041FE1"), ""))
+        assertNull(LibrePatchInfo.detectedVariantId(hex("DF0000000000"), ""))   // geração 0
+    }
+
+    @Test fun `gen1 europeu (inclui a familia 7F) vira variante EU mantendo o modelo`() {
+        assertEquals("LIBRE2PLUS_EU", LibrePatchInfo.detectedVariantId(hex("7F0E31010000"), ""))
+        assertEquals("LIBRE2_EU", LibrePatchInfo.detectedVariantId(hex("7F0E30010000"), "LIBRE2_NA"))
+        assertEquals("LIBRE2PLUS_EU", LibrePatchInfo.detectedVariantId(hex("9D0830010000"), "LIBRE2PLUS_SA"))
     }
 
     // ── catálogo ────────────────────────────────────────────────────────────────
@@ -56,8 +63,9 @@ class SensorVariantTest {
         assertEquals(SensorVariantCatalog.all.size, SensorVariantCatalog.all.map { it.id }.toSet().size)
     }
 
-    @Test fun `Libre europeu aparece mas nao esta implementado`() {
-        assertFalse(SensorVariantCatalog.byId("LIBRE2PLUS_EU")!!.implemented)
+    @Test fun `Libre europeu implementado e marcado sem teste`() {
+        assertTrue(SensorVariantCatalog.byId("LIBRE2PLUS_EU")!!.implemented)
+        assertEquals(SensorMaturity.UNTESTED, SensorVariantCatalog.byId("LIBRE2PLUS_EU")!!.maturity)
         assertEquals(SensorRegion.EU, SensorVariantCatalog.byId("LIBRE2_EU")!!.region)
     }
 }

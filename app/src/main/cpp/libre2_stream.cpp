@@ -626,3 +626,134 @@ Java_com_gluview_app_data_libre2_Libre2Native_nativeHistoryRawDetail(JNIEnv* env
     std::lock_guard<std::mutex> lock(g_mtx);
     return env->NewStringUTF(g_last_history_detail);
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// Libre 2 / 2 Plus EUROPEU ("Gen1", inclui a família 7F) — plano 21, F6.2 (21/11/2026).
+// Porte fiel do Juggluco (GPLv3): AlgNfcV.activate/EUenableStreaming, libre2.cpp
+// activationcommand/activationpayload (env real), getStreamingPayload e unlockKeySensor (subenv com
+// scanstate). Tudo passa pela MESMA libDataProcessing.so (LibreLink 2.5.2), que reconhece a 7F
+// (getProductFamily(7f0e30/7f0e31) = 3, conferido no M20 em 21/11). Os pacotes EU de 46 bytes vão
+// CRUS para o processTooth (Juggluco Libre2GattCallback: só o Gen2 decifra com V2(773) antes).
+// ════════════════════════════════════════════════════════════════════════════════════════════
+typedef jbyte      (*getActivationCommand_t)(JNIEnv*, jobject, jint, jbyteArray /*info*/, jbyteArray /*token*/);
+typedef jbyteArray (*getActivationPayload_t)(JNIEnv*, jobject, jint, jbyteArray /*uid*/, jbyteArray /*info*/,
+    jbyte /*person*/, jbyteArray /*token*/);
+typedef jbyteArray (*getEnableStreamingPayload_t)(JNIEnv*, jobject, jint, jbyteArray /*uid*/, jbyteArray /*info*/,
+    jbyte /*person*/, jint /*timeminbase*/, jbyteArray /*token*/);
+typedef jbyteArray (*getStreamingUnlockPayload_t)(JNIEnv*, jobject, jint, jbyteArray /*uid*/, jbyteArray /*info*/,
+    jbyte /*person*/, jint /*startsincebase*/, jint /*unlockcount*/, jbyteArray /*token*/);
+
+static getActivationCommand_t      p_getActivationCommand = nullptr;
+static getActivationPayload_t      p_getActivationPayload = nullptr;
+static getEnableStreamingPayload_t p_getEnableStreamingPayload = nullptr;
+static getStreamingUnlockPayload_t p_getStreamingUnlockPayload = nullptr;
+
+static bool ensureEuResolved() {
+    if (!ensureResolved()) return false;
+    void* lib = libre2_lib();
+    if (!lib) return false;
+    if (!p_getActivationCommand)
+        p_getActivationCommand = reinterpret_cast<getActivationCommand_t>(dlsym(lib, ABBSYM "getActivationCommand"));
+    if (!p_getActivationPayload)
+        p_getActivationPayload = reinterpret_cast<getActivationPayload_t>(dlsym(lib, ABBSYM "getActivationPayload"));
+    if (!p_getEnableStreamingPayload)
+        p_getEnableStreamingPayload = reinterpret_cast<getEnableStreamingPayload_t>(dlsym(lib, ABBSYM "getEnableStreamingPayload"));
+    if (!p_getStreamingUnlockPayload)
+        p_getStreamingUnlockPayload = reinterpret_cast<getStreamingUnlockPayload_t>(dlsym(lib, ABBSYM "getStreamingUnlockPayload"));
+    LOGI("EU resolve activationCommand=%p activationPayload=%p enableStreaming=%p unlock=%p",
+         (void*)p_getActivationCommand, (void*)p_getActivationPayload,
+         (void*)p_getEnableStreamingPayload, (void*)p_getStreamingUnlockPayload);
+    return true;
+}
+
+static jbyteArray realToken(JNIEnv* env) {
+    jbyteArray a = env->NewByteArray(72);
+    env->SetByteArrayRegion(a, 0, 72, reinterpret_cast<const jbyte*>(TOKEN));
+    return a;
+}
+
+static void clearJavaException(JNIEnv* env, const char* where) {
+    if (env->ExceptionCheck()) { LOGE("exceção Java após %s — limpando", where); env->ExceptionClear(); }
+}
+
+// data_t* devolvido pelo subenv (vive no scanstate) → byte[] Java (cópia; o estado é liberado depois).
+static jbyteArray dataToJava(JNIEnv* env, const data_t* d) {
+    if (!d || d->size() <= 0) return nullptr;
+    jbyteArray out = env->NewByteArray(d->size());
+    env->SetByteArrayRegion(out, 0, d->size(), reinterpret_cast<const jbyte*>(d->data()));
+    return out;
+}
+
+// Juggluco fromjava(activationcommand): getActivationCommand(env, obj, parsertype, info, token).
+extern "C" JNIEXPORT jint JNICALL
+Java_com_gluview_app_data_libre2_Libre2Native_nativeEuActivationCommand(JNIEnv* env, jobject thiz, jbyteArray info) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!ensureEuResolved() || !p_getActivationCommand || !info) return -1000;
+    jbyte cmd = p_getActivationCommand(env, thiz, PARSERTYPE, info, realToken(env));
+    clearJavaException(env, "getActivationCommand");
+    LOGI("EU getActivationCommand = 0x%02X", (unsigned)(uint8_t)cmd);
+    return (jint)(uint8_t)cmd;
+}
+
+// Juggluco fromjava(activationpayload): getActivationPayload(env, obj, parsertype, uid, info, person, token).
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_gluview_app_data_libre2_Libre2Native_nativeEuActivationPayload(JNIEnv* env, jobject thiz,
+        jbyteArray uid, jbyteArray info, jint person) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!ensureEuResolved() || !p_getActivationPayload || !uid || !info) return nullptr;
+    jbyteArray res = p_getActivationPayload(env, thiz, PARSERTYPE, uid, info, (jbyte)person, realToken(env));
+    clearJavaException(env, "getActivationPayload");
+    LOGI("EU getActivationPayload = %d bytes", res ? (int)env->GetArrayLength(res) : -1);
+    return res;
+}
+
+// Juggluco getStreamingPayload(&astate, uid, info, tim): subenv com scanstate novo; tim = agora (s).
+// O MESMO tim e o MESMO patchInfo têm de ir depois para o desbloqueio (Juggluco: "info and
+// startsincebase should be the same as used by getEnableStreamingPayload").
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_gluview_app_data_libre2_Libre2Native_nativeEuEnableStreamingPayload(JNIEnv* env, jobject,
+        jbyteArray uid, jbyteArray info, jlong epochSec) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!ensureEuResolved() || !p_getEnableStreamingPayload) return nullptr;
+    data_t* ident = jToData(env, uid);
+    data_t* pinfo = jToData(env, info);
+    if (!ident || !pinfo) { data_t::deleteex(ident); data_t::deleteex(pinfo); return nullptr; }
+    scanstate* st = new scanstate(defaultscanstate);
+    jnidata_t sub = {&envbuf, st};
+    JNIEnv* subenvp = (JNIEnv*)&sub;
+    const jint timeminbase = (jint)(epochSec - BASESECS);
+    const data_t* pay = reinterpret_cast<const data_t*>(p_getEnableStreamingPayload(
+        subenvp, nullptr, PARSERTYPE, (jbyteArray)ident, (jbyteArray)pinfo, (jbyte)0, timeminbase, (jbyteArray)g_token));
+    jbyteArray out = dataToJava(env, pay);
+    LOGI("EU getEnableStreamingPayload(t=%d) = %d bytes", (int)timeminbase, pay ? pay->size() : -1);
+    delete st;
+    data_t::deleteex(ident);
+    data_t::deleteex(pinfo);
+    return out;
+}
+
+// Juggluco unlockKeySensor: getStreamingUnlockPayload(subenv, nullptr, parsertype, uid, blueinfo,
+// person=0, bluestart-basesecs, lockcount++, token). O contador é guardado por sensor no Kotlin.
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_gluview_app_data_libre2_Libre2Native_nativeEuStreamingUnlockPayload(JNIEnv* env, jobject,
+        jbyteArray uid, jbyteArray info, jlong blueStartEpochSec, jint unlockCount) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!ensureEuResolved() || !p_getStreamingUnlockPayload) return nullptr;
+    data_t* ident = jToData(env, uid);
+    data_t* pinfo = jToData(env, info);
+    if (!ident || !pinfo) { data_t::deleteex(ident); data_t::deleteex(pinfo); return nullptr; }
+    scanstate* st = new scanstate(defaultscanstate);
+    jnidata_t sub = {&envbuf, st};
+    JNIEnv* subenvp = (JNIEnv*)&sub;
+    const jint startsincebase = (jint)(blueStartEpochSec - BASESECS);
+    const data_t* res = reinterpret_cast<const data_t*>(p_getStreamingUnlockPayload(
+        subenvp, nullptr, PARSERTYPE, (jbyteArray)ident, (jbyteArray)pinfo, (jbyte)0, startsincebase, unlockCount,
+        (jbyteArray)g_token));
+    jbyteArray out = dataToJava(env, res);
+    LOGI("EU getStreamingUnlockPayload(start=%d, n=%d) = %d bytes", (int)startsincebase, (int)unlockCount,
+         res ? res->size() : -1);
+    delete st;
+    data_t::deleteex(ident);
+    data_t::deleteex(pinfo);
+    return out;
+}

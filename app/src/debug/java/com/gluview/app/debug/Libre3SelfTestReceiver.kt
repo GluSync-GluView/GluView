@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.gluview.app.data.libre3.Libre3Native
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigInteger
 import java.security.SecureRandom
@@ -28,6 +29,8 @@ import java.security.SecureRandom
 interface DebugDeps {
     fun preferences(): com.gluview.app.data.datastore.AppPreferences
     fun repository(): com.gluview.app.data.repository.GlucoseRepository
+    fun appLogger(): com.gluview.app.util.AppLogger
+    fun appLogDao(): com.gluview.app.data.local.dao.AppLogDao
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -40,6 +43,61 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
             "kauth" -> { resultData = hex(Libre3TestAuthorization.fabricate()); return }
             "sensor_decrypt" -> { resultData = sensorOp(intent, decrypt = true) ?: "ERRO"; return }
             "sensor_encrypt" -> { resultData = sensorOp(intent, decrypt = false) ?: "ERRO"; return }
+            // F6.2: a biblioteca da Abbott empacotada reconhece a família 7F (Libre 2/2 Plus EU)?
+            "libre2_family" -> {
+                val logger = dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    context.applicationContext, DebugDeps::class.java).appLogger()
+                val lib = com.gluview.app.data.libre2.Libre2Native
+                val ok = runCatching { lib.init(logger) }.getOrDefault(false)
+                fun fam(hexPi: String) = lib.productFamily(unhex(hexPi))
+                val r = "init=$ok 9D=${fam("9d0830017136")} 2B=${fam("2b0a3a081fe1")} " +
+                    "7F0E30=${fam("7f0e30010000")} 7F0E31=${fam("7f0e31010000")} E5=${fam("e50003010000")} 70=${fam("700010010000")}"
+                Log.i(tag, "LIBRE2_FAMILY $r")
+                resultData = r
+                return
+            }
+            // F6.2: as funções do caminho EU respondem para a família 7F? (UID de exemplo, sem sensor)
+            "libre2_eu" -> {
+                val logger = dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    context.applicationContext, DebugDeps::class.java).appLogger()
+                val lib = com.gluview.app.data.libre2.Libre2Native
+                val ok = runCatching { lib.init(logger) }.getOrDefault(false)
+                val uid = unhex(intent.getStringExtra("uid") ?: "e00a3c2a1e2b07e0")
+                val sb = StringBuilder("init=$ok")
+                for (pi in listOf("7f0e30010000", "7f0e31010000", "9d0830017136")) {
+                    val info = unhex(pi)
+                    val cmd = lib.euActivationCommand(info)
+                    val act = lib.euActivationPayload(uid, info)
+                    val t = System.currentTimeMillis() / 1000
+                    val en = lib.euEnableStreamingPayload(uid, info, t)
+                    val u0 = lib.euStreamingUnlockPayload(uid, info, t, 0)
+                    val u1 = lib.euStreamingUnlockPayload(uid, info, t, 1)
+                    sb.append(" | $pi cmd=${cmd?.let { "%02x".format(it) }} act=${act?.let(::hex)} en=${en?.let(::hex)} " +
+                        "unlock0=${u0?.let(::hex)} unlock1=${u1?.let(::hex)} unlockMuda=${u0 != null && u1 != null && !u0.contentEquals(u1)}")
+                }
+                Log.i(tag, "LIBRE2_EU $sb")
+                resultData = sb.toString()
+                return
+            }
+            // Últimas linhas do log do app (AppLogger), filtradas por etiqueta — para os cenários dos simuladores.
+            "logs" -> {
+                val dao = dagger.hilt.android.EntryPointAccessors.fromApplication(
+                    context.applicationContext, DebugDeps::class.java).appLogDao()
+                val tags = intent.getStringExtra("tags")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+                val last = intent.getStringExtra("last")?.toIntOrNull() ?: 30
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val rows = dao.observeRecent(2000).first()
+                            .filter { tags == null || tags.any { t -> it.tag.startsWith(t) } }
+                            .take(last).reversed()
+                        pending.resultData = rows.joinToString(" || ") {
+                            "${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date(it.ts))} ${it.level} ${it.tag} ${it.msg} ${it.data}"
+                        }
+                    } finally { pending.finish() }
+                }
+                return
+            }
             // Últimas leituras gravadas (hora em ms, mg/dL, seta, origem) — para conferir o simulador.
             "readings" -> {
                 val repo = dagger.hilt.android.EntryPointAccessors.fromApplication(

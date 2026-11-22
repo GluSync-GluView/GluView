@@ -270,6 +270,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         val KEY_LIBRE2_FRAM           = stringPreferencesKey("libre2_fram")           // FRAM 344B para reconstruir scanstate
         val KEY_LIBRE2_SENSOR_START   = longPreferencesKey("libre2_sensor_start_ms")  // ativação (epoch ms) p/ idade
         val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
+        val KEY_LIBRE2_GEN            = intPreferencesKey("libre2_gen")               // 1 = EU (Gen1/7F), 2 = EUA/BR (Gen2)
+        val KEY_LIBRE2_BLUE_START     = longPreferencesKey("libre2_blue_start_s")     // EU: hora do enable streaming (s)
 
         // F6.1 — FreeStyle Libre 3 / Lingo (porte fiel Juggluco GPLv3)
         // whitebox crypto, fresh/saved auth, kAuth 149B, NFC activation, BLE streaming
@@ -672,6 +674,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     val libre2SensorStartMs: Flow<Long>     = dataStore.data.safeMap(0L) { it[KEY_LIBRE2_SENSOR_START] ?: 0L }
     /** Fator de calibração Libre 2 (mmol_exibida = mmol_algoritmo × fator). 1.0 = valor de fábrica. */
     val libre2CalFactor: Flow<Double>       = dataStore.data.safeMap(1.0) { it[KEY_LIBRE2_CAL_FACTOR]  ?: 1.0 }
+    val libre2Gen: Flow<Int>                = dataStore.data.safeMap(2)   { it[KEY_LIBRE2_GEN]         ?: 2 }
+    val libre2BlueStartSec: Flow<Long>      = dataStore.data.safeMap(0L)  { it[KEY_LIBRE2_BLUE_START]  ?: 0L }
 
     // F6.1 — FreeStyle Libre 3 / Lingo
     val libre3Serial: Flow<String>             = dataStore.data.safeMap("") { it[KEY_LIBRE3_SERIAL]          ?: "" }
@@ -1048,6 +1052,17 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     suspend fun saveLibre2UnlockCount(count: Int) =
         dataStore.edit { it[KEY_LIBRE2_UNLOCK_COUNT] = count }
 
+    /**
+     * Libre 2 / 2 Plus europeu (F6.2): geração do sensor (1 = EU/"Gen1", 2 = EUA/Brasil) e a hora (s)
+     * em que o Bluetooth foi ligado por NFC — o desbloqueio de cada conexão usa a MESMA hora e o mesmo
+     * patchInfo (Juggluco getbluedata/unlockKeySensor). O contador de desbloqueio NÃO volta a zero ao
+     * religar o mesmo sensor (Juggluco setbluetooth só troca a hora); sensor novo zera em saveLibre2Session.
+     */
+    suspend fun saveLibre2Eu(gen: Int, blueStartSec: Long) = dataStore.edit {
+        it[KEY_LIBRE2_GEN] = gen
+        it[KEY_LIBRE2_BLUE_START] = blueStartSec
+    }
+
     /** Atualiza a validade observada da sessão GATT persistida. */
     suspend fun saveLibre2StreamingValid(valid: Boolean) =
         dataStore.edit { it[KEY_LIBRE2_STREAMING_VALID] = valid }
@@ -1069,6 +1084,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         it.remove(KEY_LIBRE2_FRAM)
         it.remove(KEY_LIBRE2_SENSOR_START)
         it.remove(KEY_LIBRE2_CAL_FACTOR)
+        it.remove(KEY_LIBRE2_GEN)
+        it.remove(KEY_LIBRE2_BLUE_START)
     }
 
     // F6.1 — FreeStyle Libre 3 / Lingo

@@ -116,7 +116,29 @@ class Libre2Source @Inject constructor(
             // em memória e se perde ao reiniciar o processo; a ativação NFC persistiu uid+auth+MAC nas
             // prefs, então reinjetamos aqui para o handshake BLE (sensorIdent/streamingAuthData) funcionar
             // SEM re-encostar o sensor. O `address` não é necessário para o handshake (o MAC vem das prefs).
-            if (nativeOk && uid.isNotEmpty()) {
+            val gen = preferences.libre2Gen.first()
+            val blueStartSec = preferences.libre2BlueStartSec.first()
+            if (nativeOk && uid.isNotEmpty() && gen == 1) {
+                // Libre 2 EU (F6.2): sem streamingAuthenticationData; a sessão nativa só precisa do
+                // uid/patchInfo/MAC para o processTooth, e o desbloqueio de cada conexão sai da
+                // biblioteca com a hora do enable + contador (Juggluco unlockKeySensor).
+                val fram = runCatching { hexToBytes(preferences.libre2Fram.first()) }.getOrDefault(ByteArray(0))
+                Libre2Native.usEnabledStreaming(uid, patchInfo, ByteArray(0), macToBytes(savedMac))
+                if (fram.size >= 344) {
+                    Libre2Native.processScan(uid, patchInfo, fram,
+                        if (persistedStartMs > 0L) persistedStartMs / 1000 else System.currentTimeMillis() / 1000)
+                }
+                if (persistedStartMs > 0L) Libre2Native.setSensorStart(persistedStartMs / 1000)
+                ble.euUnlock = if (blueStartSec > 0L) { {
+                    val n = unlockCount++
+                    s.launch { preferences.saveLibre2UnlockCount(unlockCount) }
+                    Libre2Native.euStreamingUnlockPayload(uid, patchInfo, blueStartSec, n)
+                } } else null
+                appLogger.usage(LOG, "Sessão EU restaurada", mapOf("blueStart" to blueStartSec, "contador" to unlockCount))
+            } else {
+                ble.euUnlock = null
+            }
+            if (nativeOk && uid.isNotEmpty() && gen != 1) {
                 val authHex = preferences.libre2SessionKey.first()
                 val auth = runCatching { hexToBytes(authHex) }.getOrDefault(ByteArray(0))
                 val startMs = persistedStartMs

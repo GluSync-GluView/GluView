@@ -66,9 +66,10 @@ object SensorVariantCatalog {
         single(DataSourceType.GLUSYNC, SensorMaturity.WORKS),
         SensorVariant("LIBRE2PLUS_SA", R.string.sensor_model_libre2_plus, SensorRegion.SA, DataSourceType.LIBRE2_PLUS, SensorMaturity.WORKS),
         SensorVariant("LIBRE2PLUS_NA", R.string.sensor_model_libre2_plus, SensorRegion.NA, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED),
-        SensorVariant("LIBRE2PLUS_EU", R.string.sensor_model_libre2_plus, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED, implemented = false),
+        // F6.2 (21/11/2026): caminho europeu (Gen1, inclui a 7F) implementado — "Sem teste" até sensor real.
+        SensorVariant("LIBRE2PLUS_EU", R.string.sensor_model_libre2_plus, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED),
         SensorVariant("LIBRE2_NA", R.string.sensor_model_libre2, SensorRegion.NA, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED),
-        SensorVariant("LIBRE2_EU", R.string.sensor_model_libre2, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED, implemented = false),
+        SensorVariant("LIBRE2_EU", R.string.sensor_model_libre2, SensorRegion.EU, DataSourceType.LIBRE2_PLUS, SensorMaturity.UNTESTED),
         // F6.1 - Libre 3 / Lingo (protocolo único global, sem variantes regionais)
         SensorVariant("LIBRE3_GLOBAL", R.string.sensor_model_libre3, SensorRegion.GLOBAL, DataSourceType.LIBRE3, SensorMaturity.UNTESTED),
         SensorVariant("LINGO_GLOBAL", R.string.sensor_model_lingo, SensorRegion.GLOBAL, DataSourceType.LIBRE3, SensorMaturity.UNTESTED),
