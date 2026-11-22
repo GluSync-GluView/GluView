@@ -1964,4 +1964,15 @@
     <string name="dexcom_upload_save">Salvar</string>
     <string name="dexcom_upload_test">Testar login</string>
     <string name="dexcom_upload_last">Último envio: %1$s</string>
+    <string name="mirror_reach_title">Por onde o seguidor tenta, nesta ordem</string>
+    <string name="mirror_reach_none">Ainda sem endereço (ligue o Wi-Fi ou os dados).</string>
+    <string name="mirror_reach_lan">Mesma rede Wi-Fi</string>
+    <string name="mirror_reach_ipv6">IPv6</string>
+    <string name="mirror_reach_public">Endereço público informado</string>
+    <string name="mirror_reach_stun">IP público (STUN, tentativa extra)</string>
+    <string name="mirror_reach_note">Fora da mesma rede, só funciona se este celular puder ser alcançado: IPv6 sem bloqueio de entrada, VPN (ex.: Tailscale) ou a porta do espelho redirecionada no roteador. No 4G com IP compartilhado (CGNAT) não funciona; para seguir de longe nesse caso, use o GluSync. O seguidor recebe esta lista a cada conexão.</string>
+    <string name="mirror_public_host">Endereço público (opcional)</string>
+    <string name="mirror_public_host_help">Nome DDNS, endereço da VPN ou IP fixo. A porta %1$d precisa chegar a este celular.</string>
+    <string name="mirror_stun">Descobrir o IP público por STUN</string>
+    <string name="mirror_stun_desc">Pergunta o IP público a um servidor grátis (Google ou Cloudflare) e o seguidor tenta por ele por último. O pedido não leva nenhum dado seu. Não fura CGNAT: só ajuda com porta redirecionada ou IP público.</string>
 </resources>

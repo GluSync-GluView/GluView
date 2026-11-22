@@ -31,7 +31,9 @@ class MirrorServer(
     private val clock: () -> Long = System::currentTimeMillis,
     private val listener: Listener = object : Listener {},
     private val bindAddress: InetAddress? = null,
-    private val pingIntervalMs: Long = 30_000L
+    private val pingIntervalMs: Long = 30_000L,
+    /** Endereços atuais do paciente (F2.4), mandados no "bem-vindo" para o seguidor guardar. */
+    private val candidates: () -> List<MirrorCandidate> = { emptyList() }
 ) {
     interface Listener {
         fun onFollowerConnected(pairIdHex: String, remote: String) {}
@@ -112,8 +114,9 @@ class MirrorServer(
             val s = Session(first.pairId, key, sock, out)
             session = s
             val m = meta()
+            val addrs = runCatching { MirrorCandidate.ordered(candidates()).map { it.encode() } }.getOrDefault(emptyList())
             if (!send(s, mapOf("t" to "welcome", "c" to challenge, "name" to m.patientName,
-                    "th" to m.thresholds.toMap(), "unit" to m.unit, "now" to clock()))) return
+                    "th" to m.thresholds.toMap(), "unit" to m.unit, "addrs" to addrs, "now" to clock()))) return
             val backlog = history(since).filter { it.epochMs > since }.sortedBy { it.epochMs }.takeLast(2_000)
             backlog.chunked(200).forEach { chunk ->
                 if (!send(s, mapOf("t" to "readings", "items" to chunk.map { it.toMap() }, "now" to clock()))) return

@@ -74,15 +74,21 @@ data class PairingCode(
     val key: ByteArray,
     val host: String,
     val port: Int,
-    val patientName: String
+    val patientName: String,
+    /** Outros endereços do paciente além de [host] (F2.4); 8º campo opcional do código. */
+    val extra: List<MirrorCandidate> = emptyList()
 ) {
-    fun encode(): String = listOf(PREFIX, VERSION.toString(), MirrorCrypto.hex(pairId), MirrorCrypto.b64(key),
-        MirrorCrypto.b64(host.toByteArray(Charsets.UTF_8)), port.toString(), MirrorCrypto.b64(patientName.toByteArray(Charsets.UTF_8))).joinToString(":")
+    fun encode(): String = (listOf(PREFIX, VERSION.toString(), MirrorCrypto.hex(pairId), MirrorCrypto.b64(key),
+        MirrorCrypto.b64(host.toByteArray(Charsets.UTF_8)), port.toString(), MirrorCrypto.b64(patientName.toByteArray(Charsets.UTF_8))) +
+        listOfNotNull(extra.takeIf { it.isNotEmpty() }?.let { l ->
+            MirrorCrypto.b64(l.take(MirrorCandidate.MAX).joinToString(",") { it.encode() }.toByteArray(Charsets.UTF_8)) })
+        ).joinToString(":")
 
     val confirmation: String get() = MirrorCrypto.confirmationCode(key)
 
     override fun equals(other: Any?): Boolean = other is PairingCode && pairId.contentEquals(other.pairId) &&
-        key.contentEquals(other.key) && host == other.host && port == other.port && patientName == other.patientName
+        key.contentEquals(other.key) && host == other.host && port == other.port && patientName == other.patientName &&
+        extra == other.extra
     override fun hashCode(): Int = pairId.contentHashCode()
 
     companion object {
@@ -92,13 +98,17 @@ data class PairingCode(
         /** null quando o texto não é um código do espelho válido desta versão. */
         fun decode(text: String): PairingCode? {
             val p = text.trim().split(':')
-            if (p.size != 7 || p[0] != PREFIX || p[1].toIntOrNull() != VERSION) return null
+            if ((p.size != 7 && p.size != 8) || p[0] != PREFIX || p[1].toIntOrNull() != VERSION) return null
             val id = MirrorCrypto.unhex(p[2])?.takeIf { it.size == MirrorCrypto.PAIR_ID_BYTES } ?: return null
             val key = MirrorCrypto.unb64(p[3])?.takeIf { it.size == MirrorCrypto.KEY_BYTES } ?: return null
             val port = p[5].toIntOrNull()?.takeIf { it in 1..65535 } ?: return null
             val name = MirrorCrypto.unb64(p[6])?.toString(Charsets.UTF_8) ?: return null
             val host = MirrorCrypto.unb64(p[4])?.toString(Charsets.UTF_8)?.takeIf { h -> h.none { it.isWhitespace() } } ?: return null
-            return PairingCode(id, key, host, port, name)
+            val extra = if (p.size == 8) {
+                val text = MirrorCrypto.unb64(p[7])?.toString(Charsets.UTF_8) ?: return null
+                MirrorCandidate.decodeList(text.split(','))
+            } else emptyList()
+            return PairingCode(id, key, host, port, name, extra)
         }
     }
 }

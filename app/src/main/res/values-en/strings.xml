@@ -1957,4 +1957,15 @@
     <string name="dexcom_upload_save">Save</string>
     <string name="dexcom_upload_test">Test login</string>
     <string name="dexcom_upload_last">Last upload: %1$s</string>
+    <string name="mirror_reach_title">Where the follower tries, in this order</string>
+    <string name="mirror_reach_none">No address yet (turn on Wi-Fi or mobile data).</string>
+    <string name="mirror_reach_lan">Same Wi-Fi network</string>
+    <string name="mirror_reach_ipv6">IPv6</string>
+    <string name="mirror_reach_public">Public address you entered</string>
+    <string name="mirror_reach_stun">Public IP (STUN, extra attempt)</string>
+    <string name="mirror_reach_note">Outside the same network it only works if this phone can be reached: IPv6 without inbound blocking, a VPN (e.g. Tailscale) or the mirror port forwarded on the router. It does not work on mobile data with a shared IP (CGNAT); to follow from far away in that case, use GluSync. The follower gets this list on every connection.</string>
+    <string name="mirror_public_host">Public address (optional)</string>
+    <string name="mirror_public_host_help">DDNS name, VPN address or fixed IP. Port %1$d must reach this phone.</string>
+    <string name="mirror_stun">Find the public IP via STUN</string>
+    <string name="mirror_stun_desc">Asks a free server (Google or Cloudflare) for the public IP, and the follower tries it last. The request carries none of your data. It does not get through CGNAT: it only helps with a forwarded port or a public IP.</string>
 </resources>

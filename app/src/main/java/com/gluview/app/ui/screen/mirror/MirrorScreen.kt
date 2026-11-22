@@ -55,6 +55,7 @@ import com.gluview.app.ui.components.kit.Tone
 import com.gluview.app.ui.theme.Spacing
 import com.gluview.mirror.FollowerAlertKind
 import com.gluview.mirror.LinkStatus
+import com.gluview.mirror.MirrorCandidate
 import com.gluview.mirror.PairingCode
 import com.gluview.mirror.directionToArrow
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -123,6 +124,7 @@ fun MirrorScreen(onBack: () -> Unit, vm: MirrorViewModel = hiltViewModel()) {
     var nameText by remember { mutableStateOf<String?>(null) }
     var secretText by remember { mutableStateOf<String?>(null) }
     var portText by remember { mutableStateOf<String?>(null) }
+    var publicHostText by remember { mutableStateOf<String?>(null) }
 
     val scanner = remember {
         GmsBarcodeScanning.getClient(context, GmsBarcodeScannerOptions.Builder()
@@ -165,6 +167,9 @@ fun MirrorScreen(onBack: () -> Unit, vm: MirrorViewModel = hiltViewModel()) {
                 }
                 OutlinedTextField(nameText ?: s.patientName, { v -> val t = v.take(40); nameText = t; vm.update { it.copy(patientName = t) } },
                     label = { Text(stringResource(R.string.mirror_patient_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (s.shareEnabled) InternetReach(s, status.candidates, publicHostText,
+                    onPublicHost = { v -> val t = v.trim().take(253); publicHostText = t; vm.update { it.copy(publicHost = t) } },
+                    onStun = { on -> vm.update { it.copy(stunEnabled = on) } })
                 s.shared.forEach { f ->
                     GluCard {
                         Column(Modifier.fillMaxWidth()) {
@@ -241,6 +246,45 @@ fun MirrorScreen(onBack: () -> Unit, vm: MirrorViewModel = hiltViewModel()) {
     }
     editTarget?.let { f -> EditFollowedDialog(f, onDismiss = { editTarget = null }) { n ->
         vm.update { st -> st.copy(followed = st.followed.map { if (it.pairIdHex == n.pairIdHex) n else it }) }; editTarget = null } }
+}
+
+/**
+ * F2.4 — pela internet sem servidor: mostra por onde o seguidor vai tentar, na ordem, e deixa
+ * informar um endereço público e ligar/desligar o STUN (tentativa extra).
+ */
+@Composable
+private fun InternetReach(
+    s: MirrorSettings,
+    candidates: List<MirrorCandidate>,
+    publicHostText: String?,
+    onPublicHost: (String) -> Unit,
+    onStun: (Boolean) -> Unit
+) {
+    GluCard {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(stringResource(R.string.mirror_reach_title), style = MaterialTheme.typography.titleSmall)
+            if (candidates.isEmpty()) {
+                Text(stringResource(R.string.mirror_reach_none), style = MaterialTheme.typography.bodySmall)
+            } else candidates.forEachIndexed { i, c ->
+                val label = stringResource(when (c.kind) {
+                    MirrorCandidate.Kind.LAN -> R.string.mirror_reach_lan
+                    MirrorCandidate.Kind.IPV6 -> R.string.mirror_reach_ipv6
+                    MirrorCandidate.Kind.PUBLIC -> R.string.mirror_reach_public
+                    MirrorCandidate.Kind.STUN -> R.string.mirror_reach_stun
+                })
+                val host = if (':' in c.host) "[${c.host}]" else c.host
+                Text("${i + 1}. $label: $host:${c.port}", style = MaterialTheme.typography.bodySmall)
+            }
+            Text(stringResource(R.string.mirror_reach_note), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    OutlinedTextField(publicHostText ?: s.publicHost, onPublicHost, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.mirror_public_host)) },
+        supportingText = { Text(stringResource(R.string.mirror_public_host_help, s.sharePort)) })
+    GluCard {
+        SwitchRow(stringResource(R.string.mirror_stun), s.stunEnabled, onStun, description = stringResource(R.string.mirror_stun_desc))
+    }
 }
 
 private fun httpUrl(s: MirrorSettings, wifi: String?): String =

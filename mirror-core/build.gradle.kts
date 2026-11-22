@@ -19,3 +19,6 @@ kotlin {
 dependencies {
     testImplementation("junit:junit:4.13.2")
 }
+
+// Teste do STUN contra os servidores públicos só quando pedido: gradlew :mirror-core:test -Dstun.live=true
+tasks.test { systemProperty("stun.live", System.getProperty("stun.live") ?: "false") }

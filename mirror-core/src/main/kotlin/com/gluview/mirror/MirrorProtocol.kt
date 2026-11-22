@@ -51,5 +51,13 @@ object MirrorProtocol {
     }
 }
 
-/** O que o paciente manda junto do "bem-vindo": nome, limites e unidade. */
-data class MirrorMeta(val patientName: String, val thresholds: MirrorThresholds, val unit: String)
+/**
+ * O que o paciente manda junto do "bem-vindo": nome, limites, unidade e os endereços pelos quais
+ * pode ser alcançado agora ([MirrorCandidate], F2.4).
+ */
+data class MirrorMeta(
+    val patientName: String,
+    val thresholds: MirrorThresholds,
+    val unit: String,
+    val candidates: List<MirrorCandidate> = emptyList()
+)

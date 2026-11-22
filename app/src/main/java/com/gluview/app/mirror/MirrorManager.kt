@@ -17,6 +17,7 @@ import com.gluview.mirror.FollowerAlerts
 import com.gluview.mirror.FollowerState
 import com.gluview.mirror.LinkStatus
 import com.gluview.mirror.LocalHttpServer
+import com.gluview.mirror.MirrorCandidate
 import com.gluview.mirror.MirrorClient
 import com.gluview.mirror.MirrorCrypto
 import com.gluview.mirror.MirrorMeta
@@ -24,6 +25,7 @@ import com.gluview.mirror.MirrorReading
 import com.gluview.mirror.MirrorServer
 import com.gluview.mirror.MirrorThresholds
 import com.gluview.mirror.PairingCode
+import com.gluview.mirror.StunClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -63,7 +66,9 @@ data class MirrorServerStatus(
     val connectedFollowers: Set<String> = emptySet(),
     val httpRunning: Boolean = false,
     val wifiAddress: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    /** F2.4: endereços que o seguidor tenta, na ordem (rede local → IPv6 → público → STUN). */
+    val candidates: List<MirrorCandidate> = emptyList()
 )
 
 /**
@@ -105,6 +110,9 @@ class MirrorManager @Inject constructor(
     private var nsdRegistration: NsdManager.RegistrationListener? = null
     private var nsdDiscovery: NsdManager.DiscoveryListener? = null
     @Volatile private var lastPublished = 0L
+    /** F2.4: IPv4 público pelo STUN (tentativa extra) e quando foi descoberto. */
+    @Volatile private var stunIpv4: String? = null
+    @Volatile private var stunAtMs = 0L
 
     private val _followedViews = MutableStateFlow<List<FollowedView>>(emptyList())
     val followedViews: StateFlow<List<FollowedView>> = _followedViews
@@ -124,6 +132,38 @@ class MirrorManager @Inject constructor(
         jobs += scope.launch(Dispatchers.IO) {
             while (isActive) { runCatching { tickAlerts() }; refreshViews(); delay(30_000L) }
         }
+        // F2.4: renova o IP público pelo STUN a cada 10 min enquanto o compartilhamento estiver ligado.
+        jobs += scope.launch(Dispatchers.IO) {
+            while (isActive) { runCatching { refreshStun() }; delay(60_000L) }
+        }
+    }
+
+    private fun refreshStun(force: Boolean = false) {
+        val s = store.settings.value
+        if (shareServer == null || !s.stunEnabled) {
+            if (stunIpv4 != null) { stunIpv4 = null; refreshStatus() }
+            return
+        }
+        if (!force && System.currentTimeMillis() - stunAtMs < 10 * 60_000L) return
+        stunAtMs = System.currentTimeMillis()
+        val ip = StunClient.publicIpv4()
+        if (ip != null || stunIpv4 != null) appLogger.usage("MIRROR", "STUN", mapOf("ok" to (ip != null)))
+        stunIpv4 = ip
+        refreshStatus()
+    }
+
+    /**
+     * F2.4: por onde o paciente pode ser alcançado agora, na ordem de tentativa: rede local (Wi-Fi),
+     * IPv6 global, endereço público informado e, por último, o IP público do STUN.
+     */
+    fun patientCandidates(s: MirrorSettings = store.settings.value): List<MirrorCandidate> {
+        val port = s.sharePort
+        val list = mutableListOf<MirrorCandidate>()
+        wifiIpv4()?.let { list += MirrorCandidate(MirrorCandidate.Kind.LAN, it, port) }
+        globalIpv6().take(2).forEach { list += MirrorCandidate(MirrorCandidate.Kind.IPV6, it, port) }
+        s.publicHost.trim().takeIf(MirrorCandidate::validHost)?.let { list += MirrorCandidate(MirrorCandidate.Kind.PUBLIC, it, port) }
+        if (s.stunEnabled) stunIpv4?.let { list += MirrorCandidate(MirrorCandidate.Kind.STUN, it, port) }
+        return MirrorCandidate.ordered(list)
     }
 
     @Synchronized
@@ -150,14 +190,20 @@ class MirrorManager @Inject constructor(
         val id = MirrorCrypto.newPairId(); val key = MirrorCrypto.newKey()
         val s = store.update { it.copy(shared = it.shared + SharedFollower(MirrorCrypto.hex(id), MirrorCrypto.b64(key),
             label.trim(), System.currentTimeMillis()), shareEnabled = true) }
-        return PairingCode(id, key, wifiIpv4().orEmpty(), s.sharePort, s.patientName.ifBlank { context.getString(R.string.mirror_default_patient) })
+        return PairingCode(id, key, wifiIpv4().orEmpty(), s.sharePort, s.patientName.ifBlank { context.getString(R.string.mirror_default_patient) },
+            extraCandidates(s))
     }
+
+    /** Endereços além do Wi-Fi (que já vai no campo principal do código). */
+    private fun extraCandidates(s: MirrorSettings): List<MirrorCandidate> =
+        patientCandidates(s).filterNot { it.kind == MirrorCandidate.Kind.LAN }
 
     /** Código de um seguidor já criado (para mostrar o QR de novo). */
     fun pairingFor(f: SharedFollower): PairingCode? {
         val s = store.load()
         return PairingCode(MirrorCrypto.unhex(f.pairIdHex) ?: return null, MirrorCrypto.unb64(f.keyB64) ?: return null,
-            wifiIpv4().orEmpty(), s.sharePort, s.patientName.ifBlank { context.getString(R.string.mirror_default_patient) })
+            wifiIpv4().orEmpty(), s.sharePort, s.patientName.ifBlank { context.getString(R.string.mirror_default_patient) },
+            extraCandidates(s))
     }
 
     fun revoke(pairIdHex: String) {
@@ -169,7 +215,8 @@ class MirrorManager @Inject constructor(
     fun follow(code: PairingCode) {
         val hex = MirrorCrypto.hex(code.pairId)
         store.update { s -> s.copy(followed = s.followed.filterNot { it.pairIdHex == hex } +
-            FollowedPatient(hex, MirrorCrypto.b64(code.key), code.patientName, code.host, code.port)) }
+            FollowedPatient(hex, MirrorCrypto.b64(code.key), code.patientName, code.host, code.port,
+                learned = code.extra.map { it.encode() })) }
     }
 
     fun unfollow(pairIdHex: String) = store.update { s -> s.copy(followed = s.followed.filterNot { it.pairIdHex == pairIdHex }) }
@@ -192,13 +239,14 @@ class MirrorManager @Inject constructor(
                         ?.keyB64?.let(MirrorCrypto::unb64) },
                     history = { since -> runBlocking { history(since) } },
                     meta = { runBlocking { meta() } },
+                    candidates = { patientCandidates() },
                     listener = object : MirrorServer.Listener {
                         override fun onFollowerConnected(pairIdHex: String, remote: String) = refreshStatus()
                         override fun onFollowerDisconnected(pairIdHex: String, reason: String) = refreshStatus()
                         override fun onError(message: String) { appLogger.usage("MIRROR", message) }
                     }
                 )
-                runCatching { srv.start() }.onSuccess { shareServer = srv; registerNsd(s.sharePort) }
+                runCatching { srv.start() }.onSuccess { shareServer = srv; registerNsd(s.sharePort); kickStun() }
                     .onFailure { e -> setError(context.getString(R.string.mirror_err_port, s.sharePort)); log("Falha ao abrir o espelho", e) }
             }
             shareConfig = shareKey
@@ -231,8 +279,12 @@ class MirrorManager @Inject constructor(
             }
         }
         if (s.followed.any { it.host.isBlank() }) startDiscovery() else stopDiscovery()
+        // F2.4: ligou o STUN (ou ainda não tem IP público): descobre já, sem segurar os ajustes.
+        if (shareServer != null && s.stunEnabled && stunIpv4 == null) kickStun()
         refreshStatus(); refreshViews()
     }
+
+    private fun kickStun() { scope?.launch(Dispatchers.IO) { runCatching { refreshStun(force = true) } } }
 
     private fun startClient(cfg: FollowedPatient, previous: Followed?) {
         val key = MirrorCrypto.unb64(cfg.keyB64) ?: return
@@ -241,14 +293,33 @@ class MirrorManager @Inject constructor(
         var rr = 0
         val client = MirrorClient(
             pairId = id, key = key,
-            address = {
-                val host = cfg.host.ifBlank { discovered.getOrNull(rr++ % discovered.size.coerceAtLeast(1)) }
-                host?.let { h -> runCatching { InetSocketAddress(h, cfg.port) }.getOrNull() }
-                    ?.also { holder?.lastAddress = "${it.hostString}:${it.port}" }
+            // F2.4: primeiro a rede (endereço do código ou achado na rede local), depois os endereços
+            // que o paciente mandou (IPv6, público informado) e, por último, o do STUN.
+            addresses = {
+                val cur = holder?.cfg ?: cfg
+                val out = LinkedHashSet<InetSocketAddress>()
+                if (cur.host.isNotBlank()) runCatching { InetSocketAddress(cur.host, cur.port) }.getOrNull()?.let(out::add)
+                if (discovered.isNotEmpty()) {
+                    val start = rr++ % discovered.size
+                    (discovered.drop(start) + discovered.take(start)).forEach { h ->
+                        runCatching { InetSocketAddress(h, cur.port) }.getOrNull()?.let(out::add)
+                    }
+                }
+                MirrorCandidate.ordered(cur.learned.mapNotNull(MirrorCandidate::decode))
+                    .forEach { c -> c.socketAddress()?.let(out::add) }
+                out.toList()
             },
             since = { holder?.state?.lastEpoch() ?: 0L },
             listener = object : MirrorClient.Listener {
-                override fun onConnected(meta: MirrorMeta) { holder?.meta = meta; holder?.lastError = null; refreshViews() }
+                override fun onLinkAddress(address: InetSocketAddress) { holder?.lastAddress = "${address.hostString}:${address.port}" }
+                override fun onConnected(meta: MirrorMeta) {
+                    holder?.meta = meta; holder?.lastError = null; refreshViews()
+                    // F2.4: guarda os endereços atuais do paciente para quando sair da rede de casa.
+                    val learned = meta.candidates.map { it.encode() }
+                    if (learned.isNotEmpty() && learned != (holder?.cfg ?: cfg).learned) {
+                        store.update { s -> s.copy(followed = s.followed.map { if (it.pairIdHex == cfg.pairIdHex) it.copy(learned = learned) else it }) }
+                    }
+                }
                 override fun onReadings(items: List<MirrorReading>) {
                     holder?.state?.merge(items, System.currentTimeMillis()); refreshViews()
                     scope?.launch(Dispatchers.IO) { runCatching { tickAlerts() } }
@@ -314,7 +385,8 @@ class MirrorManager @Inject constructor(
             connectedFollowers = shareServer?.connectedPairs ?: emptySet(),
             httpRunning = httpServer != null,
             wifiAddress = wifiIpv4(),
-            error = if (shareServer == null && httpServer == null) _status.value.error else null
+            error = if (shareServer == null && httpServer == null) _status.value.error else null,
+            candidates = if (shareServer != null) runCatching { patientCandidates() }.getOrDefault(emptyList()) else emptyList()
         )
     }
 
@@ -364,6 +436,15 @@ class MirrorManager @Inject constructor(
             .flatMap { it.linkAddresses.asSequence() }.map { it.address }
             .firstOrNull { it is Inet4Address && !it.isLoopbackAddress && it.isSiteLocalAddress }?.hostAddress
     }.getOrNull()
+
+    /** IPv6 globais deste celular (alcançáveis de fora quando a rede não bloqueia a entrada). */
+    fun globalIpv6(): List<String> = runCatching {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.allNetworks.asSequence().mapNotNull { cm.getLinkProperties(it) }
+            .flatMap { it.linkAddresses.asSequence() }.map { it.address }
+            .filter { it is Inet6Address && MirrorCandidate.isGlobalIpv6(it) }
+            .map(MirrorCandidate::hostOf).distinct().toList()
+    }.getOrDefault(emptyList())
 
     private fun registerNsd(port: Int) {
         val info = NsdServiceInfo().apply { serviceName = "GluView"; serviceType = NSD_TYPE; this.port = port }

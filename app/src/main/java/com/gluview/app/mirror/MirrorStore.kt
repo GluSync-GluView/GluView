@@ -8,6 +8,7 @@ import com.gluview.mirror.FollowerAlertKind
 import com.gluview.mirror.FollowerAlertPrefs
 import com.gluview.mirror.Json
 import com.gluview.mirror.LocalHttpServer
+import com.gluview.mirror.MirrorCandidate
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,9 @@ data class FollowedPatient(
     val port: Int,
     val alerts: FollowerAlertPrefs = FollowerAlertPrefs(),
     /** O paciente tirou o acesso (guardado para não voltar a tentar nem alarmar depois de reiniciar). */
-    val revoked: Boolean = false
+    val revoked: Boolean = false,
+    /** Endereços que o paciente mandou no último "bem-vindo" (F2.4), já no formato de [com.gluview.mirror.MirrorCandidate]. */
+    val learned: List<String> = emptyList()
 )
 
 data class MirrorSettings(
@@ -43,7 +46,11 @@ data class MirrorSettings(
     /** false = só neste celular (127.0.0.1); true = também na rede Wi-Fi (senha obrigatória). */
     val httpOnWifi: Boolean = false,
     val httpPort: Int = LocalHttpServer.DEFAULT_PORT,
-    val httpSecret: String = ""
+    val httpSecret: String = "",
+    /** F2.4: endereço público opcional do paciente (DDNS, VPN, porta redirecionada no roteador). */
+    val publicHost: String = "",
+    /** F2.4: descobrir o IP público por STUN (servidores grátis do Google/Cloudflare) como tentativa extra. */
+    val stunEnabled: Boolean = true
 ) {
     companion object { const val DEFAULT_MIRROR_PORT = 17581 }
 }
@@ -89,12 +96,13 @@ class MirrorStore @Inject constructor(@ApplicationContext private val context: C
         fun encode(s: MirrorSettings): String = Json.write(mapOf(
             "shareEnabled" to s.shareEnabled, "sharePort" to s.sharePort, "patientName" to s.patientName,
             "httpEnabled" to s.httpEnabled, "httpOnWifi" to s.httpOnWifi, "httpPort" to s.httpPort,
-            "httpSecret" to s.httpSecret,
+            "httpSecret" to s.httpSecret, "publicHost" to s.publicHost, "stun" to s.stunEnabled,
             "shared" to s.shared.map { mapOf("id" to it.pairIdHex, "k" to it.keyB64, "label" to it.label, "at" to it.createdMs) },
             "followed" to s.followed.map { f ->
                 mapOf("id" to f.pairIdHex, "k" to f.keyB64, "name" to f.name, "host" to f.host, "port" to f.port,
                     "alerts" to f.alerts.enabled.map { it.name }, "repeat" to f.alerts.repeatMin,
-                    "link" to f.alerts.linkTimeoutMin, "nosig" to f.alerts.noSignalMin, "revoked" to f.revoked)
+                    "link" to f.alerts.linkTimeoutMin, "nosig" to f.alerts.noSignalMin, "revoked" to f.revoked,
+                    "learned" to f.learned)
             }
         ))
 
@@ -112,6 +120,8 @@ class MirrorStore @Inject constructor(@ApplicationContext private val context: C
                 httpOnWifi = m.b("httpOnWifi") ?: d.httpOnWifi,
                 httpPort = m.i("httpPort")?.takeIf { it in 1024..65535 } ?: d.httpPort,
                 httpSecret = m.s("httpSecret") ?: "",
+                publicHost = m.s("publicHost").orEmpty(),
+                stunEnabled = m.b("stun") ?: d.stunEnabled,
                 shared = (m["shared"] as? List<*>).orEmpty().mapNotNull { x ->
                     val o = x as? Map<*, *> ?: return@mapNotNull null
                     SharedFollower(o.s("id") ?: return@mapNotNull null, o.s("k") ?: return@mapNotNull null,
@@ -127,7 +137,8 @@ class MirrorStore @Inject constructor(@ApplicationContext private val context: C
                             repeatMin = o.i("repeat")?.coerceIn(5, 240) ?: def.repeatMin,
                             linkTimeoutMin = o.i("link")?.coerceIn(3, 120) ?: def.linkTimeoutMin,
                             noSignalMin = o.i("nosig")?.coerceIn(5, 120) ?: def.noSignalMin),
-                        revoked = o.b("revoked") ?: false)
+                        revoked = o.b("revoked") ?: false,
+                        learned = (o["learned"] as? List<*>).orEmpty().filterIsInstance<String>().take(MirrorCandidate.MAX))
                 }
             )
         }
