@@ -271,6 +271,15 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         val KEY_LIBRE2_SENSOR_START   = longPreferencesKey("libre2_sensor_start_ms")  // ativação (epoch ms) p/ idade
         val KEY_LIBRE2_CAL_FACTOR     = doublePreferencesKey("libre2_cal_factor")     // âncora ponta de dedo; 1.0 = fábrica
         val KEY_LIBRE2_GEN            = intPreferencesKey("libre2_gen")               // 1 = EU (Gen1/7F), 2 = EUA/BR (Gen2)
+        // F8.3 — envio ao Dexcom Share (API não oficial; desligado por padrão; senha em securePrefs)
+        val KEY_DEXCOM_UP_ENABLED     = booleanPreferencesKey("dexcom_upload_enabled")
+        val KEY_DEXCOM_UP_USER        = stringPreferencesKey("dexcom_upload_user")
+        val KEY_DEXCOM_UP_SERIAL      = stringPreferencesKey("dexcom_upload_receiver_serial")
+        val KEY_DEXCOM_UP_US          = booleanPreferencesKey("dexcom_upload_us")
+        val KEY_DEXCOM_UP_STATUS_MS   = longPreferencesKey("dexcom_upload_status_ms")
+        val KEY_DEXCOM_UP_STATUS_TXT  = stringPreferencesKey("dexcom_upload_status_text")
+        val KEY_DEXCOM_UP_STATUS_OK   = booleanPreferencesKey("dexcom_upload_status_ok")
+        private const val SECURE_KEY_DEXCOM_UP_PASSWORD = "dexcom_upload_password"
         val KEY_LIBRE2_BLUE_START     = longPreferencesKey("libre2_blue_start_s")     // EU: hora do enable streaming (s)
 
         // F6.1 — FreeStyle Libre 3 / Lingo (porte fiel Juggluco GPLv3)
@@ -675,6 +684,37 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     /** Fator de calibração Libre 2 (mmol_exibida = mmol_algoritmo × fator). 1.0 = valor de fábrica. */
     val libre2CalFactor: Flow<Double>       = dataStore.data.safeMap(1.0) { it[KEY_LIBRE2_CAL_FACTOR]  ?: 1.0 }
     val libre2Gen: Flow<Int>                = dataStore.data.safeMap(2)   { it[KEY_LIBRE2_GEN]         ?: 2 }
+    val dexcomUploadEnabled: Flow<Boolean>  = dataStore.data.safeMap(false) { it[KEY_DEXCOM_UP_ENABLED] ?: false }
+    val dexcomUploadUsername: Flow<String>  = dataStore.data.safeMap("") { it[KEY_DEXCOM_UP_USER] ?: "" }
+    val dexcomUploadReceiverSerial: Flow<String> = dataStore.data.safeMap("") { it[KEY_DEXCOM_UP_SERIAL] ?: "" }
+    /** false = fora dos EUA (shareous1), o caso do Brasil. */
+    val dexcomUploadUs: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_DEXCOM_UP_US] ?: false }
+    val dexcomUploadStatus: Flow<Triple<Long, String, Boolean>> = dataStore.data.safeMap(Triple(0L, "", false)) {
+        Triple(it[KEY_DEXCOM_UP_STATUS_MS] ?: 0L, it[KEY_DEXCOM_UP_STATUS_TXT] ?: "", it[KEY_DEXCOM_UP_STATUS_OK] ?: false)
+    }
+
+    /** Senha do Dexcom Share — só no armazenamento cifrado (Keystore), nunca no DataStore. */
+    suspend fun dexcomUploadPassword(): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        securePrefs.getString(SECURE_KEY_DEXCOM_UP_PASSWORD, "") ?: ""
+    }
+
+    suspend fun saveDexcomUpload(enabled: Boolean, username: String, password: String?, receiverSerial: String, us: Boolean) {
+        dataStore.edit {
+            it[KEY_DEXCOM_UP_ENABLED] = enabled
+            it[KEY_DEXCOM_UP_USER] = username.trim()
+            it[KEY_DEXCOM_UP_SERIAL] = receiverSerial.trim().uppercase()
+            it[KEY_DEXCOM_UP_US] = us
+        }
+        if (password != null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            securePrefs.edit().putString(SECURE_KEY_DEXCOM_UP_PASSWORD, password).apply()
+        }
+    }
+
+    suspend fun saveDexcomUploadStatus(atMs: Long, text: String, ok: Boolean) = dataStore.edit {
+        it[KEY_DEXCOM_UP_STATUS_MS] = atMs
+        it[KEY_DEXCOM_UP_STATUS_TXT] = text
+        it[KEY_DEXCOM_UP_STATUS_OK] = ok
+    }
     val libre2BlueStartSec: Flow<Long>      = dataStore.data.safeMap(0L)  { it[KEY_LIBRE2_BLUE_START]  ?: 0L }
 
     // F6.1 — FreeStyle Libre 3 / Lingo

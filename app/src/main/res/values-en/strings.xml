@@ -1942,4 +1942,19 @@
     <string name="libre3_account_id_help">Only change it to take over a sensor activated in another app. For a sensor activated by GluView, leave it as it is.</string>
     <string name="libre3_account_id_field">Account number</string>
     <string name="libre3_forget_sensor">Forget Libre 3 sensor</string>
+    <string name="dexcom_upload_title">Send to Dexcom Share</string>
+    <string name="dexcom_upload_desc">Sends the glucose from this phone\'s sensor to a Dexcom account, for followers using the Dexcom Follow app.</string>
+    <string name="dexcom_upload_disclaimer_title">Unofficial integration</string>
+    <string name="dexcom_upload_disclaimer">Dexcom offers no official way for other apps to upload data. This uses the same unofficial API as xDrip+ and may stop working at any time, without notice. It stays off until you turn it on. It needs the serial number of a Dexcom receiver linked to the account. The password is stored encrypted on this phone only. GluView is not a medical device and is not affiliated with Dexcom: do not use Follow as the only source for treatment decisions.</string>
+    <string name="dexcom_upload_switch">Send readings to Dexcom Share</string>
+    <string name="dexcom_upload_switch_desc">Only readings from this phone\'s sensor. Data from the cloud is never re-sent.</string>
+    <string name="dexcom_upload_user">Dexcom account username</string>
+    <string name="dexcom_upload_password">Dexcom account password</string>
+    <string name="dexcom_upload_password_saved">Password saved (type to change)</string>
+    <string name="dexcom_upload_serial">Receiver serial number</string>
+    <string name="dexcom_upload_serial_help">On the back of the Dexcom receiver (e.g. SM12345678). Dexcom refuses uploads without it.</string>
+    <string name="dexcom_upload_us">United States account</string>
+    <string name="dexcom_upload_save">Save</string>
+    <string name="dexcom_upload_test">Test login</string>
+    <string name="dexcom_upload_last">Last upload: %1$s</string>
 </resources>

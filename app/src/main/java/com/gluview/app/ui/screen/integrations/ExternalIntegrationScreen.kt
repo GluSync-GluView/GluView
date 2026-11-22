@@ -93,7 +93,7 @@ fun ExternalIntegrationScreen(
         onApiKeys = onApiKeys,
         onBack = onBack,
         snackbarHostState = snackbar,
-        extra = { LocalBroadcastSetting() }
+        extra = { LocalBroadcastSetting(); DexcomUploadSection() }
     )
 
     connectingProvider?.let { provider ->

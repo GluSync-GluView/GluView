@@ -102,6 +102,7 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
     @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
     @Inject lateinit var xdripBroadcaster: com.gluview.app.data.broadcast.XdripBroadcaster
+    @Inject lateinit var dexcomShareUploader: com.gluview.app.data.integration.DexcomShareUploader
     @Inject lateinit var sensorStatusHolder: com.gluview.app.data.sibionics.SibionicsStatusHolder
     @Inject lateinit var widgetUpdater: com.gluview.app.widget.WidgetUpdater
     @Inject lateinit var floatingWindow: com.gluview.app.overlay.FloatingGlucoseWindow
@@ -119,6 +120,7 @@ class GluSyncService : LifecycleService() {
     private var pollingJob: Job? = null
     private var miBandAutoSendJob: Job? = null
     private var xdripSendJob: Job? = null
+    private var dexcomShareJob: Job? = null
     private var wearSendJob: Job? = null
     private var mobileUploadCatchupJob: Job? = null
     private var wifiUploadCatchupJob: Job? = null
@@ -303,6 +305,17 @@ class GluSyncService : LifecycleService() {
                 runCatching {
                     xdripBroadcaster.onNewReading(reading, sensorStatusHolder.status.value.sensorStartMs,
                         com.gluview.app.data.source.DataSourceType.fromId(preferences.dataSource.first()).label)
+                }
+            }
+        }
+        // F8.3 — envio ao Dexcom Share (opcional, desligado por padrão). Só leitura do SENSOR LOCAL:
+        // fonte GLUSYNC (seguir alguém, integração Dexcom puxada pela nuvem) nunca volta para a Dexcom.
+        dexcomShareJob?.cancel()
+        dexcomShareJob = lifecycleScope.launch {
+            repository.currentReading.filterNotNull().collect { reading ->
+                val source = com.gluview.app.data.source.DataSourceType.fromId(preferences.dataSource.first())
+                if (source != com.gluview.app.data.source.DataSourceType.GLUSYNC) {
+                    runCatching { dexcomShareUploader.onNewReading(reading) }
                 }
             }
         }

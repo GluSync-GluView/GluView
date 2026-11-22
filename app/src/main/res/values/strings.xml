@@ -1949,4 +1949,19 @@
     <string name="libre3_account_id_help">Só é preciso mudar para assumir um sensor ativado em outro app. Para sensor ativado pelo GluView, deixe como está.</string>
     <string name="libre3_account_id_field">Número da conta</string>
     <string name="libre3_forget_sensor">Esquecer sensor Libre 3</string>
+    <string name="dexcom_upload_title">Enviar para o Dexcom Share</string>
+    <string name="dexcom_upload_desc">Manda a glicemia do sensor deste celular para uma conta Dexcom, para quem acompanha pelo app Dexcom Follow.</string>
+    <string name="dexcom_upload_disclaimer_title">Integração não oficial</string>
+    <string name="dexcom_upload_disclaimer">A Dexcom não oferece uma forma oficial de enviar dados de outros apps. Este envio usa a mesma API não oficial do xDrip+ e pode parar de funcionar a qualquer momento, sem aviso. Fica desligado até você ligar. Precisa do número de série de um receptor Dexcom ligado à conta. A senha fica guardada criptografada só neste celular. O GluView não é dispositivo médico e não tem ligação com a Dexcom: não use o Follow como única fonte para decisões de tratamento.</string>
+    <string name="dexcom_upload_switch">Enviar leituras ao Dexcom Share</string>
+    <string name="dexcom_upload_switch_desc">Só leituras do sensor deste celular. Dados vindos da nuvem nunca são reenviados.</string>
+    <string name="dexcom_upload_user">Usuário da conta Dexcom</string>
+    <string name="dexcom_upload_password">Senha da conta Dexcom</string>
+    <string name="dexcom_upload_password_saved">Senha salva (digite para trocar)</string>
+    <string name="dexcom_upload_serial">Número de série do receptor</string>
+    <string name="dexcom_upload_serial_help">Fica atrás do receptor Dexcom (ex.: SM12345678). Sem ele a Dexcom recusa o envio.</string>
+    <string name="dexcom_upload_us">Conta dos Estados Unidos</string>
+    <string name="dexcom_upload_save">Salvar</string>
+    <string name="dexcom_upload_test">Testar login</string>
+    <string name="dexcom_upload_last">Último envio: %1$s</string>
 </resources>
