@@ -17,6 +17,8 @@ import java.util.concurrent.Executors
  * xDrip/Juggluco (porta 17580) e com o básico da API Nightscout v1 (só leitura):
  * `/sgv.json`, `/api/v1/entries[.json]`, `/api/v1/entries/sgv.json`, `/api/v1/treatments[.json]`,
  * `/api/v1/devicestatus[.json]`, `/status.json`, `/api/v1/status[.json]`, `/pebble` e `/`.
+ * Mais `/watch.json` (próprio do GluView): o que os mostradores de relógio precisam para o gráfico
+ * igual ao da Mi Band, compacto (cabe no limite de dados em segundo plano do Garmin).
  *
  * Segurança: fora do próprio celular ([localOnly] = false) a senha é obrigatória — quem chamar
  * manda `api-secret` (a senha ou o SHA-1 dela, como no Nightscout) no cabeçalho, ou `?token=`.
@@ -116,6 +118,8 @@ class LocalHttpServer(
             "/api/v1/devicestatus", "/api/v1/devicestatus.json" -> json(data.deviceStatus(count))
             "/status.json", "/api/v1/status", "/api/v1/status.json" -> json(status())
             "/pebble" -> json(pebble(query["count"]?.toIntOrNull()?.coerceIn(1, 10) ?: 1))
+            "/watch.json" -> json(watch(query["minutes"]?.toIntOrNull()?.coerceIn(30, 720) ?: 180,
+                query["step"]?.toIntOrNull()?.coerceIn(1, 15) ?: 5))
             "/" -> Response(200, "text/html", page())
             else -> Response(404, "application/json", Json.write(mapOf("status" to 404, "message" to "Not found")))
         }
@@ -165,6 +169,48 @@ class LocalHttpServer(
                 "bgdelta" to if (mmol) String.format(java.util.Locale.US, "%.1f", delta / 18.0) else Math.round(delta).toString())
         }
         return linkedMapOf("status" to listOf(mapOf("now" to clock())), "bgs" to bgs, "cals" to emptyList<Any>())
+    }
+
+    /**
+     * Para os mostradores (Garmin, Zepp OS): última leitura já formatada na unidade do usuário, os
+     * limites do paciente e os pontos das últimas [minutes] min (no máximo um a cada [step] min,
+     * sempre com a mais nova), em `pts` = [idadeMin, mg/dL, idadeMin, mg/dL, ...] do mais velho ao
+     * mais novo. Idades pela hora do CELULAR: relógio com hora errada não engana o "há X min".
+     */
+    private fun watch(minutes: Int, step: Int): Map<String, Any?> {
+        val now = clock()
+        val since = now - minutes * 60_000L
+        val list = data.readings(1000, since).filter { it.epochMs in (since + 1)..(now + 60_000L) }.sortedByDescending { it.epochMs }
+        val latest = list.firstOrNull()
+        val prev = list.getOrNull(1)
+        val mmol = data.unit() == "MMOL_L"
+        val picked = ArrayList<MirrorReading>()
+        var lastBucket = Long.MIN_VALUE
+        for (r in list) {   // do mais novo ao mais velho: um por intervalo de [step] min
+            val bucket = (now - r.epochMs).coerceAtLeast(0L) / (step * 60_000L)
+            if (bucket != lastBucket) { picked += r; lastBucket = bucket }
+        }
+        val pts = ArrayList<Any>()
+        picked.asReversed().forEach { r ->
+            pts += ((now - r.epochMs).coerceAtLeast(0L) / 60_000L).toInt()
+            pts += Math.round(r.sgvMgDl).toInt()
+        }
+        val t = data.thresholds()
+        val delta = latest?.let { l -> prev?.takeIf { l.epochMs - it.epochMs <= 15 * 60_000L }?.let { l.sgvMgDl - it.sgvMgDl } ?: l.deltaMgDl?.toDouble() }
+        return linkedMapOf(
+            "now" to now,
+            "unit" to data.unit(),
+            "th" to linkedMapOf("ul" to Math.round(t.urgentLow).toInt(), "l" to Math.round(t.low).toInt(),
+                "h" to Math.round(t.high).toInt(), "uh" to Math.round(t.urgentHigh).toInt()),
+            "sgv" to latest?.let { Math.round(it.sgvMgDl).toInt() },
+            "txt" to latest?.let { if (mmol) String.format(java.util.Locale.US, "%.1f", it.sgvMgDl / 18.0) else Math.round(it.sgvMgDl).toString() },
+            "age" to latest?.let { ((now - it.epochMs).coerceAtLeast(0L) / 60_000L).toInt() },
+            "dir" to (latest?.direction ?: "NONE"),
+            "dtxt" to delta?.let { d ->
+                if (mmol) String.format(java.util.Locale.US, "%+.1f", d / 18.0) else (if (d >= 0) "+" else "") + Math.round(d)
+            },
+            "pts" to pts
+        )
     }
 
     private fun trend(d: String) = when (d) {

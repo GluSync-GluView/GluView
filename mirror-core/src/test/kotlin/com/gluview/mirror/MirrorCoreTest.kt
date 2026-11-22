@@ -131,6 +131,36 @@ class LocalHttpServerTest {
         assertEquals(200, s.route("GET", "/api/v1/entries.json?token=segredo123", emptyMap()).status)
     }
 
+    @Test fun watchJsonParaMostradores() {
+        val s = LocalHttpServer(0, localOnly = true, secret = null, data = data) { now + 2 * 60_000L }
+        val m = Json.parse(s.route("GET", "/watch.json?minutes=60&step=10", emptyMap()).body) as Map<*, *>
+        assertEquals(100L, m["sgv"])
+        assertEquals("100", m["txt"])
+        assertEquals(2L, m["age"])           // pela hora do celular
+        assertEquals("-1", m["dtxt"])        // 100 agora, 101 há 5 min
+        assertEquals(70L, (m["th"] as Map<*, *>)["l"])
+        val pts = (m["pts"] as List<*>).map { (it as Number).toInt() }
+        // 60 min com leituras a cada 5 min e um ponto a cada 10 min: 6 pontos, do mais velho ao mais novo.
+        assertEquals(12, pts.size)
+        assertEquals(listOf(2, 100), pts.takeLast(2))
+        assertTrue(pts[0] > pts[pts.size - 2])
+    }
+
+    @Test fun watchJsonSemLeituraEEmMmol() {
+        val vazio = object : LocalHttpServer.DataSource {
+            override fun readings(count: Int, sinceMs: Long?) = emptyList<MirrorReading>()
+            override fun thresholds() = MirrorThresholds()
+            override fun unit() = "MMOL_L"
+        }
+        val m = Json.parse(LocalHttpServer(0, true, null, vazio) { now }.route("GET", "/watch.json", emptyMap()).body) as Map<*, *>
+        assertEquals(null, m["sgv"])
+        assertEquals(emptyList<Any>(), m["pts"])
+        val mmol = object : LocalHttpServer.DataSource by data { override fun unit() = "MMOL_L" }
+        val m2 = Json.parse(LocalHttpServer(0, true, null, mmol) { now }.route("GET", "/watch.json", emptyMap()).body) as Map<*, *>
+        assertEquals("5.6", m2["txt"])
+        assertEquals("-0.1", m2["dtxt"])
+    }
+
     @Test fun rotasEErros() {
         val s = LocalHttpServer(0, localOnly = true, secret = null, data = data) { now }
         assertEquals(404, s.route("GET", "/nada", emptyMap()).status)
