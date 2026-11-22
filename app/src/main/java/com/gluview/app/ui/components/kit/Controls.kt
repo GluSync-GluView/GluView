@@ -52,6 +52,7 @@ fun SwitchRow(
 ) {
     Row(
         modifier
+            .searchHighlight(title)
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
@@ -101,7 +102,7 @@ fun SliderRow(
         activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
         disabledActiveTickColor = Color.Transparent, disabledInactiveTickColor = Color.Transparent
     )
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.searchHighlight(title).fillMaxWidth()) {
         // Título e valor já vão no nó do Slider: a linha de cima fica fora do TalkBack (sem leitura dupla).
         Row(Modifier.fillMaxWidth().clearAndSetSemantics {}, verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
@@ -167,7 +168,7 @@ fun <T> PeriodSelector(
     modifier: Modifier = Modifier,
     title: String? = null
 ) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+    Column((if (title != null) modifier.searchHighlight(title) else modifier).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
         if (title != null) {
             Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

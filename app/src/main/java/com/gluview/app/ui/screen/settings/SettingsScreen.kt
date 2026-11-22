@@ -26,6 +26,10 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Search
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.gluview.app.ui.components.kit.SettingsSearchTarget
 import com.gluview.app.ui.screen.updates.UpdatesViewModel
 import com.gluview.app.ui.screen.donation.DonationEntryViewModel
 import androidx.compose.material3.*
@@ -74,6 +78,8 @@ fun SettingsScreen(
     onBolus: () -> Unit = {},
     onCalibration: () -> Unit = {},
     onNightscout: () -> Unit = {},
+    /** Busca em Ajustes: abre a tela de um resultado (rota do NavHost). */
+    onNavigateRoute: (String) -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updatesViewModel: UpdatesViewModel = hiltViewModel(),
     donationEntryViewModel: DonationEntryViewModel = hiltViewModel()
@@ -93,6 +99,13 @@ fun SettingsScreen(
     val activity = context as AppCompatActivity
     var showLogoutDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val dataSource        by viewModel.dataSource.collectAsState()
+    // Busca (22/11/2026): null = fechada. rememberSaveable → ao voltar de um resultado a busca continua lá.
+    var searchQuery by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = searchQuery != null) { searchQuery = null }
+    val searchHits = rememberSettingsSearchHits(
+        SearchContext(isFollowerOnly, isLocalOnly, isAdmin, donationsEnabled, dataSource)
+    )
 
     // Modo Debug/Admin — busca o estado real (ligado/desligado) assim que a conta admin abre a tela.
     LaunchedEffect(isAdmin) {
@@ -150,7 +163,16 @@ fun SettingsScreen(
         onDebugBackfill = viewModel::onDebugBackfillClick,
         onLogout = ::tryLogout,
         onBack = onBack,
-        snackbarHostState = snackbarHostState
+        snackbarHostState = snackbarHostState,
+        searchQuery = searchQuery,
+        onSearchOpen = { searchQuery = "" },
+        onSearchQuery = { searchQuery = it },
+        onSearchClose = { searchQuery = null },
+        searchHits = searchHits,
+        onSearchHit = { hit ->
+            hit.highlight?.let { SettingsSearchTarget.set(it) } ?: SettingsSearchTarget.clear()
+            onNavigateRoute(hit.route)
+        }
     )
 
     if (showLogoutDialog) {
@@ -218,10 +240,29 @@ internal fun SettingsContent(
     /** Nome da versão nova conhecida, se houver (subtítulo de "Atualizações"). */
     updateAvailableName: String? = null,
     /** "Apoiar o GluView": só com a doação ligada no GluSync. */
-    showDonate: Boolean = false
+    showDonate: Boolean = false,
+    /** Busca em Ajustes: null = fechada; "" = aberta sem texto (o hub continua embaixo). */
+    searchQuery: String? = null,
+    onSearchOpen: () -> Unit = {},
+    onSearchQuery: (String) -> Unit = {},
+    onSearchClose: () -> Unit = {},
+    searchHits: List<SettingsSearchHit> = emptyList(),
+    onSearchHit: (SettingsSearchHit) -> Unit = {}
 ) {
     // Aba principal da barra inferior: sem seta (o voltar do sistema continua).
-    Page(title = stringResource(R.string.settings_title), onBack = onBack, snackbarHostState = snackbarHostState) {
+    Page(
+        title = stringResource(R.string.settings_title), onBack = onBack, snackbarHostState = snackbarHostState,
+        actions = {
+            if (searchQuery == null) IconButton(onClick = onSearchOpen) {
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.settings_search))
+            }
+        }
+    ) {
+        if (searchQuery != null) {
+            SettingsSearchBox(searchQuery, onSearchQuery, onSearchClose, searchHits, onSearchHit)
+            // Com texto, só os resultados (o hub sai para não confundir com a lista).
+            if (searchQuery.isNotBlank()) return@Page
+        }
         // Conta: um item só, sem cabeçalho de grupo (seria "Conta" duas vezes).
         if (!isLocalOnly) {
             GluCard {

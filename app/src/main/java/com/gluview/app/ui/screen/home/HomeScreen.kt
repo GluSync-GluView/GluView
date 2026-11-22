@@ -428,7 +428,7 @@ internal fun PatientHomeContent(
  * janela escolhida fica salva; "Agora" volta para o fim.
  */
 @Composable
-private fun HomeChart(
+internal fun HomeChart(
     readings: List<GraphReading>?,
     selectedHours: Int,
     onHoursChange: (Int) -> Unit,
@@ -444,21 +444,26 @@ private fun HomeChart(
     var zoomAcc by remember { mutableStateOf(1f) }
     val spanMs = hours * 3_600_000L
     val maxOffset = (HOME_SCROLL_HOURS * 3_600_000L - spanMs).coerceAtLeast(0L)
-    val gestures = remember(hours, maxOffset) {
+    // Gestos ESTÁVEIS (22/11/2026): antes eram recriados a cada passo do zoom (remember(hours)),
+    // o pointerInput reiniciava no meio do pinçar e o onGestureEnd — que salvava as horas — nunca
+    // rodava: ao sair e voltar o gráfico voltava a 3 h. Agora os valores vivos entram por
+    // rememberUpdatedState e as horas são salvas assim que mudam (LaunchedEffect abaixo).
+    val spanNow by rememberUpdatedState(spanMs)
+    val maxOffsetNow by rememberUpdatedState(maxOffset)
+    val gestures = remember {
         com.gluview.app.ui.components.chart.ChartGestures(
-            onPan = { frac -> offsetMs = (offsetMs + (frac * spanMs).toLong()).coerceIn(0L, maxOffset) },
+            onPan = { frac -> offsetMs = (offsetMs + (frac * spanNow).toLong()).coerceIn(0L, maxOffsetNow) },
             onZoom = { z ->
                 zoomAcc *= z
                 val idx = HOME_ZOOM_STEPS.indexOf(hours).let { if (it < 0) HOME_ZOOM_STEPS.indexOfFirst { h -> h >= hours } else it }
                 if (zoomAcc > 1.25f && idx > 0) { hours = HOME_ZOOM_STEPS[idx - 1]; zoomAcc = 1f }
                 else if (zoomAcc < 0.8f && idx < HOME_ZOOM_STEPS.lastIndex) { hours = HOME_ZOOM_STEPS[idx + 1]; zoomAcc = 1f }
             },
-            onGestureEnd = {
-                zoomAcc = 1f
-                if (hours != selectedHours) onHoursChange(hours)
-            }
+            onGestureEnd = { zoomAcc = 1f }
         )
     }
+    val onHoursChangeNow by rememberUpdatedState(onHoursChange)
+    LaunchedEffect(hours) { if (hours != selectedHours) onHoursChangeNow(hours) }
     val window = if (offsetMs <= 0L) GraphWindow.Trailing(hours)
                  else (clock() - offsetMs).let { to -> GraphWindow.Fixed(to - spanMs, to) }
 

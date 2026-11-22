@@ -111,7 +111,7 @@ fun GluSection(
     content: @Composable () -> Unit
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.searchHighlight(title).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(
                 Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),

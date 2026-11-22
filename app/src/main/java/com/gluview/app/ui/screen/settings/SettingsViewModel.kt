@@ -75,6 +75,27 @@ class SettingsViewModel @Inject constructor(
     val medLevSerial: StateFlow<String> = preferences.medLevensohnSerial
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    /**
+     * Serial do sensor em uso, seja qual for a fonte ("" = ainda sem serial / não pareado) — vai
+     * no card "Sensor atual" no lugar da região. G7 fica de fora: o que se guarda é o código de
+     * pareamento, não o serial.
+     */
+    val currentSensorSerial: StateFlow<String> = combine(
+        preferences.dataSource,
+        combine(preferences.sibionicsSerial, preferences.libre2Serial, preferences.libre3Serial) { a, b, c -> Triple(a, b, c) },
+        combine(preferences.accuChekSerial, preferences.medLevensohnSerial, preferences.dexcomG6TransmitterId) { a, b, c -> Triple(a, b, c) }
+    ) { source, (sib, l2, l3), (sg, ml, g6) ->
+        when (DataSourceType.fromId(source)) {
+            DataSourceType.SIBIONICS_NACIONAL, DataSourceType.SIBIONICS_CHINES, DataSourceType.SIBIONICS_GS3 -> sib
+            DataSourceType.LIBRE2_PLUS -> l2   // pontes (MiaoMiao etc.) não gravam serial em prefs
+            DataSourceType.LIBRE3 -> l3
+            DataSourceType.ACCU_CHEK_SMARTGUIDE -> sg
+            DataSourceType.MEDLEVENSOHN_SMART2 -> ml
+            DataSourceType.DEXCOM_G6 -> g6
+            else -> ""
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
     val sibionicsReuseTransmitter: StateFlow<Boolean> = preferences.sibionicsReuseTransmitter
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 

@@ -181,6 +181,7 @@ fun AppNavigation(
                 onBolus           = { nav.navigate(Screen.Bolus.route) },
                 onCalibration     = { nav.navigate(Screen.Calibration.route) },
                 onNightscout      = { nav.navigate(Screen.NightscoutHub.route) },
+                onNavigateRoute   = { route -> nav.navigate(route) },
                 onLogout          = {
                     nav.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }

@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.gluview.app.R
+import com.gluview.app.ui.components.kit.searchHighlight
 import com.gluview.app.alert.ALERT_ZONES
 import com.gluview.app.alert.AlertType
 import com.gluview.app.domain.model.GlucoseZone
@@ -514,7 +515,7 @@ private fun ValueSliderRow(
             modifier = Modifier.widthIn(min = 96.dp, max = 128.dp).semantics { contentDescription = label }
         )
     }
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.searchHighlight(label).fillMaxWidth()) {
         if (stacked) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
             field()

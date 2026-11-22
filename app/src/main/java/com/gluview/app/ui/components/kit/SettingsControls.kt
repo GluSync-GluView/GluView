@@ -63,6 +63,7 @@ fun NavRow(
 ) {
     Row(
         modifier
+            .searchHighlight(title)
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
@@ -113,6 +114,7 @@ fun CheckboxRow(
 ) {
     Row(
         modifier
+            .searchHighlight(title)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange),
@@ -143,6 +145,7 @@ fun RadioRow(
 ) {
     Row(
         modifier
+            .searchHighlight(title)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),

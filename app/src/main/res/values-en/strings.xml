@@ -276,6 +276,7 @@
     <string name="setup_error_pairing_timeout_body">The sensor did not answer in time. Keep the phone very close, confirm the pairing request if it appears and try again.</string>
     <string name="setup_ready_body_now">The sensor is already measuring. Readings arrive every 5 minutes.</string>
     <string name="settings_smartguide_serial">Sensor %1$s</string>
+    <string name="settings_current_sensor_serial">Serial: %1$s</string>
     <string name="settings_smartguide_setup">Set up the SmartGuide</string>
     <string name="settings_smartguide_repair">Pair again</string>
     <string name="settings_smartguide_calibrate">Calibrate with fingerstick</string>
@@ -1987,4 +1988,10 @@
     <string name="xiaomi_band_test_body">Wrist alert test</string>
     <string name="xiaomi_band_test_ok">Notification delivered to the band.</string>
     <string name="xiaomi_band_test_fail">It did not work: %1$s</string>
+    <string name="settings_search">Search settings</string>
+    <string name="settings_search_hint">Search a setting</string>
+    <string name="settings_search_close">Close search</string>
+    <string name="settings_search_empty">Nothing found for “%1$s”</string>
+    <string name="settings_search_empty_body">Try another word, like “alarm”, “theme” or “serial”.</string>
+    <plurals name="settings_search_count"><item quantity="one">%d result</item><item quantity="other">%d results</item></plurals>
 </resources>

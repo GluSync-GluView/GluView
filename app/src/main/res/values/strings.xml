@@ -282,6 +282,7 @@
     <string name="setup_error_pairing_timeout_body">O sensor não respondeu a tempo. Deixe o celular bem perto, confirme o pedido de pareamento se ele aparecer e tente de novo.</string>
     <string name="setup_ready_body_now">O sensor já está medindo. As leituras chegam a cada 5 minutos.</string>
     <string name="settings_smartguide_serial">Sensor %1$s</string>
+    <string name="settings_current_sensor_serial">Serial: %1$s</string>
     <string name="settings_smartguide_setup">Configurar o SmartGuide</string>
     <string name="settings_smartguide_repair">Parear de novo</string>
     <string name="settings_smartguide_calibrate">Calibrar com ponta de dedo</string>
@@ -1995,4 +1996,10 @@
     <string name="xiaomi_band_test_body">Teste de alerta no pulso</string>
     <string name="xiaomi_band_test_ok">Notificação entregue à pulseira.</string>
     <string name="xiaomi_band_test_fail">Não deu certo: %1$s</string>
+    <string name="settings_search">Buscar nos ajustes</string>
+    <string name="settings_search_hint">Buscar um ajuste</string>
+    <string name="settings_search_close">Fechar busca</string>
+    <string name="settings_search_empty">Nada encontrado para “%1$s”</string>
+    <string name="settings_search_empty_body">Tente outra palavra, como “alarme”, “tema” ou “serial”.</string>
+    <plurals name="settings_search_count"><item quantity="one">%d resultado</item><item quantity="other">%d resultados</item></plurals>
 </resources>

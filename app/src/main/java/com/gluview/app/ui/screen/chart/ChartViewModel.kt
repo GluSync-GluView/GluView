@@ -96,8 +96,16 @@ class ChartViewModel @Inject constructor(
     fun today(): LocalDate = LocalDate.now(zoneId)
 
     init {
-        val now = System.currentTimeMillis()
-        loadWindow(now - TimeUnit.HOURS.toMillis(ChartRange.H3.hours.toLong()), now)
+        // Abre no último período escolhido (lembrado ao sair e voltar do app, 22/11/2026).
+        viewModelScope.launch {
+            val saved = preferences.chartRangeHours.first()
+            val range = ChartRange.entries.firstOrNull { it.hours == saved } ?: ChartRange.H3
+            if (_mode.value == ChartMode.Relative(ChartRange.H3)) {   // usuário ainda não mexeu
+                _mode.value = ChartMode.Relative(range)
+                val now = System.currentTimeMillis()
+                loadWindow(now - TimeUnit.HOURS.toMillis(range.hours.toLong()), now)
+            }
+        }
         // L17: nas faixas relativas ("últimas 3 h") a janela anda com o relógio, sem piscar o
         // esqueleto (antes ficava congelada na hora em que a tela abriu).
         viewModelScope.launch {
@@ -116,6 +124,7 @@ class ChartViewModel @Inject constructor(
     fun onRangeSelected(r: ChartRange) {
         if (_mode.value == ChartMode.Relative(r)) return
         _mode.value = ChartMode.Relative(r)
+        viewModelScope.launch { preferences.saveChartRangeHours(r.hours) }
         val now = System.currentTimeMillis()
         loadWindow(now - TimeUnit.HOURS.toMillis(r.hours.toLong()), now)
     }

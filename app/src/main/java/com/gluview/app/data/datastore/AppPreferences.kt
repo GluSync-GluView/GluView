@@ -147,6 +147,7 @@ class AppPreferences @Inject constructor(
 
         // ── Gráficos — horas exibidas por contexto ────────────────────────────
         val KEY_HOME_GRAPH_HOURS      = intPreferencesKey("home_graph_hours")
+        val KEY_CHART_RANGE_HOURS     = intPreferencesKey("chart_range_hours")
         val KEY_WIDGET_GRAPH_HOURS    = intPreferencesKey("widget_graph_hours")
         val KEY_NOTIF_GRAPH_HOURS     = intPreferencesKey("notif_graph_hours")
 
@@ -636,6 +637,8 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
 
     // ── Gráficos ──────────────────────────────────────────────────────────────
     val homeGraphHours:   Flow<Int> = dataStore.data.safeMap(3) { it[KEY_HOME_GRAPH_HOURS]   ?: 3 }
+    /** Período da tela Gráfico (3/6/12/24 h) — lembrado ao sair e voltar do app. */
+    val chartRangeHours:  Flow<Int> = dataStore.data.safeMap(3) { it[KEY_CHART_RANGE_HOURS]  ?: 3 }
     val widgetGraphHours: Flow<Int> = dataStore.data.safeMap(3) { it[KEY_WIDGET_GRAPH_HOURS] ?: 3 }
     val notifGraphHours:  Flow<Int> = dataStore.data.safeMap(3) { it[KEY_NOTIF_GRAPH_HOURS]  ?: 3 }
 
@@ -948,6 +951,7 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         it[KEY_TERMS_ACCEPTED_EMAIL] = email
     }
     suspend fun saveHomeGraphHours(hours: Int)   = dataStore.edit { it[KEY_HOME_GRAPH_HOURS]   = hours }
+    suspend fun saveChartRangeHours(hours: Int)  = dataStore.edit { it[KEY_CHART_RANGE_HOURS]  = hours }
     suspend fun saveWidgetGraphHours(hours: Int) = dataStore.edit { it[KEY_WIDGET_GRAPH_HOURS] = hours }
     suspend fun saveNotifGraphHours(hours: Int)  = dataStore.edit { it[KEY_NOTIF_GRAPH_HOURS]  = hours }
     suspend fun saveLogsEnabled(enabled: Boolean) = dataStore.edit { it[KEY_LOGS_ENABLED] = enabled }
@@ -1445,6 +1449,7 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         // Dados + gráficos + logs
         o.put("data_retention_days",       p[KEY_DATA_RETENTION_DAYS]   ?: 100)
         o.put("home_graph_hours",          p[KEY_HOME_GRAPH_HOURS]      ?: 3)
+        o.put("chart_range_hours",         p[KEY_CHART_RANGE_HOURS]     ?: 3)
         o.put("widget_graph_hours",        p[KEY_WIDGET_GRAPH_HOURS]    ?: 3)
         o.put("notif_graph_hours",         p[KEY_NOTIF_GRAPH_HOURS]     ?: 3)
         o.put("logs_enabled",              p[KEY_LOGS_ENABLED]          ?: false)
@@ -1504,6 +1509,7 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
             if (o.has("sms_message"))               p[KEY_SMS_MESSAGE]           = o.getString("sms_message")
             if (o.has("data_retention_days"))       p[KEY_DATA_RETENTION_DAYS]   = o.getInt("data_retention_days")
             if (o.has("home_graph_hours"))          p[KEY_HOME_GRAPH_HOURS]      = o.getInt("home_graph_hours")
+            if (o.has("chart_range_hours"))         p[KEY_CHART_RANGE_HOURS]     = o.getInt("chart_range_hours")
             if (o.has("widget_graph_hours"))        p[KEY_WIDGET_GRAPH_HOURS]    = o.getInt("widget_graph_hours")
             if (o.has("notif_graph_hours"))         p[KEY_NOTIF_GRAPH_HOURS]     = o.getInt("notif_graph_hours")
             if (o.has("logs_enabled"))              p[KEY_LOGS_ENABLED]          = o.getBoolean("logs_enabled")

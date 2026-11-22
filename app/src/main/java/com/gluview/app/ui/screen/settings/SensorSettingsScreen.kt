@@ -59,7 +59,9 @@ internal data class SensorUi(
     /** Serial do Smart 2.0 configurado ("" = nenhum). */
     val medLevSerial: String = "",
     val sibionicsReuseTransmitter: Boolean = false,
-    val sibionicsGs3AccountId: String = ""
+    val sibionicsGs3AccountId: String = "",
+    /** Serial do sensor em uso, qualquer fonte ("" = sem serial ainda → o card mostra a região). */
+    val currentSerial: String = ""
 )
 
 internal data class SensorActions(
@@ -113,6 +115,7 @@ fun SensorSettingsScreen(
     val medLevSerial by viewModel.medLevSerial.collectAsState()
     val sibionicsReuseTransmitter by viewModel.sibionicsReuseTransmitter.collectAsState()
     val sibionicsGs3AccountId by viewModel.sibionicsGs3AccountId.collectAsState()
+    val currentSerial by viewModel.currentSensorSerial.collectAsState()
     var confirmMedLevUnpair by remember { mutableStateOf(false) }
     var confirmForgetSmartGuide by remember { mutableStateOf(false) }
     var calibrateSmartGuide by remember { mutableStateOf(false) }
@@ -122,7 +125,7 @@ fun SensorSettingsScreen(
 
     SensorContent(
         ui = SensorUi(dataSource, sensorWarnEnabled, sensorAgingDays, sensorNoSignalMin, glucoseDisplayMode,
-            sensorVariantId, smartGuideSerial, medLevSerial, sibionicsReuseTransmitter, sibionicsGs3AccountId),
+            sensorVariantId, smartGuideSerial, medLevSerial, sibionicsReuseTransmitter, sibionicsGs3AccountId, currentSerial),
         actions = SensorActions(viewModel::onSensorWarnEnabledChange,
             viewModel::onSensorAgingDaysChange, viewModel::onSensorNoSignalMinChange, viewModel::onGlucoseDisplayModeChange,
             onSensorSetup, onSensorScanner, onLibre2Activation,
@@ -321,10 +324,13 @@ internal fun SensorContent(ui: SensorUi, actions: SensorActions, onBack: (() -> 
 private fun CurrentSensorCard(ui: SensorUi, source: DataSourceType) {
     val noSensor = source == DataSourceType.GLUSYNC
     val variant = SensorVariantCatalog.resolve(ui.sensorVariantId, ui.dataSource)
-    val serial = when (source) {
-        DataSourceType.ACCU_CHEK_SMARTGUIDE -> ui.smartGuideSerial
-        DataSourceType.MEDLEVENSOHN_SMART2  -> ui.medLevSerial
-        else -> ""
+    // Serial no lugar da região (pedido 22/11/2026); sem serial ainda (não pareado) volta a região.
+    val serial = ui.currentSerial.ifBlank {
+        when (source) {
+            DataSourceType.ACCU_CHEK_SMARTGUIDE -> ui.smartGuideSerial
+            DataSourceType.MEDLEVENSOHN_SMART2  -> ui.medLevSerial
+            else -> ""
+        }
     }
     GluCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -337,12 +343,11 @@ private fun CurrentSensorCard(ui: SensorUi, source: DataSourceType) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     Text(variant.label(), style = MaterialTheme.typography.titleMedium)
-                    variant.region?.let {
-                        Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
                     if (serial.isNotBlank()) {
-                        Text(stringResource(R.string.settings_smartguide_serial, serial), style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.settings_current_sensor_serial, serial), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else variant.region?.let {
+                        Text(stringResource(it.nameRes), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (!source.isUsableOnThisDevice) {
