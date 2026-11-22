@@ -1968,4 +1968,12 @@
     <string name="mirror_public_host_help">DDNS name, VPN address or fixed IP. Port %1$d must reach this phone.</string>
     <string name="mirror_stun">Find the public IP via STUN</string>
     <string name="mirror_stun_desc">Asks a free server (Google or Cloudflare) for the public IP, and the follower tries it last. The request carries none of your data. It does not get through CGNAT: it only helps with a forwarded port or a public IP.</string>
+    <string name="assistant_glucose_short">Glucose</string>
+    <string name="assistant_glucose_long">Speak my glucose</string>
+    <string-array name="assistant_glucose_synonyms">
+        <item>glucose</item>
+        <item>blood sugar</item>
+        <item>my glucose</item>
+        <item>my blood sugar</item>
+    </string-array>
 </resources>

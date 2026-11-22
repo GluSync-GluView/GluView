@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plano 21 (F8, Google): App Actions. "Ok Google, abrir glicose no GluView" (intent embutida
+     OPEN_APP_FEATURE) abre gluview://assistente/glicose → Home + glicemia falada (VoiceGlucose.kt).
+     O mesmo atalho aparece ao segurar o ícone do app. O Google só ativa App Actions para apps que
+     estão no Play Console (ver Projeto DM1/GluView/execucao); fora dele, o atalho do ícone funciona. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.gluview.app"
+            android:targetClass="com.gluview.app.MainActivity">
+            <url-template android:value="gluview://assistente/{feature}" />
+            <parameter android:name="feature" android:key="feature" />
+        </intent>
+    </capability>
+
+    <shortcut
+        android:shortcutId="glicose"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/assistant_glucose_short"
+        android:shortcutLongLabel="@string/assistant_glucose_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.gluview.app"
+            android:targetClass="com.gluview.app.MainActivity"
+            android:data="gluview://assistente/glicose" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/assistant_glucose_synonyms" />
+        </capability-binding>
+    </shortcut>
+</shortcuts>

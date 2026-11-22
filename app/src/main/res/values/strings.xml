@@ -1975,4 +1975,13 @@
     <string name="mirror_public_host_help">Nome DDNS, endereço da VPN ou IP fixo. A porta %1$d precisa chegar a este celular.</string>
     <string name="mirror_stun">Descobrir o IP público por STUN</string>
     <string name="mirror_stun_desc">Pergunta o IP público a um servidor grátis (Google ou Cloudflare) e o seguidor tenta por ele por último. O pedido não leva nenhum dado seu. Não fura CGNAT: só ajuda com porta redirecionada ou IP público.</string>
+    <string name="assistant_glucose_short">Glicose</string>
+    <string name="assistant_glucose_long">Falar minha glicose</string>
+    <string-array name="assistant_glucose_synonyms">
+        <item>glicose</item>
+        <item>glicemia</item>
+        <item>minha glicose</item>
+        <item>minha glicemia</item>
+        <item>açúcar no sangue</item>
+    </string-array>
 </resources>

@@ -115,7 +115,10 @@
                 <data android:scheme="gluview" android:host="diary" />
                 <data android:scheme="gluview" android:host="reminders" />
                 <data android:scheme="gluview" android:host="diarycatalog" />
+                <!-- Plano 21 (F8): "Ok Google, abrir glicose no GluView" / atalho do ícone. -->
+                <data android:scheme="gluview" android:host="assistente" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Plano 17 (Fase 3) — explicação de privacidade que o Health Connect abre ao pedir

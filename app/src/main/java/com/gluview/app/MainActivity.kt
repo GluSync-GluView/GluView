@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var termsRepository: com.gluview.app.data.repository.TermsRepository
     // Plano 17, Fase 3 — com o app aberto o Health Connect sempre deixa ler; troca ao voltar ao app.
     @Inject lateinit var healthSync: com.gluview.app.data.health.HealthConnectSync
+    @Inject lateinit var voiceGlucose: com.gluview.app.assistant.VoiceGlucoseSpeaker
 
     private var deepLinkRoute: String? by mutableStateOf(null)
     private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
@@ -180,6 +181,12 @@ class MainActivity : AppCompatActivity() {
             )
             "reminders"    -> Screen.Reminders.route
             "diarycatalog" -> Screen.DiaryCatalog.route
+            // Plano 21 (F8): App Actions / atalho do ícone — vai para a Home e fala a glicemia.
+            // Só lê e fala; nenhum parâmetro do link muda nada no app.
+            "assistente"   -> {
+                lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { voiceGlucose.speakLatest() } }
+                Screen.Home.route
+            }
             else           -> return
         }
     }
