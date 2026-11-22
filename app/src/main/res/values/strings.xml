@@ -1986,4 +1986,13 @@
     </string-array>
     <string name="miband_model_label">Modelo da pulseira</string>
     <string name="miband_model_help">A Mi Band 6 foi testada com pulseira de verdade; os outros modelos só na pulseira virtual.</string>
+    <string name="xiaomi_band_section">Mi Band 8 (Xiaomi nova): alertas no pulso</string>
+    <string name="xiaomi_band_desc">Os alertas do GluView (baixa, alta, urgentes e previsão de hipo) chegam à pulseira como notificação e ela vibra. A chave de autenticação vem do Mi Fitness ou do Gadgetbridge. Testado só na pulseira virtual.</string>
+    <string name="xiaomi_band_alerts">Levar os alertas à pulseira</string>
+    <string name="xiaomi_band_alerts_desc">Em paralelo ao alerta do celular, que continua igual.</string>
+    <string name="xiaomi_band_test">Enviar notificação de teste</string>
+    <string name="xiaomi_band_test_title">GluView</string>
+    <string name="xiaomi_band_test_body">Teste de alerta no pulso</string>
+    <string name="xiaomi_band_test_ok">Notificação entregue à pulseira.</string>
+    <string name="xiaomi_band_test_fail">Não deu certo: %1$s</string>
 </resources>

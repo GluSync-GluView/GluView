@@ -219,6 +219,8 @@ dependencies {
     implementation(project(":wear-contract"))
     // F7.1 core: wearables núcleo (transport, command queue, device manager, etc.)
     implementation(project(":wearables-core"))
+    // F7.4: Xiaomi novo (Mi Band 8) — módulo AGPL-3.0 com código do Gadgetbridge (exceção à D3 decidida pelo Felipe, ver NOTICE.md).
+    implementation(project(":wearables-xiaomi"))
     // PT-3: pareamento EC-JPAKE do Dexcom G7 (libkeks do xDrip, GPLv3).
     implementation(project(":keks"))
     // Fase 5: envio ao relógio pelo Data Layer (falha em silêncio em aparelho sem Play Services).

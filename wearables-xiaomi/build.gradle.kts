@@ -17,7 +17,6 @@ android {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
     implementation(project(":wearables-core"))
 
     testImplementation("junit:junit:4.13.2")

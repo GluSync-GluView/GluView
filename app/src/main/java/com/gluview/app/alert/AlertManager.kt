@@ -45,6 +45,7 @@ class AlertManager @Inject constructor(
     private val glucoseRepository: GlucoseRepository,
     private val alertLogDao: AlertLogDao,
     private val iftttClient: IftttWebhookClient,
+    private val wristband: com.gluview.app.wearables.xiaomi.WristbandAlertForwarder,
     private val appLogger: AppLogger,
     @ApplicationContext private val context: Context
 ) {
@@ -180,6 +181,9 @@ class AlertManager @Inject constructor(
 
         if (!fired) return
 
+        // F7.1/F7.4: também no pulso (pulseira Xiaomi nova), em paralelo — nunca atrasa o alerta acima.
+        wristband.forward(title, message)
+
         if (decision.outcome != DndOutcome.NORMAL) {
             appLogger.usage("ALERT", "Alerta com Não Perturbe ligado",
                 mapOf("zona" to zone.name, "dnd" to dndState.name, "resultado" to decision.outcome.name))
@@ -237,6 +241,7 @@ class AlertManager @Inject constructor(
             alertType = AlertType.ALARM.name.lowercase()
         ))
         runCatching { iftttClient.triggerPredictive(reading, minutesToHypo) }
+        wristband.forward("Hipo prevista em ~$minutesToHypo min", msg)
     }
 
     // ── S16 — Ligação ─────────────────────────────────────────────────────────

@@ -35,3 +35,17 @@ Original code in this module (not derived from Gadgetbridge):
 - `proto/xiaomi.proto` — Protobuf message definitions
 
 These additions are licensed under the same AGPLv3 as the module.
+## Código derivado compilado (plano 21, F7.4, 22/11/2026)
+
+Arquivos em `src/main/java/com/gluview/wearables/xiaomi/protocol/`, adaptados do Gadgetbridge com o cabeçalho
+AGPL original (Copyright (C) 2023-2024 José Rebelo, Yoran Vulker e colaboradores):
+
+| Arquivo | Origem no Gadgetbridge |
+|---|---|
+| `XiaomiCrypto.kt` | `service/devices/xiaomi/XiaomiAuthService.java` (derivação "miwear-auth", AES-CCM de 32 bits) |
+| `XiaomiMessages.kt` | `GBProtobufGenerator/src/main/proto/xiaomi.proto`, `xiaomi/wear_account.proto`, `xiaomi/wear_notification.proto`, `XiaomiAuthService.java`, `services/XiaomiNotificationService.java` |
+| `XiaomiV1Frames.kt` | `service/devices/xiaomi/XiaomiCharacteristicV1.java`, `XiaomiUuids.java` |
+| `XiaomiBandSession.kt` | `XiaomiBleProtocolV1.java`, `XiaomiCharacteristicV1.java`, `XiaomiAuthService.java` |
+
+Os testes (`src/test/.../protocol/XiaomiProtocolTest.kt`) usam vetores gerados de forma independente em
+Python; a pulseira virtual (`tools/virtual-sensors/xiaomi.py`, GPLv3) implementa o lado da pulseira.

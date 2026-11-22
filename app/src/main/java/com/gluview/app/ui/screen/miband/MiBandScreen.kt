@@ -60,6 +60,11 @@ import java.util.Locale
 /** Tudo o que a tela mostra (vem dos flows do [MiBandViewModel]). */
 internal data class MiBandUi(
     val mac: String = "",
+    val xiaomiMac: String = "",
+    val xiaomiKey: String = "",
+    val xiaomiAlerts: Boolean = false,
+    val xiaomiResult: String? = null,
+    val xiaomiRunning: Boolean = false,
     val model: String = "mi_band_6",
     val key: String = "",
     val macError: Int? = null,
@@ -78,6 +83,10 @@ internal data class MiBandUi(
 
 internal class MiBandActions(
     val onBack: () -> Unit = {},
+    val onXiaomiMac: (String) -> Unit = {},
+    val onXiaomiKey: (String) -> Unit = {},
+    val onXiaomiAlerts: (Boolean) -> Unit = {},
+    val onXiaomiTest: (String, String) -> Unit = { _, _ -> },
     val onModel: (String) -> Unit = {},
     val onMac: (String) -> Unit = {},
     val onKey: (String) -> Unit = {},
@@ -100,6 +109,11 @@ fun MiBandScreen(
     val ui = MiBandUi(
         mac = vm.mac.collectAsState().value,
         model = vm.model.collectAsState().value,
+        xiaomiMac = vm.xiaomiMac.collectAsState().value,
+        xiaomiKey = vm.xiaomiKey.collectAsState().value,
+        xiaomiAlerts = vm.xiaomiAlerts.collectAsState().value,
+        xiaomiResult = vm.xiaomiResult.collectAsState().value,
+        xiaomiRunning = vm.xiaomiRunning.collectAsState().value,
         key = vm.key.collectAsState().value,
         macError = vm.macError.collectAsState().value,
         keyError = vm.keyError.collectAsState().value,
@@ -118,6 +132,10 @@ fun MiBandScreen(
         onBack = onBack,
         onMac = vm::onMacChange,
         onModel = vm::onModelChange,
+        onXiaomiMac = vm::onXiaomiMac,
+        onXiaomiKey = vm::onXiaomiKey,
+        onXiaomiAlerts = vm::onXiaomiAlerts,
+        onXiaomiTest = vm::sendXiaomiTest,
         onKey = vm::onKeyChange,
         onTest = vm::testConnection,
         onSend = vm::sendCurrentWatchFace,
@@ -182,6 +200,8 @@ internal fun MiBandContent(ui: MiBandUi, timeFormat: TimeFormat, actions: MiBand
                 if (ui.outcome != null || ui.log.isNotEmpty()) StatusSummary(ui.outcome, ui.log)
             }
         }
+
+        XiaomiSection(ui, actions)
 
         GluSection(stringResource(R.string.miband_auto_section)) {
             GluCard {
@@ -334,6 +354,44 @@ private fun ModelPicker(selected: String, enabled: Boolean, onPick: (String) -> 
                     text = { Text(m.displayName) },
                     onClick = { onPick(m.id); open = false }
                 )
+            }
+        }
+    }
+}
+
+
+/**
+ * F7.4: pulseira Xiaomi nova (Mi Band 8) — os alertas do GluView chegam ao pulso como notificação.
+ * Testado só na pulseira virtual (tools/virtual-sensors/xiaomi.py).
+ */
+@Composable
+internal fun XiaomiSection(ui: MiBandUi, actions: MiBandActions) {
+    GluSection(stringResource(R.string.xiaomi_band_section), description = stringResource(R.string.xiaomi_band_desc)) {
+        GluCard {
+            OutlinedTextField(
+                value = ui.xiaomiMac, onValueChange = actions.onXiaomiMac, singleLine = true, enabled = !ui.xiaomiRunning,
+                label = { Text(stringResource(R.string.miband_mac_label)) },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                modifier = Modifier.fillMaxWidth()
+            )
+            SecretTextField(
+                value = ui.xiaomiKey, onValueChange = actions.onXiaomiKey,
+                label = stringResource(R.string.miband_authkey_label),
+                supportingText = stringResource(R.string.miband_key_help),
+                isError = false, enabled = !ui.xiaomiRunning, keyboardType = KeyboardType.Ascii
+            )
+            com.gluview.app.ui.components.kit.SwitchRow(stringResource(R.string.xiaomi_band_alerts), ui.xiaomiAlerts, actions.onXiaomiAlerts,
+                description = stringResource(R.string.xiaomi_band_alerts_desc))
+            val testTitle = stringResource(R.string.xiaomi_band_test_title)
+            val testBody = stringResource(R.string.xiaomi_band_test_body)
+            OutlinedButton(onClick = { actions.onXiaomiTest(testTitle, testBody) }, enabled = !ui.xiaomiRunning,
+                modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (ui.xiaomiRunning) R.string.miband_connecting else R.string.xiaomi_band_test))
+            }
+            ui.xiaomiResult?.let { r ->
+                Text(if (r == "ok") stringResource(R.string.xiaomi_band_test_ok) else stringResource(R.string.xiaomi_band_test_fail, r),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (r == "ok") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
             }
         }
     }

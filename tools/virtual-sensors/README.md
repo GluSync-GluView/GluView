@@ -92,3 +92,18 @@ Resultado em 21/11: envio completo (92.584 bytes, CRC32 confere); chave errada r
 clara; queda no meio falha e a nova tentativa instala. Achados e corrigidos no `MiBandUploader`: filas
 de resposta reaproveitadas entre envios (agora esvaziadas a cada envio) e espera de 15 s depois de a
 conexão cair (agora desiste na hora).
+
+## Pulseira Xiaomi nova virtual (Mi Band 8, BLE V1 cifrado) — `xiaomi.py` (plano 21, F7.4, 22/11/2026)
+
+Lado da pulseira escrito aqui de forma independente do código do app (que vem do Gadgetbridge, módulo AGPL
+`:wearables-xiaomi`): serviço FE95, comandos do app em 0052 e da pulseira em 0051, aperto de mão com HMAC
+"miwear-auth", AES-CCM (tag 4) e notificação (Command tipo 7). Chave de TESTE.
+
+```
+./.venv/Scripts/python.exe -u xiaomi.py          # anuncia "Smart Band 8 S" em F3:22:33:44:77:08
+adb -s emulator-5554 shell "am broadcast -n com.gluview.app.l3test/com.gluview.app.debug.Libre3SelfTestReceiver \
+  --es op xiaomi --es mac F3:22:33:44:77:08 --es key 00112233445566778899aabbccddeeff --es title 'Glicose baixa' --es body '62 mg/dL'"
+```
+Cenários (`control-xiaomi.txt`): `wrongkey`, `refuse`, `drop`. Resultado em 22/11: aperto de mão aceito (a
+pulseira decifra os dados do celular), notificação decifrada e mostrada; chave errada e recusa dão mensagem clara.
+O nome anunciado é curto porque o anúncio tem de caber em 31 bytes.

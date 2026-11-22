@@ -341,6 +341,10 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         val KEY_MIBAND_AUTH_KEY       = stringPreferencesKey("miband_auth_key")
         /** F7.2: modelo Huami/Amazfit (id do HuamiLegacyModel); vazio = Mi Band 6, o de sempre. */
         val KEY_MIBAND_MODEL          = stringPreferencesKey("miband_model")
+        /** F7.4: pulseira Xiaomi nova (Mi Band 8) para levar os alertas. */
+        val KEY_XIAOMI_MAC            = stringPreferencesKey("xiaomi_band_mac")
+        val KEY_XIAOMI_KEY            = stringPreferencesKey("xiaomi_band_key")
+        val KEY_XIAOMI_ALERTS         = booleanPreferencesKey("xiaomi_band_alerts")
         val KEY_MIBAND_AUTO_SEND      = booleanPreferencesKey("miband_auto_send")
         // Agendamento do envio automático — período especial (ex.: madrugada) com intervalo
         // próprio; fora dele usa o intervalo padrão. Horários em minutos desde 00:00 (permite
@@ -780,6 +784,9 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     val miBandMac: Flow<String>             = dataStore.data.safeMap("") { it[KEY_MIBAND_MAC]      ?: "" }
     val miBandAuthKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_MIBAND_AUTH_KEY] ?: "" }
     val miBandModel: Flow<String>           = dataStore.data.safeMap("mi_band_6") { it[KEY_MIBAND_MODEL] ?: "mi_band_6" }
+    val xiaomiBandMac: Flow<String>         = dataStore.data.safeMap("") { it[KEY_XIAOMI_MAC] ?: "" }
+    val xiaomiBandKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_XIAOMI_KEY] ?: "" }
+    val xiaomiAlertsEnabled: Flow<Boolean>  = dataStore.data.safeMap(false) { it[KEY_XIAOMI_ALERTS] ?: false }
     val miBandAutoSend: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_MIBAND_AUTO_SEND] ?: false }
     // Agendamento: dia = intervalo curto (padrão 5 min); noite = intervalo mais espaçado
     // (padrão 30 min, das 22h às 7h) — configurável pelo usuário na tela do Mi Band.
@@ -1002,6 +1009,13 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     }
 
     suspend fun saveMiBandModel(modelId: String) = dataStore.edit { it[KEY_MIBAND_MODEL] = modelId }
+
+    suspend fun saveXiaomiBand(mac: String, key: String) = dataStore.edit {
+        it[KEY_XIAOMI_MAC] = mac.trim().uppercase()
+        it[KEY_XIAOMI_KEY] = key.trim().lowercase().removePrefix("0x")
+    }
+
+    suspend fun saveXiaomiAlerts(enabled: Boolean) = dataStore.edit { it[KEY_XIAOMI_ALERTS] = enabled }
 
     suspend fun saveMiBandAutoSend(enabled: Boolean) = dataStore.edit {
         it[KEY_MIBAND_AUTO_SEND] = enabled

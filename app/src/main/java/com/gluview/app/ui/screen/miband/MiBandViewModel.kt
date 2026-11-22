@@ -19,6 +19,7 @@ enum class MiBandOutcome { CONNECTED, SENT, FAILED, TIMEOUT }
 
 @HiltViewModel
 class MiBandViewModel @Inject constructor(
+    private val xiaomiClient: com.gluview.app.wearables.xiaomi.XiaomiBandClient,
     private val client: MiBandClient,
     private val pusher: MiBandWatchFacePusher,
     private val prefs: AppPreferences
@@ -48,6 +49,18 @@ class MiBandViewModel @Inject constructor(
     private val _model = MutableStateFlow("mi_band_6")
     val model = _model.asStateFlow()
 
+    // F7.4: pulseira Xiaomi nova (Mi Band 8) — alertas no pulso.
+    private val _xiaomiMac = MutableStateFlow("")
+    val xiaomiMac = _xiaomiMac.asStateFlow()
+    private val _xiaomiKey = MutableStateFlow("")
+    val xiaomiKey = _xiaomiKey.asStateFlow()
+    private val _xiaomiAlerts = MutableStateFlow(false)
+    val xiaomiAlerts = _xiaomiAlerts.asStateFlow()
+    private val _xiaomiResult = MutableStateFlow<String?>(null)
+    val xiaomiResult = _xiaomiResult.asStateFlow()
+    private val _xiaomiRunning = MutableStateFlow(false)
+    val xiaomiRunning = _xiaomiRunning.asStateFlow()
+
     private val _autoSend = MutableStateFlow(false)
     val autoSend = _autoSend.asStateFlow()
 
@@ -72,6 +85,9 @@ class MiBandViewModel @Inject constructor(
             _mac.value = prefs.miBandMac.first()
             _key.value = prefs.miBandAuthKey.first()
             _model.value = prefs.miBandModel.first()
+            _xiaomiMac.value = prefs.xiaomiBandMac.first()
+            _xiaomiKey.value = prefs.xiaomiBandKey.first()
+            _xiaomiAlerts.value = prefs.xiaomiAlertsEnabled.first()
             _autoSend.value = prefs.miBandAutoSend.first()
             _updateEveryReading.value = prefs.miBandUpdateEveryReading.first()
             _dayIntervalMin.value = prefs.miBandDayIntervalMin.first().toString()
@@ -83,6 +99,24 @@ class MiBandViewModel @Inject constructor(
 
     fun onMacChange(v: String) { _mac.value = v; _macError.value = null }
     fun onModelChange(id: String) { _model.value = id; viewModelScope.launch { prefs.saveMiBandModel(id) } }
+    fun onXiaomiMac(v: String) { _xiaomiMac.value = v }
+    fun onXiaomiKey(v: String) { _xiaomiKey.value = v }
+    fun onXiaomiAlerts(on: Boolean) {
+        _xiaomiAlerts.value = on
+        viewModelScope.launch { prefs.saveXiaomiBand(_xiaomiMac.value, _xiaomiKey.value); prefs.saveXiaomiAlerts(on) }
+    }
+    fun sendXiaomiTest(title: String, body: String) {
+        if (_xiaomiRunning.value) return
+        _xiaomiRunning.value = true
+        _xiaomiResult.value = null
+        viewModelScope.launch {
+            prefs.saveXiaomiBand(_xiaomiMac.value, _xiaomiKey.value)
+            var last = ""
+            val ok = xiaomiClient.sendNotification(_xiaomiMac.value.trim(), _xiaomiKey.value.trim(), title, body) { last = it }
+            _xiaomiResult.value = if (ok) "ok" else last.removePrefix("❌ ")
+            _xiaomiRunning.value = false
+        }
+    }
     fun onKeyChange(v: String) { _key.value = v; _keyError.value = null }
 
     /** Valida MAC e chave; marca o campo culpado. */

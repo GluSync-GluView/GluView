@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import com.gluview.app.ui.screen.miband.MiBandActions
 import com.gluview.app.ui.screen.miband.MiBandContent
 import com.gluview.app.ui.screen.miband.MiBandUi
+import com.gluview.app.ui.screen.miband.XiaomiSection
+import com.gluview.app.ui.components.kit.Page
 import com.gluview.app.util.TimeFormat
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -40,5 +42,14 @@ class MiBandModelCaptureTest {
             }
         }
         harness.writeReport("miband")
+    }
+
+    @Test fun secaoXiaomi() {
+        val ui = MiBandUi(xiaomiMac = "F3:22:33:44:77:08", xiaomiKey = "00112233445566778899aabbccddeeff", xiaomiAlerts = true,
+            xiaomiResult = "a chave de autenticação não confere com a pulseira")
+        for (v in listOf(Variant(Profiles.S23FE, 1f, false, "pt"), Variant(Profiles.NARROW, 1.3f, true, "en"))) {
+            harness.capture("miband", "xiaomi", v) { Page(title = "Mi Band", onBack = {}) { XiaomiSection(ui, MiBandActions()) } }
+        }
+        harness.writeReport("miband-xiaomi")
     }
 }

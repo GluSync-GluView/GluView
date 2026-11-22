@@ -34,6 +34,7 @@ interface DebugDeps {
     fun miBandPusher(): com.gluview.app.watchface.miband.MiBandWatchFacePusher
     fun miBandUploader(): com.gluview.app.watchface.miband.MiBandUploader
     fun miBandClient(): com.gluview.app.watchface.apply.MiBandClient
+    fun xiaomiBandClient(): com.gluview.app.wearables.xiaomi.XiaomiBandClient
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -114,6 +115,26 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                             log("Visor sintético gerado: ${bin.size} bytes")
                             deps.miBandUploader().connectAndUpload(mac, unhex(key), bin, log, profile)
                         } else deps.miBandPusher().send(logger = log)
+                        pending.resultData = "ok=$ok | $lines"
+                    } catch (e: Exception) {
+                        pending.resultData = "ERRO ${e.message} | $lines"
+                    } finally { pending.finish() }
+                }
+                return
+            }
+            // F7.4: notificação numa pulseira Xiaomi nova virtual (tools/virtual-sensors/xiaomi.py), chave de TESTE.
+            "xiaomi" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                val mac = intent.getStringExtra("mac") ?: return
+                val key = intent.getStringExtra("key") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val lines = StringBuilder()
+                    try {
+                        lines.append("visto=").append(scanFor(context, mac)).append(" | ")
+                        val ok = deps.xiaomiBandClient().sendNotification(mac, key,
+                            intent.getStringExtra("title") ?: "GluView", intent.getStringExtra("body") ?: "Teste") { m ->
+                            Log.i(tag, "XIAOMI $m"); lines.append(m).append(" | ") }
                         pending.resultData = "ok=$ok | $lines"
                     } catch (e: Exception) {
                         pending.resultData = "ERRO ${e.message} | $lines"
