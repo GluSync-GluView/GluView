@@ -1,7 +1,11 @@
 # F7.3 — Zepp OS (mini-app + serviço lateral)
 
-- **Objetivo:** mostrar a glicemia do GluView no relógio Zepp OS (Amazfit, Mi Band 7 e outros com Zepp OS 3.0+)
-  lendo o servidor web local do celular (F2), sem nuvem.
+- **Objetivo:** mostrar a glicemia do GluView no relógio Zepp OS 3.0+ (Amazfit Balance, Active e outros)
+  lendo o servidor web local do celular (F2), sem nuvem. **Mi Band 7 e Amazfit Band 7 são Zepp OS 1.0:**
+  ficam no projeto irmão `../zeppos-band7`, que importa a lógica daqui (`utils/glucose.js`).
+- **Alerta (plano 21, F7.1, 22/11/2026):** o serviço lateral pede `&app=zepp`; alerta de id novo no
+  `/watch.json` → vibra no padrão escolhido no celular (cenas do Zepp OS, `vibePlan`) e mostra a faixa
+  vermelha com o título por 2 min.
 - **Fonte:** `http://127.0.0.1:17580/watch.json?minutes=180&step=3` (`LocalHttpServer`, porta 17580).
 - **Arquitetura (modelo oficial "fetch-api" do Zeus CLI, `@zeppos/zml`):**
   - `app-side/index.js` — serviço lateral, roda no app Zepp do CELULAR: busca o `/watch.json` do

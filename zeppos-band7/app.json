@@ -1,0 +1,55 @@
+{
+  "configVersion": "v2",
+  "app": {
+    "appId": 1100921,
+    "appName": "GluView",
+    "appType": "app",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    },
+    "icon": "icon.png",
+    "vender": "gluview",
+    "description": "Glicemia do GluView na Mi Band 7 e na Amazfit Band 7 (Zepp OS 1.0), lida do servidor local do celular."
+  },
+  "permissions": [],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "1.0.0",
+      "target": "1.0.1",
+      "minVersion": "1.0.0"
+    }
+  },
+  "targets": {
+    "common": {
+      "module": {
+        "page": {
+          "pages": ["page/index"]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        }
+      },
+      "platforms": [
+        { "name": "band7", "deviceSource": 252 },
+        { "name": "band7-w", "deviceSource": 253 },
+        { "name": "band7-g", "deviceSource": 254 },
+        { "name": "miband7", "deviceSource": 260 },
+        { "name": "miband7-w", "deviceSource": 262 },
+        { "name": "miband7-nfc", "deviceSource": 263 },
+        { "name": "miband7-g", "deviceSource": 264 },
+        { "name": "miband7-gn", "deviceSource": 265 }
+      ],
+      "designWidth": 192
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "GluView"
+    },
+    "pt-BR": {
+      "appName": "GluView"
+    }
+  },
+  "defaultLanguage": "pt-BR"
+}

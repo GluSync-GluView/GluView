@@ -1,0 +1,8 @@
+{
+  "name": "gluview-zepp-band7",
+  "version": "1.0.0",
+  "description": "GluView no Zepp OS 1.0 (Mi Band 7, Amazfit Band 7): glicemia do servidor local do celular",
+  "main": "app.js",
+  "private": true,
+  "license": "GPL-3.0-or-later"
+}

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseWatch, display, chartOps, layout, valueGroup, arrowPoly, arrowOf, zoneColor, usableW,
-  clockText, dateText, STALE_MIN, C, newAlert, vibePlan,
+  clockText, dateText, STALE_MIN, C, newAlert, vibePlan, layoutBar,
 } from "../utils/glucose.js";
 
 const json = {
@@ -119,4 +119,26 @@ test("alerta novo vibra uma vez só, e o plano segue os trechos", () => {
   assert.deepEqual(vibePlan(a.segments), [{ at: 0, scene: "DURATION" }, { at: 700, scene: "DURATION" }, { at: 1400, scene: "DURATION" }]);
   assert.deepEqual(vibePlan([1500]), [{ at: 0, scene: "LONG" }]);
   assert.deepEqual(vibePlan([]), []);
+});
+
+test("tela de barra (Mi Band 7, Band 7): 3 estilos empilhados, sem sobrepor, valor com seta dupla cabe", () => {
+  for (const [W, H] of [[192, 490], [194, 368]]) {
+    for (const st of [0, 1, 2]) {
+      const L = layoutBar(st, W, H);
+      const blocks = [L.date, L.time, L.value, L.deltaAge].filter(Boolean).map((b) => [b.y, b.y + b.h]);
+      blocks.push([L.chart.y, L.chart.y + L.chart.h]);
+      blocks.sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < blocks.length; i++) assert.ok(blocks[i][0] >= blocks[i - 1][1] - 1, `estilo ${st} ${W}x${H}`);
+      assert.ok(blocks[blocks.length - 1][1] <= H * 0.86, `estilo ${st} cabe embaixo`);
+      assert.ok(L.chart.x >= 0 && L.chart.x + L.chart.w <= W && L.chart.w > W * 0.9);
+      // "123" com seta dupla: texto + setas dentro da largura
+      const g = valueGroup("123", L.value, W, "DoubleUp");
+      const textW = 3 * L.value.size * 0.56;
+      const left = W / 2 - g.dx - textW / 2;
+      const right = g.centers[g.centers.length - 1].cx + g.s / 2;
+      assert.ok(left >= 0 && right <= W, `estilo ${st} ${W}x${H}: ${left}..${right}`);
+      assert.ok(L.value.size >= 44, "valor legível");
+      for (const b of [L.date, L.time, L.value, L.deltaAge].filter(Boolean)) assert.ok(b.size <= b.h, `fonte cabe na faixa (${st} ${W}x${H})`);
+    }
+  }
 });

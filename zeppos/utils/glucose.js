@@ -160,6 +160,26 @@ export function layout(style, W, H, round) {
     value: T(0.57, 0.18, 88), deltaAge: T(0.76, 0.08, 32) };
 }
 
+// Tela de BARRA (Mi Band 7 192x490, Amazfit Band 7 194x368 — Zepp OS 1.0): estreita e alta, então
+// os blocos empilham em coluna e as fontes saem da LARGURA. O valor cabe com 3 dígitos e seta dupla
+// (3 x 0,56 + 0,175 + 1 = 2,855 x tamanho <= 0,94 x largura → tamanho <= 0,33 x largura).
+// A fonte também respeita a ALTURA da faixa (85%): a Band 7 é mais baixa que a Mi Band 7 e cortava o topo.
+export function layoutBar(style, W, H) {
+  const k = W / 260;
+  const T = (y, h, f) => ({ y: Math.round(H * y), h: Math.round(H * h), size: Math.round(Math.min(W * f, H * h * 0.85)) });
+  const box = (y, h) => ({ x: 4, y: Math.round(H * y), w: W - 8, h: Math.round(H * h) });
+  if (style === 1) {
+    return { k, labels: false, time: T(0.02, 0.10, 0.20), value: T(0.13, 0.19, 0.33), deltaAge: T(0.33, 0.07, 0.13),
+      chart: box(0.42, 0.34) };
+  }
+  if (style === 2) {
+    return { k, labels: true, date: T(0.02, 0.06, 0.11), time: T(0.08, 0.09, 0.18), value: T(0.18, 0.14, 0.28),
+      chart: box(0.33, 0.38), deltaAge: T(0.73, 0.07, 0.12) };
+  }
+  return { k, labels: true, time: T(0.02, 0.10, 0.20), chart: box(0.13, 0.33), value: T(0.48, 0.17, 0.30),
+    deltaAge: T(0.66, 0.07, 0.13) };
+}
+
 // Valor + seta centralizados juntos: o texto (widget TEXT centralizado na tela) anda dx px para a
 // esquerda e as setas vão à direita dele. Largura dos dígitos estimada em 0,56 do tamanho da fonte.
 export function valueGroup(value, lv, W, dir) {
