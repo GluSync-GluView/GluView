@@ -1,18 +1,24 @@
-<manifest xmlns="http://www.garmin.com/xml/connectiq" version="3">
-    <application id="b7b8f4d2-7c2a-4a7e-9d11-5b6a2f1c0e33" type="watch-app" name="@Strings.AppName" entry="GluViewApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
-        <iq:products xmlns:iq="http://www.garmin.com/xml/connectiq">
+<?xml version="1.0"?>
+<!-- GluView para Garmin Connect IQ (plano 21, F7.5). Formato oficial iq:manifest (o anterior, com
+     namespace padrão, não compilava: "Missing the iq:application tag"). Produtos com tela colorida e
+     Connect IQ ≥ 3.2; mais modelos podem ser incluídos depois de testados no simulador. -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application id="b7b8f4d27c2a4a7e9d115b6a2f1c0e33" type="watch-app" name="@Strings.AppName"
+        entry="GluViewApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+        <iq:products>
             <iq:product id="venu3"/>
             <iq:product id="venu3s"/>
             <iq:product id="vivoactive5"/>
             <iq:product id="fenix7"/>
-            <iq:product id="forerunner965"/>
+            <iq:product id="fr965"/>
         </iq:products>
-        <iq:permissions xmlns:iq="http://www.garmin.com/xml/connectiq">
+        <iq:permissions>
             <iq:uses-permission id="Communications"/>
         </iq:permissions>
-        <iq:languages xmlns:iq="http://www.garmin.com/xml/connectiq">
+        <iq:languages>
             <iq:language>eng</iq:language>
             <iq:language>por</iq:language>
         </iq:languages>
-    </application>
-</manifest>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>

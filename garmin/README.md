@@ -1,14 +1,35 @@
-# F7.5 — Garmin Connect IQ (watch-app/widget de dados)
+# F7.5 — Garmin Connect IQ (app de relógio)
 
-- **Objetivo:** mostrador/app de dados no relógio Garmin lendo glicemia do servidor web local do GluView (F2), sem nuvem/loja.
-- **Endpoint:** `http://127.0.0.1:17580/sgv.json?count=1` (Nightscout/xDrip compatível, `LocalHttpServer` do `:mirror-core`, porta 17580). Campos: `sgv`, `direction`, `date` (epoch ms).
-- **Projeto:** `manifest.xml`, `monkey.jungle`, `source/GluViewView.mc`, recursos em `resources/`. Permissão `Communications`. Produtos de exemplo no manifest (ajustar conforme simulador/dispositivo).
-- **Comportamento:** exibe valor, direção e idade em minutos calculada a partir de `date`; leitura velha permanece visível apenas com idade crescente (não como atual).
-- **Maturidade:** **Sem teste em simulador Connect IQ/hardware real** neste ambiente. **Não publicar em loja.**
-- **Prova esperada (simulador Connect IQ):** importar o projeto no SDK Connect IQ, executar no simulador com o servidor local do GluView ativo e capturar print com valor e idade.
-- **Observação:** acesso HTTP local a partir do app Connect IQ depende do ambiente (simulador/telefone pareado). Pode ser necessário usar o host exposto pelo Garmin Connect Mobile no dispositivo real; documentar ajuste se houver.
+- **Objetivo:** app no relógio Garmin lendo a glicemia do servidor web local do GluView (F2), sem nuvem.
+- **Endpoint:** `http://127.0.0.1:17580/pebble?count=1` (`LocalHttpServer`, porta 17580). Raiz = objeto, que é
+  o que o `makeWebRequest` do Connect IQ aceita (o `/sgv.json` tem raiz lista e nunca chegava ao app).
+  Campos usados: `bgs[0].sgv`, `bgs[0].direction`, `bgs[0].datetime` e `status[0].now` (hora do CELULAR,
+  então hora errada no relógio não engana a idade).
+- **Projeto:** `manifest.xml` (formato `iq:manifest`), `monkey.jungle`, `source/GluViewView.mc`, `resources/`.
+  Produtos: venu3, venu3s, vivoactive5, fenix7, fr965. Permissão `Communications`.
+- **Comportamento:** valor + seta desenhada (as fontes do relógio não têm →↗↘) + idade; busca a cada 60 s;
+  leitura com 20 min ou mais, ou falha na busca → "Sem sinal" (valor some).
+- **Não publicar em loja** sem decisão do Felipe (cadastro de desenvolvedor Garmin pendente).
 
-## Auditoria 21/11/2026 (Claude)
-- Corrigido: busca a cada 60 s, idade recalculada a cada desenho, "Sem sinal" com leitura de 20 min ou mais ou
-  falha na busca, conta de idade sem estouro de 32 bits, `using Toybox.Time`/`Toybox.Timer` que faltavam.
-- Ainda **não compilado** no SDK Connect IQ nem testado no simulador.
+## Como compilar e testar (SDK 9.3.0, 21/11/2026)
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+$sdk = "$env:APPDATA\Garmin\ConnectIQ\Sdks\connectiq-sdk-win-9.3.0-2026-10-20-95888f262"
+& "$sdk\bin\monkeyc.bat" -f monkey.jungle -o bin\GluView-fenix7.prg -d fenix7 -y C:\claude\_tools\garmin\developer_key.der
+& "$sdk\bin\connectiq.bat"      # abre o simulador
+& "$sdk\bin\monkeydo.bat" bin\GluView-fenix7.prg fenix7
+```
+
+- No simulador, desmarcar **Settings → Use Device HTTPS Requirements** (senão a busca em `http://` dá -1001;
+  no celular Android o Garmin Connect libera o 127.0.0.1).
+- Dados reais: `adb -s emulator-5554 forward tcp:17580 tcp:17580` com o GluView rodando no emulador.
+- A chave de desenvolvedor (`developer_key.der`) fica FORA do Git, em `C:\claude\_tools\garmin\`.
+
+## Testes no simulador (21/11/2026, Claude)
+- fēnix 7 com o GluView do emulador: `115 →`, idade correndo (resposta 200).
+- Servidor de teste no formato `/pebble`: `210 ↑↑` (3 min), `72 ↘` (1 min), leitura de 25 min → "Sem sinal".
+- Venu 3, Forerunner 965 e fēnix 7 com `48 ↓↓`: layout certo nos três.
+- Defeitos achados e corrigidos no teste: seta em texto saía "◆?" (agora desenhada); no Venu 3 as linhas se
+  sobrepunham (agora posicionadas pela altura das fontes).
+- Falta: relógio Garmin de verdade pareado com o Garmin Connect do celular.
