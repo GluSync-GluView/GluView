@@ -61,7 +61,7 @@ internal fun rememberSettingsSearchHits(ctx: SearchContext): List<SettingsSearch
             .map { item ->
                 val title = res.getString(item.titleRes)
                 val path = pathOf(item.screen)
-                SettingsSearchHit(title, path, item.screen.route, title, "$title $path ${item.keywords.joinToString(" ")}")
+                SettingsSearchHit(title, path, item.screen.route, title, "$title $path ${item.keywordsRes?.let(res::getString).orEmpty()}")
             }
         screens + items
     }
