@@ -44,6 +44,8 @@ class XiaomiBandSession(
 ) {
     enum class Protocol { V1, V2 }
 
+    val isV2: Boolean get() = protocol == Protocol.V2
+
     private var session: XiaomiSession? = null
     private var index = 1
     private var seq = 0
@@ -101,6 +103,57 @@ class XiaomiBandSession(
         return sendCommand(s.encrypt(command, i), encrypted = true, i) ?: Result.Ok
     }
 
+    // ---- visor
+    /**
+     * Instala o visor [bytes] com o id [id] e o ativa; depois apaga [deleteId] (o visor anterior), se houver.
+     * Fluxo do Gadgetbridge: pedido de instalação → pedido de envio (tipo 16) → partes pelo canal de dados
+     * (V1: característica 0055, cifrado com índice 0; V2: canal 2 em claro) → ativa.
+     */
+    suspend fun installWatchface(id: String, bytes: ByteArray, deleteId: String?, onProgress: (Int) -> Unit = {}): Result {
+        session ?: return Result.Failed("sem autenticação")
+        sendEncrypted(XiaomiMessages.watchfaceInstallCommand(id, bytes.size)).let { if (it is Result.Failed) return it }
+        val status = readUntil(15_000) { XiaomiMessages.watchfaceInstallStatus(it) }
+            ?: return Result.Failed("a pulseira não respondeu ao pedido de instalação do visor")
+        if (status != 0) return Result.Failed("a pulseira recusou instalar o visor (estado $status)")
+        val md5 = java.security.MessageDigest.getInstance("MD5").digest(bytes)
+        sendEncrypted(XiaomiMessages.dataUploadRequestCommand(XiaomiMessages.UPLOAD_TYPE_WATCHFACE, md5, bytes.size))
+            .let { if (it is Result.Failed) return it }
+        val ack = readUntil(15_000) { XiaomiMessages.uploadAck(it) } ?: return Result.Failed("a pulseira não aceitou o envio do visor")
+        if (ack.errno != 0) return Result.Failed("a pulseira recusou o envio do visor (erro ${ack.errno})")
+        val parts = XiaomiMessages.uploadParts(XiaomiMessages.UPLOAD_TYPE_WATCHFACE, bytes, ack.resumePosition, ack.chunkSize ?: 2048)
+        log("Enviando o visor: ${bytes.size} bytes em ${parts.size} partes…")
+        parts.forEachIndexed { i, part ->
+            sendData(part)?.let { return it }
+            onProgress((i + 1) * 100 / parts.size)
+        }
+        sendEncrypted(XiaomiMessages.watchfaceSetCommand(id)).let { if (it is Result.Failed) return it }
+        if (deleteId != null && deleteId != id) sendEncrypted(XiaomiMessages.watchfaceDeleteCommand(deleteId))
+        log("Visor $id instalado e ativo.")
+        return Result.Ok
+    }
+
+    /** Uma parte do envio pelo canal de dados. */
+    private suspend fun sendData(part: ByteArray): Result? {
+        if (protocol == Protocol.V2) {
+            val frame = XiaomiV2Frames.data(seq++, XiaomiV2Frames.OPCODE_PLAIN, part, channel = XiaomiV2Frames.CHANNEL_DATA)
+            frame.toList().chunked(link.maxWrite).forEach { link.write(XiaomiV2Frames.TX, it.toByteArray()) }
+            val r = nextV2(5_000) { it.type == XiaomiV2Frames.TYPE_ACK || it.type == XiaomiV2Frames.TYPE_NACK }
+            return if (r?.type == XiaomiV2Frames.TYPE_NACK) Result.Failed("a pulseira recusou uma parte do visor") else null
+        }
+        val s = session ?: return Result.Failed("sem autenticação")
+        return sendCommand(s.encrypt(part, 0), encrypted = true, index = 0, characteristic = XiaomiV1Frames.DATA_UPLOAD, prefixIndex = false)
+    }
+
+    /** Lê comandos da pulseira até [pick] reconhecer um (os outros são ignorados). */
+    private suspend fun <T> readUntil(timeoutMs: Long, pick: (ByteArray) -> T?): T? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val c = readCommand() ?: return null
+            pick(c)?.let { return it }
+        }
+        return null
+    }
+
     // ---- V2
     /**
      * Próximo pacote V2 que satisfaz [want]. Os de dados recebem confirmação na hora; os que chegam fora
@@ -133,10 +186,14 @@ class XiaomiBandSession(
         return if (r?.type == XiaomiV2Frames.TYPE_NACK) Result.Failed("a pulseira recusou o pacote (V2)") else null
     }
 
-    /** Escreve um comando em 0052 e espera a confirmação; null = ok, senão a falha. */
-    private suspend fun sendCommand(payload: ByteArray, encrypted: Boolean, index: Int = 0): Result? {
+    /**
+     * Escreve um comando (0052) ou parte de envio (0055) e espera a confirmação; null = ok, senão a falha.
+     * [prefixIndex] = em pedaços, o índice da cifra vai na frente (comandos); no envio de dados não.
+     */
+    private suspend fun sendCommand(payload: ByteArray, encrypted: Boolean, index: Int = 0,
+                                    characteristic: java.util.UUID = XiaomiV1Frames.COMMAND_WRITE, prefixIndex: Boolean = true): Result? {
         if (protocol == Protocol.V2) return sendV2(payload, if (encrypted) XiaomiV2Frames.OPCODE_ENCRYPTED else XiaomiV2Frames.OPCODE_PLAIN)
-        val w = XiaomiV1Frames.COMMAND_WRITE
+        val w = characteristic
         if (XiaomiV1Frames.fitsSingle(payload.size, link.maxWrite)) {
             link.write(w, XiaomiV1Frames.single(payload, encrypted, index))
             return when (val r = link.receive(w, 5_000)?.let(XiaomiV1Frames::parse)) {
@@ -146,7 +203,7 @@ class XiaomiBandSession(
             }
         }
         // Em pedaços; cifrado leva o índice na frente (XiaomiCharacteristicV1.sendNext).
-        val data = if (encrypted) byteArrayOf((index and 0xff).toByte(), ((index ushr 8) and 0xff).toByte()) + payload else payload
+        val data = if (encrypted && prefixIndex) byteArrayOf((index and 0xff).toByte(), ((index ushr 8) and 0xff).toByte()) + payload else payload
         val parts = XiaomiV1Frames.chunks(data, link.maxWrite)
         link.write(w, XiaomiV1Frames.chunkStart(parts.size, encrypted))
         if (link.receive(w, 5_000)?.let(XiaomiV1Frames::parse) != XiaomiV1Frames.Incoming.ReadyForChunks)

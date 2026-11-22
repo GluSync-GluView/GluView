@@ -10,6 +10,7 @@
 // faixa vermelha com o título por 2 min.
 import { display, chartOps, layoutBar, valueGroup, clockText, dateText, C, STYLES, newAlert, vibePlan } from "../../zeppos/utils/glucose";
 import { toWidgets, arrowLines, timeAdapter, dotsAlong } from "../utils/widgets";
+import { makeTimers } from "../utils/timers";
 
 const { width: W, height: H } = hmSetting.getDeviceInfo();
 const SCENE_DURATION = 27;       // forte, 600 ms (doc do sensor VIBRATE, Zepp OS 1.0)
@@ -26,6 +27,7 @@ let style = 0;
 let alertText = null;
 let alertUntil = 0;
 let fetchTimer = null;
+let firstFetch = null;
 let drawTimer = null;
 let vibeTimers = [];
 let clock = null;
@@ -46,18 +48,24 @@ function guard(label, fn) {
 // Timers: setTimeout/setInterval quando existem (o polyfill do shared/ cria), senão timer.createTimer.
 // Cancelar confere cada função antes: no relógio pode haver setTimeout sem clearInterval, e o erro ao
 // fechar a página aparecia como "TypeError: not a function" (simulador da Band 7, 22/11/2026).
+// Timers próprios sobre timer.createTimer (utils/timers.js): o setTimeout do polyfill derrubava o app.
+const T = makeTimers(timer);
 function later(ms, fn) {
-  if (typeof setTimeout === "function") return { t: setTimeout(fn, ms), kind: "timeout" };
-  const ref = timer.createTimer(Math.max(1, ms), 2147483647, () => { timer.stopTimer(ref); fn(); }, {});
-  return { t: ref, kind: "hm" };
+  return { t: T.setTimeout(fn, ms), kind: "own" };
 }
+// Repetição feita de esperas encadeadas: o setInterval do polyfill dispara já em 1 ms (pedido de dados em
+// dobro bem na hora da conexão com o celular).
 function every(ms, fn) {
-  if (typeof setInterval === "function") return { t: setInterval(fn, ms), kind: "interval" };
-  return { t: timer.createTimer(ms, ms, fn, {}), kind: "hm" };
+  const h = { kind: "loop", stopped: false, t: null };
+  const tick = () => { h.t = later(ms, () => { if (h.stopped) return; fn(); tick(); }); };
+  tick();
+  return h;
 }
 function cancel(h) {
   if (!h) return;
   try {
+    if (h.kind === "loop") { h.stopped = true; cancel(h.t); return; }
+    if (h.kind === "own") { T.clearTimeout(h.t); return; }
     if (h.kind === "timeout" && typeof clearTimeout === "function") clearTimeout(h.t);
     else if (h.kind === "interval" && typeof clearInterval === "function") clearInterval(h.t);
     else if (typeof timer !== "undefined" && timer.stopTimer) timer.stopTimer(h.t);
@@ -135,28 +143,48 @@ const { messageBuilder } = getApp()._options.globalData;
 Page({
     state: {},
     build() {
-      // A barra do sistema (nome do app + hora) cobriria a nossa hora no topo.
-      try { hmUI.setStatusBarVisible(false); } catch (e) { /* firmware sem a chamada: segue */ }
-      style = getInt("gluview_style", 0) % STYLES.length;
-      try { clock = hmSensor.createSensor(hmSensor.id.TIME); } catch (e) { clock = null; }
-      // Redesenha logo DEPOIS do toque (fora do tratamento do evento); toques seguidos antes do redesenho
-      // contam uma vez só.
-      let pending = null;
-      onTap = () => {
-        if (pending) return;
-        style = (style + 1) % STYLES.length;
-        setInt("gluview_style", style);
-        pending = later(30, guard("toque", () => { pending = null; this.draw(); }));
-      };
-      const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: W, h: H, color: C.BLACK });
-      bg.addEventListener(hmUI.event.CLICK_UP, onTap);
-      this.draw();
-      this.refresh();
-      fetchTimer = every(60000, guard("busca", () => this.refresh()));
-      drawTimer = every(30000, guard("relógio", () => this.draw()));
+      let step = "início";
+      try {
+        // A barra do sistema (nome do app + hora) cobriria a nossa hora no topo.
+        step = "try { hmUI.setStatusBarVisible(false); }";
+        try { hmUI.setStatusBarVisible(false); } catch (e) { /* firmware sem a chamada: segue */ }
+        step = "style = getInt('gluview_style', 0) % STY";
+        style = getInt("gluview_style", 0) % STYLES.length;
+        step = "try { clock = hmSensor.createSensor(hmSe";
+        try { clock = hmSensor.createSensor(hmSensor.id.TIME); } catch (e) { clock = null; }
+        // Redesenha logo DEPOIS do toque (fora do tratamento do evento); toques seguidos antes do redesenho
+        // contam uma vez só.
+        step = "let pending = null;";
+        let pending = null;
+        step = "onTap = () => {";
+        onTap = () => {
+          if (pending) return;
+          style = (style + 1) % STYLES.length;
+          setInt("gluview_style", style);
+          pending = later(30, guard("toque", () => { pending = null; this.draw(); }));
+        step = "};";
+        };
+        step = "const bg = hmUI.createWidget(hmUI.widget";
+        const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, { x: 0, y: 0, w: W, h: H, color: C.BLACK });
+        step = "bg.addEventListener(hmUI.event.CLICK_UP,";
+        bg.addEventListener(hmUI.event.CLICK_UP, onTap);
+        step = "this.draw();";
+        this.draw();
+        // 1ª busca um pouco depois de abrir: a conexão com o celular ainda está se acertando.
+        step = "firstFetch = later(1500, guard('1ª busca";
+        firstFetch = later(1500, guard("1ª busca", () => this.refresh()));
+        step = "fetchTimer = every(60000, guard('busca',";
+        fetchTimer = every(60000, guard("busca", () => this.refresh()));
+        step = "drawTimer = every(30000, guard('relógio'";
+        drawTimer = every(30000, guard("relógio", () => this.draw()));
+      
+      } catch (e) {
+        log("GluView ERRO na montagem (" + step + "): " + e);
+      }
     },
     onDestroy() {
       try {
+        cancel(firstFetch);
         cancel(fetchTimer);
         cancel(drawTimer);
         vibeTimers.forEach(cancel);

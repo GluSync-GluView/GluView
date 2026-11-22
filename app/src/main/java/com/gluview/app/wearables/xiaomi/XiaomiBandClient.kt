@@ -48,7 +48,34 @@ class XiaomiBandClient @Inject constructor(@ApplicationContext private val conte
      * a mais). O padrão vai pelo "teste de vibração" do protocolo, que aceita liga/pausa em ms.
      */
     suspend fun alert(mac: String, keyHex: String, title: String, body: String, style: VibrationStyle?,
-                      log: (String) -> Unit): Boolean = mutex.withLock {
+                      log: (String) -> Unit): Boolean = withSession(mac, keyHex, log) { s, emit ->
+        (s.notify((System.currentTimeMillis() / 1000).toInt(), title, body, System.currentTimeMillis()) as? XiaomiBandSession.Result.Failed)
+            ?.let { emit("❌ ${it.reason}"); return@withSession false }
+        if (style != null && style != VibrationStyle.OFF) {
+            (s.vibrate(style.segmentsMs) as? XiaomiBandSession.Result.Failed)?.let { emit("❌ ${it.reason}"); return@withSession false }
+            emit("Vibração: ${style.id}.")
+        }
+        emit("✅ Notificação enviada à pulseira.")
+        true
+    }
+
+    /**
+     * Plano 21, F7.4 — instala o visor gerado por [XiaomiWatchfaceBuilder] (glicemia + gráfico + hora ao vivo)
+     * e apaga o anterior ([deleteId]). [make] recebe true quando a pulseira fala o protocolo V2 (9 Active).
+     */
+    suspend fun installWatchface(mac: String, keyHex: String, id: String, deleteId: String?, make: (Boolean) -> ByteArray,
+                                 log: (String) -> Unit): Boolean = withSession(mac, keyHex, log) { s, emit ->
+        val bytes = make(s.isV2)
+        emit("Visor gerado: ${bytes.size} bytes.")
+        when (val r = s.installWatchface(id, bytes, deleteId) { if (it % 25 == 0) emit("Enviando o visor: $it%") }) {
+            is XiaomiBandSession.Result.Failed -> { emit("❌ ${r.reason}"); false }
+            XiaomiBandSession.Result.Ok -> { emit("✅ Visor instalado e ativo."); true }
+        }
+    }
+
+    /** Conecta, autentica, roda [block] e desconecta (a pulseira não fica ligada o tempo todo). */
+    private suspend fun withSession(mac: String, keyHex: String, log: (String) -> Unit,
+                                    block: suspend (XiaomiBandSession, (String) -> Unit) -> Boolean): Boolean = mutex.withLock {
         fun emit(m: String) { Log.i(tag, m); log(m) }
         fun fail(m: String): Boolean { emit("❌ $m"); return false }
         val k = keyHex.trim().removePrefix("0x").lowercase()
@@ -70,9 +97,10 @@ class XiaomiBandClient @Inject constructor(@ApplicationContext private val conte
             val uuids = services.bluetoothGattServices.flatMap { sv -> sv.characteristics.map { it.uuid } }.toSet()
             val v2 = XiaomiV2Frames.RX in uuids && XiaomiV2Frames.TX in uuids
             val mtu = runCatching { withTimeoutOrNull(5_000) { conn.requestMtu(if (v2) 512 else 247).await() } }.getOrNull() ?: 23
-            val channels = if (v2) mapOf(XiaomiV2Frames.RX to Channel<ByteArray>(Channel.UNLIMITED))
-                else mapOf(XiaomiV1Frames.COMMAND_READ to Channel<ByteArray>(Channel.UNLIMITED),
-                    XiaomiV1Frames.COMMAND_WRITE to Channel<ByteArray>(Channel.UNLIMITED))
+            val wanted = if (v2) listOf(XiaomiV2Frames.RX)
+                else listOf(XiaomiV1Frames.COMMAND_READ, XiaomiV1Frames.COMMAND_WRITE) +
+                    (if (XiaomiV1Frames.DATA_UPLOAD in uuids) listOf(XiaomiV1Frames.DATA_UPLOAD) else emptyList())
+            val channels = wanted.associateWith { Channel<ByteArray>(Channel.UNLIMITED) }
             for ((uuid, ch) in channels) {
                 val ready = CompletableDeferred<Unit>()
                 disposables.add(conn.setupNotification(uuid).doOnNext { ready.complete(Unit) }.flatMap { it }
@@ -83,10 +111,13 @@ class XiaomiBandClient @Inject constructor(@ApplicationContext private val conte
             val link = object : XiaomiLink {
                 override val maxWrite = (mtu - 3).coerceAtLeast(20)
                 override suspend fun write(characteristic: UUID, value: ByteArray) { conn.writeCharacteristic(characteristic, value).await() }
-                override suspend fun receive(characteristic: UUID, timeoutMs: Long): ByteArray? = withTimeoutOrNull(timeoutMs) {
-                    select<ByteArray?> {
-                        channels.getValue(characteristic).onReceive { it }
-                        dropped.onAwait { null }
+                override suspend fun receive(characteristic: UUID, timeoutMs: Long): ByteArray? {
+                    val ch = channels[characteristic] ?: return null
+                    return withTimeoutOrNull(timeoutMs) {
+                        select<ByteArray?> {
+                            ch.onReceive { it }
+                            dropped.onAwait { null }
+                        }
                     }
                 }
             }
@@ -95,14 +126,7 @@ class XiaomiBandClient @Inject constructor(@ApplicationContext private val conte
             val region = Locale.getDefault().language.take(2).uppercase(Locale.ROOT).ifBlank { "PT" }
             (s.authenticate(Build.VERSION.SDK_INT, Build.MODEL ?: "Android", region) as? XiaomiBandSession.Result.Failed)
                 ?.let { return fail(it.reason) }
-            (s.notify((System.currentTimeMillis() / 1000).toInt(), title, body, System.currentTimeMillis()) as? XiaomiBandSession.Result.Failed)
-                ?.let { return fail(it.reason) }
-            if (style != null && style != VibrationStyle.OFF) {
-                (s.vibrate(style.segmentsMs) as? XiaomiBandSession.Result.Failed)?.let { return fail(it.reason) }
-                emit("Vibração: ${style.id}.")
-            }
-            emit("✅ Notificação enviada à pulseira.")
-            return true
+            return block(s, ::emit)
         } catch (e: Exception) {
             return fail("erro: ${e.message}")
         } finally {

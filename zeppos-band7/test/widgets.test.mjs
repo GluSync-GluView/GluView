@@ -61,3 +61,28 @@ test("sem polilinha no firmware: discos encostados ao longo do caminho", () => {
   // canto não duplica
   assert.equal(d.filter((c) => c.x === 30 && c.y === 0).length, 1);
 });
+
+test("timers próprios: período = espera, para no 1º disparo, intervalo repete", async () => {
+  const { makeTimers } = await import("../utils/timers.js");
+  const made = [];
+  const stopped = [];
+  const hm = {
+    createTimer(delay, period, cb) { const ref = made.length + 1; made.push({ ref, delay, period, cb }); return ref; },
+    stopTimer(ref) { stopped.push(ref); },
+  };
+  const t = makeTimers(hm);
+  let fired = 0;
+  t.setTimeout(() => fired++, 60000);
+  assert.deepEqual([made[0].delay, made[0].period], [60000, 60000]);   // nunca MAX_SAFE_INTEGER
+  made[0].cb();
+  assert.equal(fired, 1);
+  assert.deepEqual(stopped, [1]);
+  t.setTimeout(() => {}, 1e20);                                        // gigante vira int32
+  assert.equal(made[1].period, 2147483647);
+  let ticks = 0;
+  const iv = t.setInterval(() => ticks++, 30000);
+  made[2].cb(); made[2].cb();
+  assert.equal(ticks, 2);
+  t.clearInterval(iv);
+  assert.ok(stopped.includes(3));
+});

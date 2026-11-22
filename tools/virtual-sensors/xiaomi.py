@@ -19,6 +19,9 @@ BLE V2 (`--proto v2`, Mi Band 9 Active): o app escreve em 005F e a pulseira noti
   Sessão: o app pede (opcode 1), a pulseira responde (opcode 2). Dados = canal (1 protobuf) + opcode
   (1 claro, 2 cifrado AES-CTR com IV = chave de cifra do app) + Command protobuf; quem recebe dados confirma.
 Vibração personalizada (os dois): Command tipo 2 subtipo 59, System(4).vibrationTestCustom(41).vibration*.
+Visor (F7.4): Command 4/4 (instalar: id, tamanho) → installStatus 0; Command 22/0 (envio: tipo 16, md5,
+  tamanho) → ack; partes [total, nº] pelo canal de dados (V1: 0055 cifrado com índice 0; V2: canal 2 em claro)
+  com [0, tipo, md5, tamanho] + bytes + CRC32; confere tudo e grava xiaomi-visor-<id>.bin; 4/1 ativa, 4/2 apaga.
 
 Chave de TESTE (`--key`). Cenários (control-xiaomi.txt): `wrongkey` (a pulseira passa a usar outra chave),
 `refuse` (recusa a confirmação), `drop` (cai depois da autenticação), `nack` (V2: recusa o próximo pacote de dados). Só dados sintéticos. GPLv3.
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import binascii
 import hashlib
 import hmac
 import os
@@ -153,6 +157,10 @@ class Band:
         self.rx = b""
         self.band_seq = 0
         self.nack = False
+        self.face_id = None
+        self.face_size = 0
+        self.parts: dict[int, bytes] = {}
+        self.faces_ok = 0
 
     def services(self) -> list[Service]:
         if self.v2:
@@ -164,7 +172,7 @@ class Band:
         self.write = Characteristic(CMD_WRITE, P.NOTIFY | P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW,
                                     CharacteristicValue(write=self.on_write))
         self.act = Characteristic(ACT, P.NOTIFY | P.WRITE_WITHOUT_RESPONSE, RW, b"")
-        self.upl = Characteristic(UPL, P.NOTIFY | P.WRITE_WITHOUT_RESPONSE, RW, b"")
+        self.upl = Characteristic(UPL, P.NOTIFY | P.WRITE | P.WRITE_WITHOUT_RESPONSE, RW, CharacteristicValue(write=self.on_upl_write))
         return [Service(SVC, [self.read, self.write, self.act, self.upl])]
 
     async def notify(self, ch, value: bytes) -> None:
@@ -215,7 +223,10 @@ class Band:
                     return
                 body = aes_ctr(self.keys[16:32], body)
             try:
-                await self.process(body)
+                if channel == 2:
+                    await self.upload_part(body)
+                else:
+                    await self.process(body)
             except Exception as e:  # noqa: BLE001
                 log.info("Comando ilegível (%s): chave/cifra errada?", e)
 
@@ -231,14 +242,23 @@ class Band:
         log.info("APP(0052) -> %s", hexs(v[:24]) + (" …" if len(v) > 24 else ""))
         asyncio.get_event_loop().create_task(self.handle_frame(v))
 
-    async def handle_frame(self, v: bytes) -> None:
+    # ---- partes do envio de dados chegam em 0055 (V1, cifradas com índice 0, sem índice na frente)
+    def on_upl_write(self, _conn, value: bytes) -> None:
+        asyncio.get_event_loop().create_task(self.handle_frame(bytes(value), upload=True))
+
+    async def handle_frame(self, v: bytes, upload: bool = False) -> None:
+        ch = self.upl if upload else self.write
         chunk = struct.unpack_from("<H", v, 0)[0]
         if chunk != 0:
             self.chunks[chunk] = v[2:]
             if len(self.chunks) == self.chunks_expected:
                 data = b"".join(self.chunks[i] for i in range(1, self.chunks_expected + 1))
-                await self.notify(self.write, bytes([0, 0, 1, 0]))
-                if self.chunk_enc:
+                await self.notify(ch, bytes([0, 0, 1, 0]))
+                if upload:
+                    plain = self.decrypt_app(data, 0) if self.chunk_enc else data
+                    if plain is not None:
+                        await self.upload_part(plain)
+                elif self.chunk_enc:
                     idx = struct.unpack_from("<H", data, 0)[0]
                     await self.process(self.decrypt_app(data[2:], idx))
                 else:
@@ -249,7 +269,7 @@ class Band:
             self.chunk_enc = v[3] == 1
             self.chunks_expected = struct.unpack_from("<H", v, 4)[0]
             self.chunks = {}
-            await self.notify(self.write, bytes([0, 0, 1, 1]))
+            await self.notify(ch, bytes([0, 0, 1, 1]))
         elif kind == 2:                       # comando curto
             enc = v[3] == 1
             if enc:
@@ -257,9 +277,9 @@ class Band:
                 payload = self.decrypt_app(v[6:], idx)
             else:
                 payload = v[4:]
-            await self.notify(self.write, bytes([0, 0, 3, 0 if payload is not None else 1]))
+            await self.notify(ch, bytes([0, 0, 3, 0 if payload is not None else 1]))
             if payload is not None:
-                await self.process(payload)
+                await (self.upload_part(payload) if upload else self.process(payload))
 
     def decrypt_app(self, ct: bytes, idx: int) -> bytes | None:
         if not self.keys:
@@ -324,6 +344,21 @@ class Band:
                 self.drop = False
                 for conn in list(self.device.connections.values()):
                     await conn.disconnect()
+        elif ctype == 4 and sub == 4:
+            st = pb_parse(pb_parse(c[6][0])[6][0])
+            self.face_id = st[1][0].decode()
+            self.face_size = st[2][0]
+            self.parts = {}
+            log.info("VISOR: pedido de instalação id %s, %d bytes", self.face_id, self.face_size)
+            await self.send_command(pb_uint(1, 4) + pb_uint(2, 4) + pb_bytes(6, pb_uint(5, 0)))
+        elif ctype == 22 and sub == 0:
+            req = pb_parse(pb_parse(c[24][0])[1][0])
+            log.info("VISOR: pedido de envio tipo %d, %d bytes", req[1][0], req[3][0])
+            await self.send_command(pb_uint(1, 22) + pb_uint(2, 0) + pb_bytes(24, pb_bytes(2, pb_uint(2, 0) + pb_uint(4, 0))))
+        elif ctype == 4 and sub == 1:
+            log.info("VISOR ATIVO: %s", pb_parse(c[6][0])[2][0].decode())
+        elif ctype == 4 and sub == 2:
+            log.info("VISOR APAGADO: %s", pb_parse(c[6][0])[2][0].decode())
         elif ctype == 2 and sub == 59:
             test = pb_parse(pb_parse(c[4][0])[41][0])
             parts = []
@@ -340,6 +375,29 @@ class Band:
                      n3[5][0].decode(), n3[6][0].decode())
         else:
             log.info("Comando tipo %s/%s ignorado", ctype, sub)
+
+    async def upload_part(self, part: bytes) -> None:
+        total, idx = struct.unpack_from("<HH", part, 0)
+        self.parts[idx] = part[4:]
+        if len(self.parts) < total:
+            return
+        payload = b"".join(self.parts[i] for i in range(1, total + 1))
+        self.parts = {}
+        body, crc = payload[:-4], struct.unpack_from("<I", payload, len(payload) - 4)[0]
+        crc_ok = (binascii.crc32(body) & 0xFFFFFFFF) == crc
+        kind, md5, size = body[1], body[2:18], struct.unpack_from("<I", body, 18)[0]
+        data = body[22:]
+        md5_ok = hashlib.md5(data).digest() == md5
+        head_ok = data[:2] == bytes([0x5A, 0xA5]) and data[0x28:0x31].decode("ascii", "replace") == (self.face_id or "")
+        log.info("VISOR recebido: %d partes, tipo %d, %d bytes (pedido %d) — CRC32 %s, MD5 %s, cabeçalho 5A A5 + id %s",
+                 total, kind, len(data), self.face_size, "ok" if crc_ok else "ERRADO", "ok" if md5_ok else "ERRADO",
+                 "ok" if head_ok else "ERRADO")
+        if crc_ok and md5_ok and size == len(data):
+            self.faces_ok += 1
+            name = f"xiaomi-visor-{self.face_id}.bin"
+            with open(name, "wb") as f:
+                f.write(data)
+            log.info("VISOR gravado em %s", name)
 
     async def control_loop(self, path: str) -> None:
         while True:

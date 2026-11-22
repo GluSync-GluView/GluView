@@ -44,4 +44,9 @@
     <string name="vibration_long">Long</string>
     <string name="vibration_insistent">Insistent</string>
     <string name="vibration_call">Call</string>
+    <string name="xiaomi_face_model">Band model (for the watch face)</string>
+    <string name="xiaomi_face_enabled">Glucose on the watch face, with graph</string>
+    <string name="xiaomi_face_enabled_desc">GluView rebuilds the watch face on each reading (at the Mi Band interval above) with the value, arrow and the last 3 h graph. The time comes from the band itself. Tested only with the virtual band.</string>
+    <string name="xiaomi_face_send">Send watch face now</string>
+    <string name="xiaomi_face_ok">Watch face installed and active on the band.</string>
 </resources>

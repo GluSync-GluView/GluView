@@ -1,0 +1,14 @@
+{
+  "name": "gluview-zepp-face",
+  "version": "1.0.0",
+  "description": "GluView no Zepp OS: glicemia do servidor local do celular",
+  "main": "app.js",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "@zeppos/device-types": "^3.0.0"
+  },
+  "dependencies": {
+    "@zeppos/zml": "^0.0.9"
+  }
+}

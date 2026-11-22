@@ -347,6 +347,10 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
         val KEY_XIAOMI_ALERTS         = booleanPreferencesKey("xiaomi_band_alerts")
         /** F7.1: soneca (min) quando a pessoa a pede na pulseira/relógio (ex.: recusa a "chamada"). */
         val KEY_WEARABLE_SNOOZE_MIN   = intPreferencesKey("wearable_snooze_min")
+        /** F7.4: glicemia com gráfico no visor da Xiaomi nova; modelo (mb8/mb9/mb9active); id do visor ativo. */
+        val KEY_XIAOMI_FACE           = booleanPreferencesKey("xiaomi_band_face")
+        val KEY_XIAOMI_MODEL          = stringPreferencesKey("xiaomi_band_model")
+        val KEY_XIAOMI_FACE_ACTIVE_ID = stringPreferencesKey("xiaomi_face_active_id")
         /** F7.1: ajustes de alerta de cada tipo de aparelho (WearableAlertSettings.encode). */
         fun keyWearableAlerts(family: String) = stringPreferencesKey("wearable_alerts_$family")
         val KEY_MIBAND_AUTO_SEND      = booleanPreferencesKey("miband_auto_send")
@@ -792,6 +796,9 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     val xiaomiBandKey: Flow<String>         = dataStore.data.safeMap("") { it[KEY_XIAOMI_KEY] ?: "" }
     val xiaomiAlertsEnabled: Flow<Boolean>  = dataStore.data.safeMap(false) { it[KEY_XIAOMI_ALERTS] ?: false }
     val wearableSnoozeMinutes: Flow<Int>    = dataStore.data.safeMap(30) { it[KEY_WEARABLE_SNOOZE_MIN] ?: 30 }
+    val xiaomiBandFace: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_XIAOMI_FACE] ?: false }
+    val xiaomiBandModel: Flow<String>       = dataStore.data.safeMap("mb8") { it[KEY_XIAOMI_MODEL] ?: "mb8" }
+    val xiaomiFaceActiveId: Flow<String>    = dataStore.data.safeMap("") { it[KEY_XIAOMI_FACE_ACTIVE_ID] ?: "" }
     /** Texto salvo dos ajustes de alerta do tipo de aparelho [family]; null = nunca configurado. */
     fun wearableAlerts(family: String): Flow<String?> = dataStore.data.safeMap(null) { it[keyWearableAlerts(family)] }
     val miBandAutoSend: Flow<Boolean>       = dataStore.data.safeMap(false) { it[KEY_MIBAND_AUTO_SEND] ?: false }
@@ -1025,6 +1032,9 @@ val KEY_LIBRE2_UNLOCK_COUNT   = intPreferencesKey("libre2_unlock_count")      //
     suspend fun saveXiaomiAlerts(enabled: Boolean) = dataStore.edit { it[KEY_XIAOMI_ALERTS] = enabled }
 
     suspend fun saveWearableAlerts(family: String, encoded: String) = dataStore.edit { it[keyWearableAlerts(family)] = encoded }
+    suspend fun saveXiaomiBandFace(enabled: Boolean) = dataStore.edit { it[KEY_XIAOMI_FACE] = enabled }
+    suspend fun saveXiaomiBandModel(id: String) = dataStore.edit { it[KEY_XIAOMI_MODEL] = id }
+    suspend fun saveXiaomiFaceActiveId(id: String) = dataStore.edit { it[KEY_XIAOMI_FACE_ACTIVE_ID] = id }
     suspend fun saveWearableSnoozeMinutes(minutes: Int) = dataStore.edit { it[KEY_WEARABLE_SNOOZE_MIN] = minutes.coerceIn(5, 240) }
 
     suspend fun saveMiBandAutoSend(enabled: Boolean) = dataStore.edit {

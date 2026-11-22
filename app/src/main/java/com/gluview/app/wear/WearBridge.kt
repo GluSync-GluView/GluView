@@ -153,7 +153,15 @@ class WearBridge @Inject constructor(
      * alerta velho entregue depois engana). true = entregue a pelo menos um relógio com o app.
      */
     suspend fun sendAlert(alert: com.gluview.wear.contract.WearAlert): Boolean = runCatching {
-        val nodes = watchNodesWithApp().orEmpty()
+        // Alerta vai a todo relógio ALCANÇÁVEL com o app, perto ou não: a mensagem pode ir pela nuvem
+        // (no par de emuladores o relógio aparece com rota "cloud" e isNearby=false, e nada chegava).
+        // Sem resposta da capacidade (no par de emuladores ela vinha vazia), vai aos relógios conectados:
+        // num relógio sem o app a mensagem só é descartada.
+        val nodes = watchNodesWithApp(nearbyOnly = false).orEmpty().ifEmpty {
+            runCatching { withTimeoutOrNull(5_000) { nodeClient.connectedNodes.await() }.orEmpty().map { it.id to it.displayName } }
+                .onFailure { Log.w(tag, "Relógios conectados: ${it.message}") }.getOrDefault(emptyList())
+        }
+        Log.i(tag, "Alerta para o relógio: ${nodes.size} relógio(s)")
         if (nodes.isEmpty()) return false
         val bytes = com.gluview.wear.contract.WearAlert.encode(alert)
         var ok = false
@@ -162,14 +170,14 @@ class WearBridge @Inject constructor(
                 .getOrDefault(false) || ok
         }
         ok
-    }.getOrDefault(false)
+    }.onFailure { Log.w(tag, "Alerta para o relógio falhou: ${it.message}") }.getOrDefault(false)
 
-    private suspend fun watchNodesWithApp(): List<Pair<String, String>>? = runCatching {
+    private suspend fun watchNodesWithApp(nearbyOnly: Boolean = true): List<Pair<String, String>>? = runCatching {
         val info = withTimeoutOrNull(5_000) {
             capabilityClient.getCapability(WearPaths.CAPABILITY, CapabilityClient.FILTER_REACHABLE).await()
         } ?: return emptyList()
-        info.nodes.filter { it.isNearby }.map { it.id to it.displayName }
-    }.getOrNull()
+        info.nodes.filter { !nearbyOnly || it.isNearby }.map { it.id to it.displayName }
+    }.onFailure { Log.w(tag, "Capacidade do relógio: ${it.message}") }.getOrNull()
 
     private suspend fun sendReading(reading: GlucoseReading) {
         val limits = prefs.glucoseThresholds.first()

@@ -65,6 +65,9 @@ internal data class MiBandUi(
     val xiaomiAlerts: Boolean = false,
     val xiaomiResult: String? = null,
     val xiaomiRunning: Boolean = false,
+    val xiaomiModel: String = "mb8",
+    val xiaomiFace: Boolean = false,
+    val xiaomiFaceResult: String? = null,
     val model: String = "mi_band_6",
     val key: String = "",
     val macError: Int? = null,
@@ -87,6 +90,9 @@ internal class MiBandActions(
     val onXiaomiKey: (String) -> Unit = {},
     val onXiaomiAlerts: (Boolean) -> Unit = {},
     val onXiaomiTest: (String, String) -> Unit = { _, _ -> },
+    val onXiaomiModel: (String) -> Unit = {},
+    val onXiaomiFace: (Boolean) -> Unit = {},
+    val onXiaomiFaceSend: () -> Unit = {},
     val onModel: (String) -> Unit = {},
     val onMac: (String) -> Unit = {},
     val onKey: (String) -> Unit = {},
@@ -114,6 +120,9 @@ fun MiBandScreen(
         xiaomiAlerts = vm.xiaomiAlerts.collectAsState().value,
         xiaomiResult = vm.xiaomiResult.collectAsState().value,
         xiaomiRunning = vm.xiaomiRunning.collectAsState().value,
+        xiaomiModel = vm.xiaomiModel.collectAsState().value,
+        xiaomiFace = vm.xiaomiFace.collectAsState().value,
+        xiaomiFaceResult = vm.xiaomiFaceResult.collectAsState().value,
         key = vm.key.collectAsState().value,
         macError = vm.macError.collectAsState().value,
         keyError = vm.keyError.collectAsState().value,
@@ -136,6 +145,9 @@ fun MiBandScreen(
         onXiaomiKey = vm::onXiaomiKey,
         onXiaomiAlerts = vm::onXiaomiAlerts,
         onXiaomiTest = vm::sendXiaomiTest,
+        onXiaomiModel = vm::onXiaomiModel,
+        onXiaomiFace = vm::onXiaomiFace,
+        onXiaomiFaceSend = vm::sendXiaomiFace,
         onKey = vm::onKeyChange,
         onTest = vm::testConnection,
         onSend = vm::sendCurrentWatchFace,
@@ -390,6 +402,21 @@ internal fun XiaomiSection(ui: MiBandUi, actions: MiBandActions) {
             }
             ui.xiaomiResult?.let { r ->
                 Text(if (r == "ok") stringResource(R.string.xiaomi_band_test_ok) else stringResource(R.string.xiaomi_band_test_fail, r),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (r == "ok") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+            }
+            // F7.4: glicemia com gráfico no visor (o visor inteiro é refeito a cada leitura).
+            Text(stringResource(R.string.xiaomi_face_model), style = MaterialTheme.typography.bodyMedium)
+            com.gluview.app.ui.components.kit.ChoiceChips(
+                com.gluview.app.watchface.xiaomi.XiaomiBandModel.entries.map { it.id }, ui.xiaomiModel, actions.onXiaomiModel,
+                label = { id -> com.gluview.app.watchface.xiaomi.XiaomiBandModel.fromId(id).label })
+            com.gluview.app.ui.components.kit.SwitchRow(stringResource(R.string.xiaomi_face_enabled), ui.xiaomiFace, actions.onXiaomiFace,
+                description = stringResource(R.string.xiaomi_face_enabled_desc))
+            OutlinedButton(onClick = actions.onXiaomiFaceSend, enabled = !ui.xiaomiRunning, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (ui.xiaomiRunning) R.string.miband_connecting else R.string.xiaomi_face_send))
+            }
+            ui.xiaomiFaceResult?.let { r ->
+                Text(if (r == "ok") stringResource(R.string.xiaomi_face_ok) else stringResource(R.string.xiaomi_band_test_fail, r),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (r == "ok") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
             }

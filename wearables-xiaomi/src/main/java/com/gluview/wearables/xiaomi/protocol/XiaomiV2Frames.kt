@@ -38,6 +38,7 @@ object XiaomiV2Frames {
     const val TYPE_SESSION = 2
     const val TYPE_DATA = 3
     const val CHANNEL_PROTOBUF = 1
+    const val CHANNEL_DATA = 2
     const val OPCODE_PLAIN = 1
     const val OPCODE_ENCRYPTED = 2
     const val SESSION_START_REQUEST = 1

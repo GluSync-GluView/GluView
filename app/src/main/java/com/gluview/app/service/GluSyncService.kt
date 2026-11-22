@@ -100,6 +100,7 @@ class GluSyncService : LifecycleService() {
     @Inject lateinit var cloudAccess: CloudAccessRepository
     @Inject lateinit var termsRepository: TermsRepository
     @Inject lateinit var miBandPusher: MiBandWatchFacePusher
+    @Inject lateinit var xiaomiFacePusher: com.gluview.app.watchface.xiaomi.XiaomiWatchfacePusher
     @Inject lateinit var wearBridge: com.gluview.app.wear.WearBridge
     @Inject lateinit var xdripBroadcaster: com.gluview.app.data.broadcast.XdripBroadcaster
     @Inject lateinit var dexcomShareUploader: com.gluview.app.data.integration.DexcomShareUploader
@@ -290,7 +291,10 @@ class GluSyncService : LifecycleService() {
         // o pusher aplica o toggle das preferências e o intervalo mínimo de 5 min.
         miBandAutoSendJob?.cancel()
         miBandAutoSendJob = lifecycleScope.launch {
-            repository.currentReading.filterNotNull().collect { miBandPusher.maybeAutoSend() }
+            repository.currentReading.filterNotNull().collect {
+                miBandPusher.maybeAutoSend()
+                runCatching { xiaomiFacePusher.maybeAutoSend() }   // F7.4: visor da Xiaomi nova
+            }
         }
         // Fase 5 do plano 14 (Wear OS): cada leitura nova vai para o relógio Wear OS pareado (se houver
         // um com o GluView). Melhor esforço — sem Play Services ou sem relógio, não faz nada.

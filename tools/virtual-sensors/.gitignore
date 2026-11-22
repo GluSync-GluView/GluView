@@ -14,3 +14,5 @@ huami.out
 huami.log
 xiaomi.out
 xiaomi.log
+xiaomi-visor-*.bin
+control-xiaomi.txt

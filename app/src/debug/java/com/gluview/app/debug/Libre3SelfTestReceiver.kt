@@ -40,6 +40,7 @@ interface DebugDeps {
     fun alertManager(): com.gluview.app.alert.AlertManager
     fun mirrorManager(): com.gluview.app.mirror.MirrorManager
     fun mirrorStore(): com.gluview.app.mirror.MirrorStore
+    fun xiaomiFacePusher(): com.gluview.app.watchface.xiaomi.XiaomiWatchfacePusher
 }
 
 class Libre3SelfTestReceiver : BroadcastReceiver() {
@@ -208,6 +209,37 @@ class Libre3SelfTestReceiver : BroadcastReceiver() {
                         pending.resultData = "enfileirado ${family.id} $kind configurado=${hub.configured(family)}"
                     } catch (e: Exception) {
                         pending.resultData = "ERRO ${e.message}"
+                    } finally { pending.finish() }
+                }
+                return
+            }
+            // F7.4: visor com glicemia e gráfico SINTÉTICOS na Xiaomi virtual (o app de teste não tem leituras).
+            //   mac= key= model=mb8|mb9|mb9active id=167210065 old=<id anterior opcional>
+            "xiaomi_face" -> {
+                val deps = dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, DebugDeps::class.java)
+                val mac = intent.getStringExtra("mac") ?: return
+                val key = intent.getStringExtra("key") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val lines = StringBuilder()
+                    try {
+                        lines.append("visto=").append(scanFor(context, mac)).append(" | ")
+                        val model = com.gluview.app.watchface.xiaomi.XiaomiBandModel.fromId(intent.getStringExtra("model"))
+                        val now = System.currentTimeMillis()
+                        val readings = (0 until 60).map { i ->
+                            com.gluview.app.util.GraphReading(now - (59 - i) * 180_000L, (140 + 60 * kotlin.math.sin(i / 8.0)).toFloat())
+                        }
+                        val pusher = deps.xiaomiFacePusher()
+                        val data = com.gluview.app.watchface.xiaomi.XiaomiWatchfacePusher.FaceData("132", "+3", 2, "↗", false, com.gluview.app.util.graph.GraphPalette.ZONE_IN_RANGE)
+                        val id = intent.getStringExtra("id") ?: "167210065"
+                        val ok = deps.xiaomiBandClient().installWatchface(mac, key, id, intent.getStringExtra("old"), { isV2 ->
+                            val fam = if (isV2) com.gluview.wearables.xiaomi.watchface.XiaomiWatchfaceBuilder.Family.MI_BAND_9_ACTIVE else model.family
+                            val g = com.gluview.app.util.GlucoseGraphRenderer.renderWatchface(readings, fam.width - 8, if (fam.height >= 400) 170 else 110, 3)
+                            pusher.build(fam, data, g, id)
+                        }) { m -> Log.i(tag, "XIAOMI_FACE $m"); lines.append(m).append(" | ") }
+                        pending.resultData = "ok=$ok | $lines"
+                    } catch (e: Exception) {
+                        pending.resultData = "ERRO ${e.message} | $lines"
                     } finally { pending.finish() }
                 }
                 return

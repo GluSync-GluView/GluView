@@ -133,8 +133,8 @@ class WearablesHub @Inject constructor(
     private fun transportFor(family: WearableFamily, log: (String) -> Unit): AlertTransport = when (family) {
         WearableFamily.HUAMI -> HuamiAlertTransport(prefs, huami, log)
         WearableFamily.XIAOMI -> XiaomiAlertTransport(prefs, xiaomi, log)
-        WearableFamily.WEAR_OS -> WearOsAlertTransport(wear)
-        WearableFamily.GARMIN, WearableFamily.ZEPP -> WatchAppAlertTransport(family, board)
+        WearableFamily.WEAR_OS -> WearOsAlertTransport(wear, log)
+        WearableFamily.GARMIN, WearableFamily.ZEPP -> WatchAppAlertTransport(family, board, log)
     }
 
     companion object {

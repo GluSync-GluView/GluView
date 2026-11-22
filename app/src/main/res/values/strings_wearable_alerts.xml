@@ -45,4 +45,9 @@
     <string name="vibration_long">Longa</string>
     <string name="vibration_insistent">Insistente</string>
     <string name="vibration_call">Chamada</string>
+    <string name="xiaomi_face_model">Modelo da pulseira (para o visor)</string>
+    <string name="xiaomi_face_enabled">Glicemia no visor, com gráfico</string>
+    <string name="xiaomi_face_enabled_desc">O GluView refaz o visor a cada leitura (no intervalo da Mi Band acima) com o valor, a seta e o gráfico das últimas 3 h. A hora é da própria pulseira. Testado só na pulseira virtual.</string>
+    <string name="xiaomi_face_send">Enviar visor agora</string>
+    <string name="xiaomi_face_ok">Visor instalado e ativo na pulseira.</string>
 </resources>

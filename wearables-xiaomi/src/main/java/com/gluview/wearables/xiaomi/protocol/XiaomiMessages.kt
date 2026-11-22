@@ -37,6 +37,13 @@ object XiaomiMessages {
     const val NOTIFICATION_SEND = 0
     const val TYPE_SYSTEM = 2
     const val VIBRATION_TEST = 59
+    const val TYPE_WATCHFACE = 4
+    const val WATCHFACE_SET = 1
+    const val WATCHFACE_DELETE = 2
+    const val WATCHFACE_INSTALL = 4
+    const val TYPE_DATA_UPLOAD = 22
+    const val DATA_UPLOAD_START = 0
+    const val UPLOAD_TYPE_WATCHFACE = 16
 
     // ---- escrita (proto2: só o que foi definido)
     class Writer {
@@ -104,6 +111,62 @@ object XiaomiMessages {
         val auth = c.msg(3)
         val dv = auth?.msg(31)
         return Command(c.num(1) ?: -1, c.num(2) ?: -1, dv?.bytes(1), dv?.bytes(2), c.num(100) ?: auth?.num(8))
+    }
+
+    // ---- visor (XiaomiWatchfaceService, wear_watch_face.proto) e envio de dados (XiaomiDataUploadService, wear_mass.proto)
+    /** Watchface{watchfaceInstallStart{id, size}} — a pulseira responde com installStatus (0 = pode enviar). */
+    fun watchfaceInstallCommand(id: String, size: Int): ByteArray {
+        val start = Writer().string(1, id).uint(2, size.toLong()).build()
+        return Writer().uint(1, TYPE_WATCHFACE.toLong()).uint(2, WATCHFACE_INSTALL.toLong())
+            .bytes(6, Writer().bytes(6, start).build()).build()
+    }
+
+    fun watchfaceSetCommand(id: String): ByteArray = Writer().uint(1, TYPE_WATCHFACE.toLong()).uint(2, WATCHFACE_SET.toLong())
+        .bytes(6, Writer().string(2, id).build()).build()
+
+    fun watchfaceDeleteCommand(id: String): ByteArray = Writer().uint(1, TYPE_WATCHFACE.toLong()).uint(2, WATCHFACE_DELETE.toLong())
+        .bytes(6, Writer().string(2, id).build()).build()
+
+    /** DataUpload{dataUploadRequest{type, md5sum, size}}. */
+    fun dataUploadRequestCommand(type: Int, md5: ByteArray, size: Int): ByteArray {
+        val req = Writer().uint(1, type.toLong()).bytes(2, md5).uint(3, size.toLong()).build()
+        return Writer().uint(1, TYPE_DATA_UPLOAD.toLong()).uint(2, DATA_UPLOAD_START.toLong())
+            .bytes(24, Writer().bytes(1, req).build()).build()
+    }
+
+    data class UploadAck(val errno: Int, val resumePosition: Int, val chunkSize: Int?)
+
+    fun watchfaceInstallStatus(cmd: ByteArray): Int? {
+        val c = parse(cmd)
+        if (c.num(1) != TYPE_WATCHFACE || c.num(2) != WATCHFACE_INSTALL) return null
+        return c.msg(6)?.num(5) ?: 0
+    }
+
+    fun uploadAck(cmd: ByteArray): UploadAck? {
+        val c = parse(cmd)
+        if (c.num(1) != TYPE_DATA_UPLOAD || c.num(2) != DATA_UPLOAD_START) return null
+        val ack = c.msg(24)?.msg(2) ?: return UploadAck(0, 0, null)
+        return UploadAck(ack.num(2) ?: 0, ack.num(4) ?: 0, ack.num(5))
+    }
+
+    /**
+     * O que vai pelo canal de dados (XiaomiDataUploadService.doUpload): [0, tipo, md5, tamanho LE32,
+     * bytes a partir de [resume]] + CRC32 LE de tudo, em partes de ([chunkSize] − 4) bytes, cada uma com
+     * [total LE16, número da parte LE16] na frente.
+     */
+    fun uploadParts(type: Int, bytes: ByteArray, resume: Int, chunkSize: Int): List<ByteArray> {
+        val md5 = java.security.MessageDigest.getInstance("MD5").digest(bytes)
+        val body = java.nio.ByteBuffer.allocate(2 + 16 + 4 + bytes.size - resume).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .put(0).put(type.toByte()).put(md5).putInt(bytes.size).put(bytes, resume, bytes.size - resume).array()
+        val crc = java.util.zip.CRC32().apply { update(body) }.value.toInt()
+        val payload = java.nio.ByteBuffer.allocate(body.size + 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).put(body).putInt(crc).array()
+        val part = chunkSize - 4
+        val total = (payload.size + part - 1) / part
+        return (0 until total).map { i ->
+            val from = i * part; val to = minOf(payload.size, from + part)
+            java.nio.ByteBuffer.allocate(4 + to - from).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putShort(total.toShort()).putShort((i + 1).toShort()).put(payload, from, to - from).array()
+        }
     }
 
     // ---- vibração (XiaomiVibrationManager / wear_system.proto: System.vibrationTestCustom = 41)

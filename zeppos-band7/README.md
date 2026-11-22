@@ -44,7 +44,10 @@ do Google Drive).
 - Depois de muitas reinstalações seguidas pelo `zeus dev`, o `fetch` do serviço lateral passou a falhar
   (DevTools: `ws://localhost:7833 … ERR_CONNECTION_RESET`, ponte do simulador caída) e o relógio mostrava
   "Sem dados" — o mesmo caminho tinha entregado os dados antes. Para retomar: reiniciar o simulador.
-- Ainda aparece um "TypeError: not a function" sem pilha logo no 1º pedido de dados da instância que o
-  `zeus dev` acabou de instalar (a página é recarregada e segue normal); não foi achado — os trechos do
-  app estão protegidos e registram o erro com `GluView ERRO em …`, e nenhum desses apareceu.
+- "TypeError: not a function" sem pilha: suspeita principal é o `setTimeout` do polyfill do modelo oficial, que cria
+  o timer com período `Number.MAX_SAFE_INTEGER` (usado pela troca de mensagens no tempo limite de cada pedido e pelos
+  toques). Desde 22/11 (tarde) o app instala timers próprios antes do polyfill (`utils/timers.js`, `timers-first.js`,
+  período = espera, testado no Node). NÃO conferido no simulador: depois de reiniciar o simulador (para recuperar a
+  ponte) até a versão que já tinha funcionado (`9b9f129`) passou a cair em laço ao abrir — ambiente do simulador, não
+  código. Na próxima rodada com o simulador saudável, conferir se o erro sumiu.
 - Falta: Mi Band 7 e Band 7 de verdade (vibração e a altura de 490 px só conferidas no teste de layout).

@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.first
  * Pulseiras e relógios aqui não ficam ligados: cada alerta conecta, avisa e solta (como o envio do visor),
  * então "conectado" = configurado. Glicose segue pelos caminhos que já existem (visor, Data Layer, /watch.json).
  */
-abstract class AlertTransport(val family: WearableFamily, canSnooze: Boolean) : WearableTransport {
+abstract class AlertTransport(val family: WearableFamily, canSnooze: Boolean, protected val log: (String) -> Unit = {}) : WearableTransport {
     override val info = WearableDeviceInfo(
         id = "alerts_${family.id}", displayName = family.name, family = family.id,
         capabilities = WearableCapabilities(canVibrate = true, canReceiveSnooze = canSnooze)
@@ -38,10 +38,17 @@ abstract class AlertTransport(val family: WearableFamily, canSnooze: Boolean) : 
     override suspend fun connect(): Boolean = configured()
     override suspend fun disconnect() {}
     override suspend fun isConnected(): Boolean = configured()
-    override suspend fun send(command: WearableCommand): Boolean = when (command) {
-        is WearableCommand.Alert -> alert(command)
-        is WearableCommand.Find -> find()
-        else -> false
+    override suspend fun send(command: WearableCommand): Boolean {
+        val ok = runCatching {
+            when (command) {
+                is WearableCommand.Alert -> alert(command)
+                is WearableCommand.Find -> find()
+                else -> false
+            }
+        }.onFailure { log("Erro ao enviar: ${it.message}") }.getOrDefault(false)
+        if (command is WearableCommand.Alert) log(if (ok) "Alerta entregue (${command.style.id}, tentativa ${command.attempt + 1})"
+            else "Alerta não entregue (tentativa ${command.attempt + 1})")
+        return ok
     }
 }
 
@@ -55,8 +62,8 @@ private fun hexKey(s: String): ByteArray? {
 class HuamiAlertTransport(
     private val prefs: AppPreferences,
     private val sender: HuamiAlertSender,
-    private val log: (String) -> Unit
-) : AlertTransport(WearableFamily.HUAMI, canSnooze = true) {
+    log: (String) -> Unit
+) : AlertTransport(WearableFamily.HUAMI, canSnooze = true, log) {
     override suspend fun configured() = prefs.miBandMac.first().isNotBlank() && hexKey(prefs.miBandAuthKey.first()) != null
 
     private suspend fun profile(): HuamiProfile =
@@ -79,8 +86,8 @@ class HuamiAlertTransport(
 class XiaomiAlertTransport(
     private val prefs: AppPreferences,
     private val client: XiaomiBandClient,
-    private val log: (String) -> Unit
-) : AlertTransport(WearableFamily.XIAOMI, canSnooze = false) {
+    log: (String) -> Unit
+) : AlertTransport(WearableFamily.XIAOMI, canSnooze = false, log) {
     override suspend fun configured() = prefs.xiaomiBandMac.first().isNotBlank() && hexKey(prefs.xiaomiBandKey.first()) != null
 
     override suspend fun alert(cmd: WearableCommand.Alert): Boolean =
@@ -92,7 +99,7 @@ class XiaomiAlertTransport(
 }
 
 /** Relógio Wear OS com o app do GluView: mensagem com o padrão; o relógio vibra e notifica. */
-class WearOsAlertTransport(private val bridge: WearBridge) : AlertTransport(WearableFamily.WEAR_OS, canSnooze = false) {
+class WearOsAlertTransport(private val bridge: WearBridge, log: (String) -> Unit = {}) : AlertTransport(WearableFamily.WEAR_OS, canSnooze = false, log) {
     override suspend fun configured() = true   // sem relógio por perto o envio só falha (e desiste em 3)
 
     override suspend fun alert(cmd: WearableCommand.Alert): Boolean =
@@ -100,7 +107,7 @@ class WearOsAlertTransport(private val bridge: WearBridge) : AlertTransport(Wear
 }
 
 /** Garmin e Zepp OS: o alerta vai para o quadro e sai no próximo /watch.json daquele app. */
-class WatchAppAlertTransport(family: WearableFamily, private val board: WatchAlertBoard) : AlertTransport(family, canSnooze = false) {
+class WatchAppAlertTransport(family: WearableFamily, private val board: WatchAlertBoard, log: (String) -> Unit = {}) : AlertTransport(family, canSnooze = false, log) {
     override suspend fun configured() = true
 
     override suspend fun alert(cmd: WearableCommand.Alert): Boolean {
